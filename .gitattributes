@@ -1,0 +1,44 @@
+# Normalize line endings explicitly so we never see the
+#   "LF will be replaced by CRLF the next time Git touches it"
+# warning again, regardless of contributors' global git config.
+#
+# Source code: LF (Unix) — every tool in the toolchain (Biome, Vite, esbuild,
+# Cargo, pnpm) expects LF. Windows scripts keep CRLF because cmd.exe needs it.
+
+* text=auto eol=lf
+
+# Windows-specific scripts: keep CRLF, otherwise cmd.exe / PowerShell fail.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# Lockfiles — treat as binary so Git doesn't try diffing or normalising.
+pnpm-lock.yaml -text
+package-lock.json -text
+Cargo.lock -text
+
+# Known binary types — never touch.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.svg  text eol=lf
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.wasm  binary
+*.zip   binary
+*.7z    binary
+*.gz    binary
+*.tar   binary
+*.exe   binary
+*.dll   binary
+*.dylib binary
+*.so    binary
+*.pdf   binary
+*.vsix  binary
+*.node  binary

@@ -1,0 +1,59 @@
+[project]
+name = "research-py"
+version = "0.1.0"
+description = "Founder OS research sidecar - thin Python service that orchestrates SearXNG + Firecrawl + (later) GPT-Researcher / STORM / Crawl4AI / ScrapeGraphAI / Trafilatura / Docling / pydantic-ai"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+# Phase 2a deps only. Heavy ML/agent libs come in 2b and 2c.
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "httpx>=0.28",
+  "pydantic>=2.10",
+  "pydantic-settings>=2.7",
+]
+
+[project.optional-dependencies]
+# Phase 2b - deep research (GPT-Researcher wired 2026-04-27)
+# gpt-researcher pulls in: langchain-* (openai/anthropic/community), tiktoken,
+# beautifulsoup4, lxml, playwright (optional), arxiv, wikipedia, markdownify,
+# duckduckgo-search, etc. Adds ~700-900MB to the image.
+research = [
+  "gpt-researcher>=0.10",
+]
+
+# Phase 2c - structured scraping + extraction
+# crawl4ai pulls playwright (chromium) transitively; the Dockerfile runs
+# `playwright install chromium --with-deps`. Trafilatura is the no-ML
+# fallback for pages where crawl4ai is overkill. Docling stays commented
+# until we wire PDF/PPTX evidence ingestion (later 2c slice).
+scraping = [
+  "crawl4ai>=0.5",
+  "scrapegraphai>=1.30",
+  "trafilatura>=1.8",
+  # "docling>=2.20",
+]
+
+# Phase 2c - orchestration
+agents = [
+  # "pydantic-ai>=0.0.50",
+  # "knowledge-storm>=1.0",
+]
+
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.24",
+  "respx>=0.22",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/research_py"]
+
+[tool.uv]
+package = true

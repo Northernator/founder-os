@@ -1,0 +1,244 @@
+{
+  "name": "founder-cowork",
+  "displayName": "Founder Cowork",
+  "description": "Multi-agent VS Code extension for Founder OS - Mission Control, CLI-driven agents (Claude / Codex / Gemini / Ollama), and two-way handoff sync with the Founder OS desktop app.",
+  "version": "0.3.0",
+  "publisher": "founder-os",
+  "license": "UNLICENSED",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/founder-os/founder-os"
+  },
+  "engines": {
+    "vscode": "^1.89.0"
+  },
+  "icon": "images/icon.png",
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "ai",
+    "claude",
+    "codex",
+    "gemini",
+    "ollama",
+    "codegen",
+    "scaffolding",
+    "founder-os",
+    "cowork",
+    "multi-agent"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:founderCowork.sessions",
+    "onView:founderCowork.status",
+    "onCommand:founderCowork.openMissionControl",
+    "onCommand:founderCowork.newSession",
+    "onCommand:founderCowork.orchestrate",
+    "onCommand:founderCowork.showSession",
+    "onCommand:founderCowork.killSession",
+    "onCommand:founderCowork.pickVentureRoot",
+    "onCommand:founderCowork.showStatus"
+  ],
+  "main": "./out/extension.js",
+  "type": "commonjs",
+  "contributes": {
+    "commands": [
+      {
+        "command": "founderCowork.openMissionControl",
+        "title": "Founder Cowork: Open Mission Control",
+        "icon": "$(layout-panel)"
+      },
+      {
+        "command": "founderCowork.newSession",
+        "title": "Founder Cowork: Spawn Agent Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "founderCowork.orchestrate",
+        "title": "Founder Cowork: Orchestrate PM + Executor",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "founderCowork.showSession",
+        "title": "Founder Cowork: Show Session Terminal",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "founderCowork.killSession",
+        "title": "Founder Cowork: Kill Session",
+        "icon": "$(stop)"
+      },
+      {
+        "command": "founderCowork.pickVentureRoot",
+        "title": "Founder Cowork: Select Venture Folder"
+      },
+      {
+        "command": "founderCowork.showStatus",
+        "title": "Founder Cowork: Refresh Status"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "founderCowork.newSession",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a",
+        "when": "!terminalFocus && !editorTextFocus"
+      },
+      {
+        "command": "founderCowork.orchestrate",
+        "key": "ctrl+shift+o",
+        "mac": "cmd+shift+o",
+        "when": "!terminalFocus && !editorTextFocus"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "founderCowork.newSession",
+          "when": "view == founderCowork.sessions",
+          "group": "navigation"
+        },
+        {
+          "command": "founderCowork.orchestrate",
+          "when": "view == founderCowork.sessions",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "founderCowork.showSession",
+          "when": "view == founderCowork.sessions && viewItem == agentSession",
+          "group": "inline"
+        },
+        {
+          "command": "founderCowork.killSession",
+          "when": "view == founderCowork.sessions && viewItem == agentSession",
+          "group": "inline"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "founderCowork",
+          "title": "Founder Cowork",
+          "icon": "$(rocket)"
+        }
+      ]
+    },
+    "views": {
+      "founderCowork": [
+        {
+          "id": "founderCowork.sessions",
+          "name": "Agent Sessions",
+          "type": "tree",
+          "icon": "$(hubot)"
+        },
+        {
+          "id": "founderCowork.status",
+          "name": "Build Status",
+          "type": "tree"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "founderCowork.sessions",
+        "contents": "$(rocket) **No agent sessions yet.**\n\n[Open Mission Control](command:founderCowork.openMissionControl)\n\n[Spawn Agent Session](command:founderCowork.newSession) (Ctrl+Shift+A)\n\n[Orchestrate PM + Executor](command:founderCowork.orchestrate) (Ctrl+Shift+O)\n\n[Select Venture Folder](command:founderCowork.pickVentureRoot)"
+      },
+      {
+        "view": "founderCowork.status",
+        "contents": "**No handoff runs yet.**\n\nPoint `founderCowork.ventureRoot` at your Founder OS venture, then the desktop app's pipeline will drop handoff bundles here.\n\n[Open Settings](command:workbench.action.openSettings?%22founderCowork%22)"
+      }
+    ],
+    "configuration": {
+      "title": "Founder Cowork",
+      "properties": {
+        "founderCowork.ventureRoot": {
+          "type": "string",
+          "description": "Path to the active Founder OS venture workspace root. Handoff inbox is watched under {ventureRoot}/.founder/handoffs/."
+        },
+        "founderCowork.autoWatch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically watch the Founder OS handoff inbox on activation."
+        },
+        "founderCowork.model": {
+          "type": "string",
+          "default": "claude-opus-4-6",
+          "description": "Default Claude model for Mission Control operations."
+        },
+        "founderCowork.providers.claude.binaryName": {
+          "type": "string",
+          "default": "claude",
+          "description": "Name of the Claude Code CLI binary (must be on PATH)."
+        },
+        "founderCowork.providers.codex.binaryName": {
+          "type": "string",
+          "default": "codex",
+          "description": "Name of the Codex CLI binary (must be on PATH)."
+        },
+        "founderCowork.providers.gemini.binaryName": {
+          "type": "string",
+          "default": "gemini",
+          "description": "Name of the Gemini CLI binary (must be on PATH)."
+        },
+        "founderCowork.providers.ollama.baseUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Base URL for the local Ollama service."
+        },
+        "founderCowork.providers.ollama.model": {
+          "type": "string",
+          "default": "llama3.1",
+          "description": "Default Ollama model tag."
+        },
+        "founderCowork.github.defaultBranch": {
+          "type": "string",
+          "default": "main",
+          "description": "Default git branch."
+        },
+        "founderCowork.github.remote": {
+          "type": "string",
+          "default": "origin",
+          "description": "Default git remote."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "package": "pnpm run build && vsce package --no-dependencies --allow-missing-repository",
+    "package:ci": "pnpm run build && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@founder-os/handoff-contract": "workspace:*",
+    "@founder-os/handoff-vscode": "workspace:*",
+    "@founder-os/workspace-core": "workspace:*",
+    "@founder-os/prompts": "workspace:*",
+    "@founder-os/prompt-master": "workspace:*",
+    "@founder-os/logger": "workspace:*",
+    "@founder-os/domain": "workspace:*",
+    "@founder-os/artifacts-core": "workspace:*",
+    "@founder-os/agent-registry": "workspace:*",
+    "@founder-os/agent-runner": "workspace:*",
+    "@founder-os/agent-accounts": "workspace:*",
+    "@founder-os/mission-control-protocol": "workspace:*",
+    "@founder-os/mission-control-ui": "workspace:*",
+    "@founder-os/worktree-manager": "workspace:*",
+    "simple-git": "^3.25.0",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.89.0",
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3",
+    "esbuild": "^0.25.0",
+    "@vscode/vsce": "^3.2.1"
+  }
+}

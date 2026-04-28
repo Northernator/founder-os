@@ -1,0 +1,70 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "organizeImports": { "enabled": true },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "suspicious": {
+        "noExplicitAny": "warn"
+      },
+      "style": {
+        "useImportType": "error",
+        "useConsistentArrayType": "error"
+      }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "es5"
+    }
+  },
+  "files": {
+    "ignore": [
+      "node_modules",
+      "dist",
+      "build",
+      ".turbo",
+      "apps/founder-desktop/src-tauri/target",
+      "apps/founder-desktop/src-tauri/gen",
+      "ventures/**/.founder"
+    ]
+  },
+  "overrides": [
+    {
+      "include": ["apps/founder-desktop/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "node:fs": "Tauri WebView can't run Node modules — use Tauri commands (invoke) for filesystem access. See packages/prompt-master/src/index.ts for the client-safe pattern.",
+                  "node:fs/promises": "Tauri WebView can't run Node modules — use Tauri commands (invoke) for filesystem access.",
+                  "node:path": "Tauri WebView can't run Node modules — use the @tauri-apps/api/path APIs.",
+                  "node:os": "Tauri WebView can't run Node modules — use the @tauri-apps/api/os APIs.",
+                  "node:crypto": "Tauri WebView can't run Node modules — use globalThis.crypto.subtle (Web Crypto).",
+                  "node:child_process": "Tauri WebView can't spawn processes — use Tauri commands (invoke) on the Rust side.",
+                  "node:stream": "Tauri WebView can't run Node modules — use Web Streams (ReadableStream/WritableStream).",
+                  "node:util": "Tauri WebView can't run Node modules.",
+                  "node:events": "Tauri WebView can't run Node modules — use EventTarget or a small lib.",
+                  "node:buffer": "Tauri WebView can't run Node modules — use Uint8Array / TextEncoder / TextDecoder.",
+                  "@founder-os/prompt-master/node": "The /node entry point pulls in node:fs and node:child_process. The desktop app uses the client-safe barrel: import from \"@founder-os/prompt-master\" only."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

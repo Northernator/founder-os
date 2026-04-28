@@ -1,0 +1,191 @@
+name: founder-os-services
+
+# SearXNG + Firecrawl as sidecar services for the research pipeline.
+# Both AGPL-3.0 — kept at HTTP arm's length, never imported into proprietary core.
+# See services/README.md for setup, troubleshooting, and the rationale.
+#
+# Firecrawl architecture mirrors firecrawl/firecrawl/docker-compose.yaml:
+#   api  ─→  redis (Bull queue, rate limits)
+#        ─→  rabbitmq (NUQ work queue)
+#        ─→  nuq-postgres (NUQ job state)
+#        ─→  playwright-service (headless Chromium pool)
+
+x-firecrawl-env: &firecrawl-env
+  REDIS_URL: redis://redis-firecrawl:6379
+  REDIS_RATE_LIMIT_URL: redis://redis-firecrawl:6379
+  PLAYWRIGHT_MICROSERVICE_URL: http://playwright-service:3000/scrape
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  POSTGRES_DB: postgres
+  POSTGRES_HOST: nuq-postgres
+  POSTGRES_PORT: 5432
+  NUQ_RABBITMQ_URL: amqp://rabbitmq:5672
+  USE_DB_AUTHENTICATION: "false"
+  NUM_WORKERS_PER_QUEUE: 4
+  CRAWL_CONCURRENT_REQUESTS: 10
+  MAX_CONCURRENT_JOBS: 5
+  BROWSER_POOL_SIZE: 5
+  HARNESS_STARTUP_TIMEOUT_MS: 60000
+  LOGGING_LEVEL: info
+  ENV: local
+  TEST_API_KEY: ${FIRECRAWL_API_KEY:-}
+
+services:
+  # --- SearXNG -----------------------------------------------------------
+  searxng:
+    image: searxng/searxng:latest
+    container_name: founder-searxng
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+      - UWSGI_WORKERS=4
+      - UWSGI_THREADS=4
+    networks:
+      - founder-research
+
+  # --- Firecrawl support services ----------------------------------------
+  redis-firecrawl:
+    image: redis:7-alpine
+    container_name: founder-redis-firecrawl
+    restart: unless-stopped
+    command: redis-server --bind 0.0.0.0 --save 60 1 --loglevel warning
+    volumes:
+      - redis-firecrawl-data:/data
+    networks:
+      - founder-research
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: founder-rabbitmq
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - founder-research
+
+  nuq-postgres:
+    image: ghcr.io/firecrawl/nuq-postgres:latest
+    container_name: founder-nuq-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - nuq-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - founder-research
+
+  playwright-service:
+    image: ghcr.io/firecrawl/playwright-service:latest
+    container_name: founder-playwright
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      MAX_CONCURRENT_PAGES: 10
+    tmpfs:
+      - /tmp/.cache:noexec,nosuid,size=1g
+    networks:
+      - founder-research
+
+  # --- research-py (FastAPI orchestrator) -------------------------------
+  research-py:
+    build:
+      context: ./research-py
+    container_name: founder-research-py
+    restart: unless-stopped
+    ports:
+      - "3030:3030"
+    environment:
+      # Upstream services
+      RESEARCH_PY_SEARXNG_URL: http://searxng:8080
+      RESEARCH_PY_FIRECRAWL_URL: http://firecrawl-api:3002
+      RESEARCH_PY_FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      RESEARCH_PY_VENTURES_DIR: /ventures
+      RESEARCH_PY_LOG_LEVEL: info
+      # Phase 2b: GPT-Researcher LLM config. Defaults to OpenAI; override
+      # the provider + key in .env to switch to Anthropic or Ollama.
+      RESEARCH_PY_LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      RESEARCH_PY_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      RESEARCH_PY_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Default points at the host's Ollama via host.docker.internal so
+      # `ollama serve` on Windows reaches the container.
+      RESEARCH_PY_OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      # Per-slot model overrides. Leave empty in .env to use the
+      # provider-default models picked in research_py/config.py.
+      RESEARCH_PY_FAST_LLM: ${FAST_LLM:-}
+      RESEARCH_PY_SMART_LLM: ${SMART_LLM:-}
+      RESEARCH_PY_STRATEGIC_LLM: ${STRATEGIC_LLM:-}
+      RESEARCH_PY_EMBEDDING: ${EMBEDDING:-}
+    volumes:
+      # Bind-mount the monorepo's ventures/ tree so research-py can write
+      # artifacts directly into ventures/<slug>/01_research/ etc.
+      - ../ventures:/ventures
+    extra_hosts:
+      # Lets RESEARCH_PY_OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # resolve on Linux daemons (Windows/Mac get this for free).
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      searxng:
+        condition: service_started
+      firecrawl-api:
+        condition: service_started
+    networks:
+      - founder-research
+
+  # --- Firecrawl API + workers (single container via harness) -----------
+  firecrawl-api:
+    image: ghcr.io/firecrawl/firecrawl:latest
+    container_name: founder-firecrawl-api
+    restart: unless-stopped
+    command: ["node", "dist/src/harness.js", "--start-docker"]
+    environment:
+      <<: *firecrawl-env
+      HOST: "0.0.0.0"
+      PORT: 3002
+      EXTRACT_WORKER_PORT: 3004
+      WORKER_PORT: 3005
+    depends_on:
+      redis-firecrawl:
+        condition: service_started
+      playwright-service:
+        condition: service_started
+      nuq-postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3002:3002"
+    networks:
+      - founder-research
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+
+networks:
+  founder-research:
+    driver: bridge
+    name: founder-research
+
+volumes:
+  redis-firecrawl-data:
+    name: founder-redis-firecrawl-data
+  nuq-postgres-data:
+    name: founder-nuq-postgres-data

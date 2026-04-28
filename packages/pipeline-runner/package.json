@@ -1,0 +1,35 @@
+{
+  "name": "@founder-os/pipeline-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "echo test pipeline-runner",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@founder-os/pipeline-core": "workspace:*",
+    "@founder-os/branding-core": "workspace:*",
+    "@founder-os/branding-assets": "workspace:*",
+    "@founder-os/artifacts-core": "workspace:*",
+    "@founder-os/artifacts-index": "workspace:*",
+    "@founder-os/handoff-contract": "workspace:*",
+    "@founder-os/handoff-desktop": "workspace:*",
+    "@founder-os/audit-contract": "workspace:*",
+    "@founder-os/prompts": "workspace:*",
+    "@founder-os/workspace-core": "workspace:*",
+    "@founder-os/db": "workspace:*",
+    "@founder-os/logger": "workspace:*",
+    "@founder-os/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3"
+  }
+}

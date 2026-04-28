@@ -1,0 +1,115 @@
+{
+  "name": "founder-os-builder",
+  "displayName": "Founder OS Builder",
+  "description": "VS Code extension for the Founder OS build pipeline - receives handoff bundles and executes AI-driven code generation",
+  "version": "0.1.0",
+  "publisher": "founder-os",
+  "license": "UNLICENSED",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/founder-os/founder-os"
+  },
+  "engines": {
+    "vscode": "^1.89.0"
+  },
+  "icon": "images/icon.png",
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "ai",
+    "claude",
+    "codegen",
+    "scaffolding",
+    "founder-os"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "type": "commonjs",
+  "contributes": {
+    "commands": [
+      {
+        "command": "founderOs.pickVentureRoot",
+        "title": "Founder OS: Select Venture Folder"
+      },
+      {
+        "command": "founderOs.runPipeline",
+        "title": "Founder OS: Run Pipeline"
+      },
+      {
+        "command": "founderOs.acceptHandoff",
+        "title": "Founder OS: Accept Handoff Bundle"
+      },
+      {
+        "command": "founderOs.showStatus",
+        "title": "Founder OS: Show Status"
+      }
+    ],
+    "configuration": {
+      "title": "Founder OS",
+      "properties": {
+        "founderOs.ventureRoot": {
+          "type": "string",
+          "description": "Path to the active venture workspace root"
+        },
+        "founderOs.model": {
+          "type": "string",
+          "default": "claude-opus-4-6",
+          "description": "Claude model to use for code generation"
+        },
+        "founderOs.autoWatch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically watch the inbox for new handoff bundles"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "founderOs",
+          "title": "Founder OS",
+          "icon": "$(rocket)"
+        }
+      ]
+    },
+    "views": {
+      "founderOs": [
+        {
+          "id": "founderOs.status",
+          "name": "Build Status",
+          "type": "tree"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "// package": "esbuild bundles workspace:* deps into out/extension.js, so we skip vsce's dep resolver. --allow-missing-repository lets local-only builds go through without pointing at a real GitHub repo.",
+    "package": "pnpm run build && vsce package --no-dependencies --allow-missing-repository",
+    "package:ci": "pnpm run build && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@founder-os/handoff-contract": "workspace:*",
+    "@founder-os/handoff-vscode": "workspace:*",
+    "@founder-os/workspace-core": "workspace:*",
+    "@founder-os/prompts": "workspace:*",
+    "@founder-os/prompt-master": "workspace:*",
+    "@founder-os/logger": "workspace:*",
+    "@founder-os/domain": "workspace:*",
+    "@founder-os/artifacts-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.89.0",
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3",
+    "esbuild": "^0.25.0",
+    "@vscode/vsce": "^3.2.1"
+  }
+}

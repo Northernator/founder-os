@@ -1,0 +1,8 @@
+# Local secrets
+.env
+
+# Container state lives in named Docker volumes (founder-redis-firecrawl-data,
+# founder-nuq-postgres-data) — not in this folder.
+
+# SearXNG runtime extras
+searxng/uwsgi.ini

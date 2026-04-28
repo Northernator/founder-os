@@ -1,0 +1,79 @@
+[package]
+name = "founder-desktop"
+version = "0.1.0"
+description = "Founder OS Desktop App"
+authors = []
+license = ""
+repository = ""
+default-run = "founder-desktop"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "founder_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "founder-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync", "io-util", "rt", "rt-multi-thread", "macros", "process"] }
+# HTTP client for LLM providers. `stream` gives us `bytes_stream()` over SSE
+# responses; `rustls-tls` avoids pulling in the system's native TLS stack so
+# Windows builds don't need a Schannel-compatible OpenSSL.
+reqwest = { version = "0.12", default-features = false, features = ["stream", "json", "http2", "charset", "rustls-tls"] }
+futures-util = "0.3"
+# OS keychain access for LLM API keys. v2.x pulls in the right platform
+# backend by default — Credential Manager on Windows, Keychain on macOS,
+# Secret Service on Linux — so we don't have to cfg-gate features.
+keyring = "2"
+# PDF text extraction for chat attachments. Pure-Rust, no native deps, so
+# it compiles on Windows without extra toolchain work. We trap panics on
+# malformed input inside the Tauri command — some crafted PDFs still trip
+# the crate.
+pdf-extract = "0.7"
+# Base64 used to transport binary attachment bytes from the WebView to the
+# Rust side via `invoke`. JSON number-array transport works but bloats 4x;
+# base64 is compact and round-trips cleanly.
+base64 = "0.22"
+# DNS resolver for the Brand tab's domain availability checks. Pure Rust
+# (no C deps), tokio-compatible, supports A/AAAA lookups plus SOA/NS so we
+# can distinguish "no DNS at all" from "domain exists but no web". We pin
+# to 0.23 — 0.24 renames the crate to hickory-resolver and the API
+# moved; upgrade when we're ready for the churn.
+trust-dns-resolver = "0.23"
+# ZIP writer for exporting the brand pack as a single downloadable file.
+# `deflate` is the compression method every zip tool expects; we
+# deliberately turn off the default `bzip2` / `zstd` features since the
+# stdlib browsers don't support those for .zip and they bloat the
+# binary. Pure-Rust, no C toolchain required.
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+walkdir = "2"
+# Cross-platform filesystem watcher for the Phase 2.3 handoff_watcher.
+# Pure Rust on Win/macOS/Linux (uses ReadDirectoryChangesW / FSEvents / inotify
+# under the hood). v6 has the modern Result-returning API. We don't enable
+# the `serde` feature — events stay in-Rust and we project them to JSON for
+# the frontend.
+notify = { version = "6", default-features = false, features = ["macos_kqueue"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

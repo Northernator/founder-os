@@ -1,0 +1,27 @@
+node_modules
+.pnpm-store
+.turbo
+dist
+build
+out
+coverage
+.vscode-test
+.DS_Store
+Thumbs.db
+*.log
+*.tsbuildinfo
+apps/founder-desktop/src-tauri/target
+apps/founder-desktop/src-tauri/gen
+ventures/*/.founder/logs/*
+!ventures/*/.founder/logs/.gitkeep
+
+# Editor / tool scratch files we never want tracked.
+_tmp_*
+tmp/
+*.tmp
+.pm-write-test.txt
+.idea/
+
+# services/ sidecars
+services/.env
+services/searxng/uwsgi.ini

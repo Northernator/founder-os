@@ -1,0 +1,11 @@
+# SearXNG bot-protection limiter config.
+# Disabled at the server level in settings.yml (server.limiter: false),
+# so this file mostly exists to keep SearXNG happy on startup.
+# If you ever expose this instance to the public internet, flip these on.
+
+[botdetection.ip_limit]
+filter_link_local = false
+link_token = false
+
+[botdetection.ip_lists]
+pass_searxng_org = false

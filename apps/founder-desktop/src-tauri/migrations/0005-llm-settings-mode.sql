@@ -1,0 +1,17 @@
+-- 0005 — subscription-mode support on llm_settings
+--
+-- `mode` distinguishes how we talk to a provider:
+--   'api_key'      → hit the provider's HTTP API with a saved key
+--                    (the only path pre-0005 — so default on migration is this)
+--   'subscription' → shell out to the provider's own CLI (`claude`,
+--                    `codex`, `gemini`), which authenticates against the
+--                    user's consumer subscription and handles its own
+--                    credentials on disk (~/.claude/.credentials.json etc.).
+--                    No api_key required; api_key column stays NULL.
+--
+-- SQLite can't ALTER COLUMN to add a CHECK, but we validate the string on
+-- the TS side (`db.upsertLlmSetting`) before write, which is sufficient for
+-- a single-user desktop app. The column is nullable for forward-compat
+-- with rows inserted by older builds; resolveApiKey / pickActiveProvider
+-- treat NULL as 'api_key' (legacy behaviour).
+ALTER TABLE llm_settings ADD COLUMN mode TEXT NOT NULL DEFAULT 'api_key';

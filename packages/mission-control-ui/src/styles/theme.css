@@ -1,0 +1,224 @@
+/*
+ * Mission Control theming — wires VS Code's CSS variables (injected
+ * automatically into every webview) into a small set of semantic tokens
+ * we use throughout the app. Anything not pulled from --vscode-* falls
+ * back to a sane neutral so the dev server (outside VS Code) still renders.
+ */
+
+:root {
+  --fc-bg: var(--vscode-editor-background, #1e1e1e);
+  --fc-bg-raised: var(--vscode-editorWidget-background, #252526);
+  --fc-bg-hover: rgba(128, 128, 128, 0.12);
+  --fc-fg: var(--vscode-editor-foreground, #d4d4d4);
+  --fc-fg-muted: var(--vscode-descriptionForeground, #888);
+  --fc-fg-link: var(--vscode-textLink-foreground, #3794ff);
+  --fc-border: var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.3));
+  --fc-accent: var(--vscode-focusBorder, #007acc);
+  --fc-success: var(--vscode-testing-iconPassed, #4ec9b0);
+  --fc-warning: var(--vscode-testing-iconQueued, #cca700);
+  --fc-error: var(--vscode-errorForeground, #f14c4c);
+  --fc-font: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  --fc-font-mono: var(--vscode-editor-font-family, "SF Mono", Menlo, Consolas, monospace);
+  --fc-radius: 6px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--fc-bg);
+  color: var(--fc-fg);
+  font-family: var(--fc-font);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--vscode-button-background, var(--fc-accent));
+  color: var(--vscode-button-foreground, white);
+  border: 1px solid transparent;
+  border-radius: var(--fc-radius);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--vscode-button-hoverBackground, var(--fc-accent));
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--fc-fg);
+  border-color: var(--fc-border);
+}
+
+button.secondary:hover {
+  background: var(--fc-bg-hover);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input, textarea, select {
+  font: inherit;
+  color: var(--vscode-input-foreground, var(--fc-fg));
+  background: var(--vscode-input-background, rgba(255,255,255,0.04));
+  border: 1px solid var(--vscode-input-border, var(--fc-border));
+  border-radius: var(--fc-radius);
+  padding: 6px 10px;
+  width: 100%;
+}
+
+textarea {
+  font-family: var(--fc-font-mono);
+  resize: vertical;
+  min-height: 80px;
+}
+
+code, pre {
+  font-family: var(--fc-font-mono);
+  background: var(--fc-bg-hover);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.92em;
+}
+
+pre {
+  padding: 10px 14px;
+  overflow-x: auto;
+}
+
+a {
+  color: var(--fc-fg-link);
+  text-decoration: none;
+}
+a:hover { text-decoration: underline; }
+
+/* Layout primitives */
+
+.mc-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+}
+
+.mc-header {
+  padding: 16px 24px 0;
+  border-bottom: 1px solid var(--fc-border);
+}
+
+.mc-title { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+.mc-subtitle { margin: 0 0 12px; color: var(--fc-fg-muted); font-size: 12px; }
+
+.mc-tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.mc-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 8px 14px;
+  color: var(--fc-fg-muted);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.mc-tab:hover { color: var(--fc-fg); background: var(--fc-bg-hover); }
+.mc-tab[aria-selected="true"] {
+  color: var(--fc-fg);
+  border-bottom-color: var(--fc-accent);
+}
+
+.mc-body {
+  padding: 16px 24px 24px;
+  overflow-y: auto;
+}
+
+.mc-card {
+  background: var(--fc-bg-raised);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.mc-card-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fc-fg-muted);
+}
+
+.mc-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.mc-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.mc-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--fc-bg-hover);
+  font-size: 11px;
+  color: var(--fc-fg-muted);
+}
+
+.mc-pill.success { background: rgba(78, 201, 176, 0.15); color: var(--fc-success); }
+.mc-pill.warn    { background: rgba(204, 167, 0, 0.15); color: var(--fc-warning); }
+.mc-pill.error   { background: rgba(241, 76, 76, 0.15); color: var(--fc-error); }
+
+.mc-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.mc-table th, .mc-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--fc-border);
+}
+
+.mc-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fc-fg-muted);
+  font-weight: 600;
+}
+
+.mc-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--fc-fg-muted);
+  border: 1px dashed var(--fc-border);
+  border-radius: var(--fc-radius);
+}
+
+.mc-stub {
+  padding: 24px;
+  border: 1px dashed var(--fc-border);
+  border-radius: var(--fc-radius);
+  background: var(--fc-bg-raised);
+}
+
+.mc-stub h3 { margin-top: 0; }
+.mc-stub .actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }

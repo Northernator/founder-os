@@ -1,0 +1,21 @@
+# Everything that shouldn't ship in the .vsix.
+# esbuild produces a single bundled out/extension.js, so we don't need
+# src/, node_modules/, or any workspace packages in the package.
+
+.vscode/**
+.vscode-test/**
+src/**
+out/**/*.map
+node_modules/**
+
+# pnpm leaves a `tmp/pnpm-vstore/` symlink junction in workspace package
+# dirs. vsce's secretlint scanner trips on the broken symlinks (EACCES).
+tmp/**
+
+tsconfig.json
+esbuild.mjs
+**/*.ts
+**/*.tsbuildinfo
+.gitignore
+.eslintrc*
+**/.DS_Store

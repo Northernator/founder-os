@@ -1,0 +1,29 @@
+{
+  "name": "@founder-os/query",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "echo test query",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@founder-os/domain": "workspace:*",
+    "@founder-os/db": "workspace:*",
+    "@founder-os/artifacts-core": "workspace:*",
+    "@founder-os/audit-contract": "workspace:*",
+    "@founder-os/handoff-contract": "workspace:*",
+    "@founder-os/logger": "workspace:*",
+    "@tanstack/react-query": "^5.75.5"
+  },
+  "peerDependencies": {
+    "react": "^19.1.0"
+  }
+}

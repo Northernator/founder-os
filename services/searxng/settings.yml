@@ -1,0 +1,70 @@
+# SearXNG settings for Founder OS local research stack.
+# Reference: https://docs.searxng.org/admin/settings/index.html
+
+use_default_settings: true
+
+general:
+  instance_name: "Founder OS Search"
+  privacypolicy_url: false
+  donation_url: false
+  contact_url: false
+  enable_metrics: false
+
+server:
+  # Generated on first run if blank — but pin one for stable session cookies.
+  # Replace with `openssl rand -hex 32` output.
+  secret_key: "2ef7ca88f124da50508ea34f83939b445f600168e392790d6ddaee98cb1451c3"
+  base_url: "http://localhost:8080/"
+  image_proxy: false
+  http_protocol_version: "1.0"
+  method: "POST"
+  default_http_headers:
+    X-Content-Type-Options: nosniff
+    X-Download-Options: noopen
+    X-Robots-Tag: noindex, nofollow
+    Referrer-Policy: no-referrer
+  # Disable the rate limiter on localhost — research-runner will be hammering it.
+  limiter: false
+  public_instance: false
+
+ui:
+  static_use_hash: true
+  default_locale: "en"
+  query_in_title: true
+  infinite_scroll: false
+  center_alignment: false
+  results_on_new_tab: false
+
+# IMPORTANT: enabling JSON is what makes the API usable from research-runner.
+# Without `json` in formats, /search?format=json returns HTML.
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  formats:
+    - html
+    - json
+    - csv
+    - rss
+
+# Engines — slim default set tuned for research. Add/remove as needed.
+# See https://docs.searxng.org/admin/settings/settings_engine.html
+engines:
+  - name: google
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: brave
+    disabled: false
+  - name: wikipedia
+    disabled: false
+  - name: github
+    disabled: false
+  - name: reddit
+    disabled: false
+  - name: hackernews
+    disabled: false
+  - name: arxiv
+    disabled: false
