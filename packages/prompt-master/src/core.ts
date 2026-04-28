@@ -24,6 +24,7 @@ import type { OptimizeInput, OptimizeResult, PromptContext } from "./types.js";
 export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
   const start = Date.now();
   const context: PromptContext = input.context ?? "other";
+  const ventureId = input.ventureId;
   const hash =
     input.cacheKey ??
     (await hashKey({
@@ -50,6 +51,7 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
       cacheHit: true,
       latencyMs: result.trace.latencyMs,
       transport: "cache",
+      ventureId,
     });
     return result;
   }
@@ -84,6 +86,7 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
           transport.name === "null"
             ? "no transport configured"
             : "transport returned input unchanged",
+        ventureId,
       });
     } else {
       await emit({
@@ -93,6 +96,7 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
         cacheHit: false,
         latencyMs: result.trace.latencyMs,
         transport: transport.name,
+        ventureId,
       });
     }
     return result;
@@ -102,6 +106,7 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
       event: "prompt_master.fallback",
       context,
       reason: `transport error: ${(err as Error).message ?? String(err)}`,
+      ventureId,
     });
     return {
       optimized: input.prompt,

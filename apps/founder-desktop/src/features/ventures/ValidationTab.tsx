@@ -418,7 +418,11 @@ Omit any field where the document has no relevant info.`;
         pricingModel: "How the pricing is structured (subscription, one-off, usage-based, etc.)",
         keyLearnings: "Key learnings from customer interviews or validation experiments",
       };
-      const optimizedSystem = await optimize({ prompt: system, context: "research" });
+      const optimizedSystem = await optimize({
+        prompt: system,
+        context: "research",
+        ventureId: venture.id,
+      });
       console.info(
         "[prompt-master] validation-extract",
         optimizedSystem.fallbackUsed

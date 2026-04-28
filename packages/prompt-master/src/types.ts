@@ -44,6 +44,13 @@ export interface OptimizeInput {
    * excluded from the hash.
    */
   cacheKey?: string;
+  /**
+   * Free-form identifier the consumer uses to group events. Forwarded to
+   * the telemetry sink so the desktop Options-tab stats card (and any
+   * future per-venture tuning) can aggregate token savings by venture.
+   * The optimizer itself doesn't read this — it's purely a telemetry tag.
+   */
+  ventureId?: string;
 }
 
 export interface OptimizeResult {

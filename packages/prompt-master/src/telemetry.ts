@@ -22,11 +22,15 @@ export type TelemetryEvent =
       cacheHit: boolean;
       latencyMs: number;
       transport: string;
+      /** Optional consumer-supplied venture id for per-venture grouping. */
+      ventureId?: string;
     }
   | {
       event: "prompt_master.fallback";
       context: string;
       reason: string;
+      /** Optional consumer-supplied venture id for per-venture grouping. */
+      ventureId?: string;
     };
 
 export interface TelemetrySink {

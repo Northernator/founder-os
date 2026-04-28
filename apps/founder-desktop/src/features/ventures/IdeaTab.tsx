@@ -519,7 +519,11 @@ Omit any field where the document has no relevant info.`;
         competitorNotes: "Competitor weaknesses or differentiation notes",
         customerNotes: "Any customer insights, feedback, or interview notes",
       };
-      const optimizedSystem = await optimize({ prompt: system, context: "research" });
+      const optimizedSystem = await optimize({
+        prompt: system,
+        context: "research",
+        ventureId: venture.id,
+      });
       console.info(
         "[prompt-master] idea-extract",
         optimizedSystem.fallbackUsed

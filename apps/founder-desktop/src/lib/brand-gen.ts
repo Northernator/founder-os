@@ -116,6 +116,9 @@ const ARCHETYPE_DESCRIPTIONS: Record<LogoArchetype, string> = {
 export async function generateLogoCandidates(opts: {
   brief: BrandGenBrief;
   provider: LlmProviderId;
+  /** Optional venture id forwarded to Prompt Master telemetry so the
+   *  Options-tab stats card can attribute tokens saved to this venture. */
+  ventureId?: string;
   signal?: AbortSignal;
   onArchetypeStart?: (archetype: LogoArchetype) => void;
   onArchetypeDone?: (candidate: LogoCandidate & { error?: string }) => void;
@@ -129,6 +132,7 @@ export async function generateLogoCandidates(opts: {
   const optimizedSystem = await optimize({
     prompt: SYSTEM_PROMPT_SVG,
     context: "wireframe",
+    ventureId: opts.ventureId,
   });
   console.info(
     "[prompt-master] brand-gen.logo",
@@ -270,6 +274,9 @@ export async function generateFullPack(opts: {
   brief: BrandGenBrief;
   provider: LlmProviderId;
   lockedLogoSvg: string;
+  /** Optional venture id forwarded to Prompt Master telemetry so the
+   *  Options-tab stats card can attribute tokens saved to this venture. */
+  ventureId?: string;
   signal?: AbortSignal;
   onAssetStart?: (spec: BrandAssetSpec) => void;
   onAssetDone?: (result: PackAssetResult) => void;
@@ -287,6 +294,7 @@ export async function generateFullPack(opts: {
         const optimizedSystem = await optimize({
           prompt: system,
           context: "wireframe",
+          ventureId: opts.ventureId,
         });
         console.info(
           `[prompt-master] brand-gen.${spec.key}`,

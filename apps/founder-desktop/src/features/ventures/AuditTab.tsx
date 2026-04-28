@@ -650,6 +650,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
         const optimizedSystem = await optimize({
           prompt: SYSTEM_PROMPT,
           context: "audit",
+          ventureId,
         });
         console.info(
           "[prompt-master] audit-fix",

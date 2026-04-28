@@ -1,8 +1,6 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "organizeImports": {
-    "enabled": true
-  },
+  "organizeImports": { "enabled": true },
   "linter": {
     "enabled": true,
     "rules": {
@@ -109,17 +107,17 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "node:fs": "Tauri WebView cannot run Node modules -- use Tauri commands (invoke) for filesystem access. See packages/prompt-master/src/index.ts for the client-safe pattern.",
+                  "node:fs": "Tauri WebView cannot run Node modules -- use Tauri commands (invoke) for filesystem access.",
                   "node:fs/promises": "Tauri WebView cannot run Node modules -- use Tauri commands (invoke) for filesystem access.",
-                  "node:path": "Tauri WebView cannot run Node modules -- use the @tauri-apps/api/path APIs.",
-                  "node:os": "Tauri WebView cannot run Node modules -- use the @tauri-apps/api/os APIs.",
-                  "node:crypto": "Tauri WebView cannot run Node modules -- use globalThis.crypto.subtle (Web Crypto).",
-                  "node:child_process": "Tauri WebView cannot spawn processes -- use Tauri commands (invoke) on the Rust side.",
-                  "node:stream": "Tauri WebView cannot run Node modules -- use Web Streams (ReadableStream/WritableStream).",
+                  "node:path": "Tauri WebView cannot run Node modules -- use @tauri-apps/api/path.",
+                  "node:os": "Tauri WebView cannot run Node modules -- use @tauri-apps/api/os.",
+                  "node:crypto": "Tauri WebView cannot run Node modules -- use globalThis.crypto.subtle.",
+                  "node:child_process": "Tauri WebView cannot spawn processes -- use Tauri commands.",
+                  "node:stream": "Tauri WebView cannot run Node modules -- use Web Streams.",
                   "node:util": "Tauri WebView cannot run Node modules.",
-                  "node:events": "Tauri WebView cannot run Node modules -- use EventTarget or a small lib.",
-                  "node:buffer": "Tauri WebView cannot run Node modules -- use Uint8Array / TextEncoder / TextDecoder.",
-                  "@founder-os/prompt-master/node": "The /node entry point pulls in node:fs and node:child_process. The desktop app uses the client-safe barrel: import from @founder-os/prompt-master only."
+                  "node:events": "Tauri WebView cannot run Node modules -- use EventTarget.",
+                  "node:buffer": "Tauri WebView cannot run Node modules -- use Uint8Array.",
+                  "@founder-os/prompt-master/node": "The /node entry point pulls in Node-only deps. Desktop app uses the client-safe barrel: import from @founder-os/prompt-master only."
                 }
               }
             }

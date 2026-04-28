@@ -139,7 +139,11 @@ export async function draftScreensCanvas(
   // JSON shape; mirror of spec-drafter's value. maxTokens 6000 is
   // enough for ~12 screens with full notes; lower than spec-drafter's
   // 8000 because the screens canvas is structurally smaller.
-  const optimizedSystem = await optimize({ prompt: system, context: "wireframe" });
+  const optimizedSystem = await optimize({
+    prompt: system,
+    context: "wireframe",
+    ventureId: args.venture.id,
+  });
   console.info(
     "[prompt-master] screens-drafter",
     optimizedSystem.fallbackUsed

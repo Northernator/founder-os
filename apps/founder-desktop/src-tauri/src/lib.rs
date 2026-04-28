@@ -324,6 +324,12 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0008-prompt-master-events.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 9,
+            description: "prompt_master_event_venture",
+            sql: include_str!("../migrations/0009-prompt-master-event-venture.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 

@@ -443,7 +443,11 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
         customerQuotes: "Direct customer quotes from interviews, forums, or reviews",
         evidenceNotes: "Summary of validation evidence — numbers, sources, key signals",
       };
-      const optimizedSystem = await optimize({ prompt: system, context: "research" });
+      const optimizedSystem = await optimize({
+        prompt: system,
+        context: "research",
+        ventureId: venture.id,
+      });
       console.info(
         "[prompt-master] research-extract",
         optimizedSystem.fallbackUsed

@@ -1153,6 +1153,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
     const optimizedSystem = await optimize({
       prompt: systemPrompt,
       context: "venture-chat",
+      ventureId: venture.id,
     });
     if (optimizedSystem.tokensSaved > 0) {
       setPromptMasterTokensSaved((prev) => prev + optimizedSystem.tokensSaved);

@@ -1,0 +1,26 @@
+-- 0009 — per-venture grouping for Prompt Master events
+--
+-- Migration 0008 created prompt_master_events without a venture
+-- column because the first cut of telemetry only grouped by
+-- `context` ("venture-chat", "audit", "research", …). The Options
+-- tab now wants a "Top ventures by tokens saved" panel alongside
+-- the existing "Top contexts" list, which means each row needs to
+-- remember which venture the optimisation ran against.
+--
+-- The column is nullable on purpose: events emitted before this
+-- migration ran (every row already in the table on existing
+-- installs) have no venture_id and stay in place — they keep
+-- contributing to the lifetime totals and top-contexts breakdown
+-- but are excluded from the top-ventures aggregation by the
+-- WHERE venture_id IS NOT NULL filter on the read side.
+--
+-- Index reasoning: the top-ventures query GROUP BYs venture_id and
+-- filters out NULLs. With a single index on venture_id, SQLite can
+-- skip the NULL stripe on disk entirely (NULLs are stored at one
+-- end of the b-tree) and walk the rest in venture order, which is
+-- exactly the shape the GROUP BY wants. No need for a composite
+-- index with `event` because the table is small (<= 10k rows from
+-- the EVENT_LOG_CAP eviction in pm_event_log) — a full scan of the
+-- non-null venture stripe is already cheap.
+ALTER TABLE prompt_master_events ADD COLUMN venture_id TEXT;
+CREATE INDEX idx_pm_events_venture ON prompt_master_events(venture_id);

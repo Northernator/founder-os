@@ -121,7 +121,11 @@ export async function draftSpecCanvas(args: DraftSpecCanvasArgs): Promise<SpecDr
   // 4. Stream. Single user turn — drafting is one-shot, no conversation
   // history. Temperature kept low because we want consistent JSON shape;
   // the prompt has plenty of latitude for content variation.
-  const optimizedSystem = await optimize({ prompt: system, context: "system" });
+  const optimizedSystem = await optimize({
+    prompt: system,
+    context: "system",
+    ventureId: args.venture.id,
+  });
   console.info(
     "[prompt-master] spec-drafter",
     optimizedSystem.fallbackUsed

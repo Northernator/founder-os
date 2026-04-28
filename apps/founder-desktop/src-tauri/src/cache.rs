@@ -80,6 +80,11 @@ pub struct EventStats {
     pub total_events: i64,
     pub cache_hit_rate: f64,
     pub top_contexts: Vec<TopContext>,
+    /// Top ventures by lifetime tokens saved. Excludes rows where
+    /// venture_id is NULL — events emitted before migration 0009 (and
+    /// global-scope events with no venture in scope) live on in the
+    /// table for lifetime totals but don't appear here.
+    pub top_ventures: Vec<TopVenture>,
 }
 
 #[derive(Serialize)]
@@ -88,6 +93,14 @@ pub struct TopContext {
     pub context: String,
     pub tokens_saved: i64,
     pub count: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TopVenture {
+    pub venture_id: String,
+    pub tokens_saved: i64,
+    pub events: i64,
 }
 
 /// Bound for the in-table event log. Older rows are pruned inside
@@ -269,15 +282,25 @@ pub fn pm_event_log(
     cache_hit: bool,
     transport: Option<String>,
     latency_ms: Option<i64>,
+    venture_id: Option<String>,
 ) -> Result<(), String> {
     with_conn(&state, &app, |conn| {
         let now = current_iso();
         let cache_hit_int: i64 = if cache_hit { 1 } else { 0 };
         conn.execute(
             "INSERT INTO prompt_master_events \
-             (ts, event, context, tokens_saved, cache_hit, transport, latency_ms) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![now, event, context, tokens_saved, cache_hit_int, transport, latency_ms],
+             (ts, event, context, tokens_saved, cache_hit, transport, latency_ms, venture_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                now,
+                event,
+                context,
+                tokens_saved,
+                cache_hit_int,
+                transport,
+                latency_ms,
+                venture_id
+            ],
         )
         .map_err(|e| format!("event log insert: {e}"))?;
 
@@ -364,11 +387,41 @@ pub fn pm_event_stats(
             top_contexts.push(row.map_err(|e| format!("event stats top row: {e}"))?);
         }
 
+        // Top ventures by tokens saved. Optimize events only — fallback
+        // rows have tokens_saved = 0 and dilute the GROUP BY. Rows with
+        // NULL venture_id (events emitted before migration 0009, or
+        // global-scope events with no venture in scope) are filtered out
+        // here so the panel only shows real per-venture data.
+        let mut vstmt = conn
+            .prepare(
+                "SELECT venture_id, COALESCE(SUM(tokens_saved), 0) AS ts_total, COUNT(*) \
+                 FROM prompt_master_events \
+                 WHERE event = 'optimize' AND venture_id IS NOT NULL \
+                 GROUP BY venture_id \
+                 ORDER BY ts_total DESC \
+                 LIMIT 5",
+            )
+            .map_err(|e| format!("event stats top ventures prepare: {e}"))?;
+        let vrows = vstmt
+            .query_map([], |r| {
+                Ok(TopVenture {
+                    venture_id: r.get(0)?,
+                    tokens_saved: r.get(1)?,
+                    events: r.get(2)?,
+                })
+            })
+            .map_err(|e| format!("event stats top ventures query: {e}"))?;
+        let mut top_ventures: Vec<TopVenture> = Vec::new();
+        for row in vrows {
+            top_ventures.push(row.map_err(|e| format!("event stats top ventures row: {e}"))?);
+        }
+
         Ok(EventStats {
             lifetime_tokens_saved,
             total_events,
             cache_hit_rate,
             top_contexts,
+            top_ventures,
         })
     })
 }

@@ -38,6 +38,11 @@ export function createTauriTelemetrySink(): TelemetrySink {
   return {
     async emit(event: TelemetryEvent): Promise<void> {
       try {
+        // ventureId is optional on both event variants. Coerce undefined
+        // to null so the Tauri bridge serialises it as SQL NULL — passing
+        // `undefined` would drop the kwarg and leave the bound parameter
+        // unset (rusqlite treats that as a binding error).
+        const ventureId = event.ventureId ?? null;
         if (event.event === "prompt_master.optimize") {
           await invoke<void>("pm_event_log", {
             event: shortenEvent(event.event),
@@ -46,6 +51,7 @@ export function createTauriTelemetrySink(): TelemetrySink {
             cacheHit: event.cacheHit,
             transport: event.transport,
             latencyMs: event.latencyMs,
+            ventureId,
           });
         } else {
           // Fallback events carry no transport / latency / tokens —
@@ -57,6 +63,7 @@ export function createTauriTelemetrySink(): TelemetrySink {
             cacheHit: false,
             transport: null,
             latencyMs: null,
+            ventureId,
           });
         }
       } catch (err) {

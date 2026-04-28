@@ -110,7 +110,11 @@ export async function buildPipelineLlmCaller(
     // and we send the original prompt.
     let optimizedSystem = system;
     if (system && system.trim().length > 0) {
-      const result = await optimize({ prompt: system, context: "other" });
+      const result = await optimize({
+        prompt: system,
+        context: "other",
+        ventureId: opts.ventureId,
+      });
       optimizedSystem = result.optimized;
       console.info(
         "[prompt-master] pipeline-step",

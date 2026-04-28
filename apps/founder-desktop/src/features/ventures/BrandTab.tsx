@@ -692,7 +692,11 @@ Rules:
 - UK context: don't clash with well-known UK brands.
 - Return ONLY the JSON block. No preamble, no commentary.`;
 
-      const optimizedSystem = await optimize({ prompt: system, context: "wireframe" });
+      const optimizedSystem = await optimize({
+        prompt: system,
+        context: "wireframe",
+        ventureId: venture.id,
+      });
       console.info(
         "[prompt-master] brand-naming",
         optimizedSystem.fallbackUsed
@@ -1155,6 +1159,7 @@ Rules:
       const optimizedSystem = await optimize({
         prompt: system,
         context: "wireframe",
+        ventureId: venture.id,
       });
       console.info(
         "[prompt-master] brand-concepts",
@@ -1302,6 +1307,7 @@ Rules:
       const optimizedSystem = await optimize({
         prompt: system,
         context: "wireframe",
+        ventureId: venture.id,
       });
       console.info(
         "[prompt-master] brand-concept-regen",
@@ -1457,6 +1463,7 @@ Rules:
       await generateLogoCandidates({
         brief,
         provider: providerId,
+        ventureId: venture.id,
         onArchetypeDone: (candidate) => {
           setLogoCandidates((prev) => {
             // Stable slot order: replace-or-append by archetype id.
@@ -1560,6 +1567,7 @@ Rules:
         brief,
         provider: providerId,
         lockedLogoSvg: chosenLogoSvg,
+        ventureId: venture.id,
         onAssetStart: (spec) => {
           setPackEntries((prev) =>
             prev.map((e) => (e.spec.key === spec.key ? { ...e, status: "running" } : e))

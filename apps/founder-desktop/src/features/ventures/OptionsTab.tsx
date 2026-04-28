@@ -36,12 +36,17 @@ import { pushToast } from "../../lib/toasts.js";
 import { SubscriptionsSection } from "./SubscriptionsSection.js";
 
 /** Wire payload for `pm_event_stats` in src-tauri/src/cache.rs.
- *  Field names line up with the Rust side's serde rename_all=camelCase. */
+ *  Field names line up with the Rust side's serde rename_all=camelCase.
+ *
+ *  topVentures excludes rows where venture_id IS NULL — events emitted
+ *  before migration 0009 (and global-scope events) live on in the table
+ *  but don't appear here. */
 type EventStats = {
   lifetimeTokensSaved: number;
   totalEvents: number;
   cacheHitRate: number;
   topContexts: Array<{ context: string; tokensSaved: number; count: number }>;
+  topVentures: Array<{ ventureId: string; tokensSaved: number; events: number }>;
 };
 
 type ProviderFormState = {
@@ -846,6 +851,11 @@ function PromptMasterSection() {
   const [cacheStats, setCacheStats] = React.useState<CacheStats | null>(null);
   const [eventStats, setEventStats] = React.useState<EventStats | null>(null);
   const [loadingStats, setLoadingStats] = React.useState(true);
+  // Venture id → name map for the "Top ventures" panel. Built from
+  // db.listVentures and refreshed alongside stats so a venture renamed
+  // mid-session shows the new name on the next tick. A venture deleted
+  // since events were logged falls back to the raw id.
+  const [ventureNamesById, setVentureNamesById] = React.useState<Record<string, string>>({});
 
   const refreshStats = React.useCallback(async () => {
     // Don't blank the existing values while refreshing — that would
@@ -853,9 +863,14 @@ function PromptMasterSection() {
     // logged but never surface as a card-level error because both
     // backends are best-effort by contract.
     try {
-      const [cs, es] = await Promise.all([inspectCache(), invoke<EventStats>("pm_event_stats")]);
+      const [cs, es, ventures] = await Promise.all([
+        inspectCache(),
+        invoke<EventStats>("pm_event_stats"),
+        db.listVentures(),
+      ]);
       setCacheStats(cs);
       setEventStats(es);
+      setVentureNamesById(Object.fromEntries(ventures.map((v) => [v.id, v.name])));
     } catch (err) {
       console.warn("[options] prompt-master stats refresh failed", err);
     } finally {
@@ -937,6 +952,7 @@ function PromptMasterSection() {
         <PromptMasterStats
           cacheStats={cacheStats}
           eventStats={eventStats}
+          ventureNamesById={ventureNamesById}
           loading={loadingStats}
           onRefresh={() => void refreshStats()}
         />
@@ -1017,11 +1033,16 @@ function formatPercent(ratio: number): string {
 function PromptMasterStats({
   cacheStats,
   eventStats,
+  ventureNamesById,
   loading,
   onRefresh,
 }: {
   cacheStats: CacheStats | null;
   eventStats: EventStats | null;
+  /** Venture id → display name. Empty when the list hasn't loaded yet
+   *  or when a venture has been deleted since its events were logged.
+   *  The Top ventures panel falls back to the raw id when missing. */
+  ventureNamesById: Record<string, string>;
   loading: boolean;
   onRefresh: () => void;
 }) {
@@ -1084,7 +1105,7 @@ function PromptMasterStats({
           }}
         >
           <CacheStatsPanel stats={cacheStats} />
-          <OptimisationStatsPanel stats={eventStats} />
+          <OptimisationStatsPanel stats={eventStats} ventureNamesById={ventureNamesById} />
         </div>
       )}
     </div>
@@ -1159,7 +1180,13 @@ function CacheStatsPanel({ stats }: { stats: CacheStats | null }) {
   );
 }
 
-function OptimisationStatsPanel({ stats }: { stats: EventStats | null }) {
+function OptimisationStatsPanel({
+  stats,
+  ventureNamesById,
+}: {
+  stats: EventStats | null;
+  ventureNamesById: Record<string, string>;
+}) {
   return (
     <div
       style={{
@@ -1249,6 +1276,69 @@ function OptimisationStatsPanel({ stats }: { stats: EventStats | null }) {
           <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>—</p>
         )}
       </div>
+      {stats && stats.topVentures.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: "#6B7280",
+              marginBottom: 4,
+            }}
+          >
+            Top ventures
+          </div>
+          <ul
+            style={{
+              listStyle: "none",
+              margin: 0,
+              padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
+            {stats.topVentures.map((v) => {
+              // Resolve venture name; fall back to raw id when the
+              // venture record has been deleted since its events were
+              // logged. Tooltip carries the raw id either way so a
+              // power user can grep for it without renaming a venture.
+              const name = ventureNamesById[v.ventureId] ?? v.ventureId;
+              return (
+                <li
+                  key={v.ventureId}
+                  title={v.ventureId}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 12,
+                    color: "#374151",
+                  }}
+                >
+                  <span
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      maxWidth: "60%",
+                    }}
+                  >
+                    {name}
+                  </span>
+                  <span
+                    style={{
+                      color: "#6B7280",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {formatNumber(v.tokensSaved)} ({v.events})
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
