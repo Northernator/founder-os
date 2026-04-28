@@ -1,3 +1,16 @@
+import {
+  type EntityType,
+  EntityTypeSchema,
+  type UkSetupCanvas,
+  UkSetupCanvasSchema,
+  type Venture,
+  type VentureManifest,
+  createEmptyUkSetupCanvas,
+  deriveUkSetupRules,
+  isUkSetupComplete,
+} from "@founder-os/domain";
+import { getUkSetupCanvasPath } from "@founder-os/workspace-core";
+import { invoke } from "@tauri-apps/api/core";
 /**
  * UkSetupTab (pt.33) — guided UI for the UK_SETUP_READY stage.
  *
@@ -15,20 +28,8 @@
  * block further edits. The canvas debounce (~600ms idle) covers most
  * typing patterns.
  */
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import {
-  EntityTypeSchema,
-  UkSetupCanvasSchema,
-  createEmptyUkSetupCanvas,
-  deriveUkSetupRules,
-  isUkSetupComplete,
-  type EntityType,
-  type UkSetupCanvas,
-  type Venture,
-  type VentureManifest,
-} from "@founder-os/domain";
-import { getUkSetupCanvasPath } from "@founder-os/workspace-core";
+import type React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { pushToast } from "../../lib/toasts.js";
 
 const SAVE_DEBOUNCE_MS = 600;
@@ -39,16 +40,11 @@ type Props = {
 };
 
 export function UkSetupTab({ venture, manifest }: Props) {
-  const canvasPath = useMemo(
-    () => getUkSetupCanvasPath(venture.rootPath),
-    [venture.rootPath]
-  );
+  const canvasPath = useMemo(() => getUkSetupCanvasPath(venture.rootPath), [venture.rootPath]);
 
   const [canvas, setCanvas] = useState<UkSetupCanvas | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">(
-    "saved"
-  );
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
 
   // Debounce ref — cancelled on every edit, fires SAVE_DEBOUNCE_MS
   // after the last keystroke. Same pattern as BrandTab's autosave.
@@ -75,10 +71,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
             // File on disk is malformed — start with a fresh canvas
             // but don't overwrite. The pipeline step's same-day
             // tripwire will pick this up too.
-            console.warn(
-              "[uk-setup] canvas parse failed, using fresh defaults",
-              parsed.error
-            );
+            console.warn("[uk-setup] canvas parse failed, using fresh defaults", parsed.error);
             if (!cancelled && manifest)
               setCanvas(createEmptyUkSetupCanvas(venture.id, manifest.entityType));
           }
@@ -86,8 +79,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
           // No canvas on disk yet — happens before the first pipeline
           // run. Initialise from the manifest so the user can edit
           // immediately; the autosave will create the file.
-          if (!cancelled)
-            setCanvas(createEmptyUkSetupCanvas(venture.id, manifest.entityType));
+          if (!cancelled) setCanvas(createEmptyUkSetupCanvas(venture.id, manifest.entityType));
         }
       } catch (err) {
         console.error("[uk-setup] load failed", err);
@@ -134,11 +126,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
   }, [canvas, canvasPath]);
 
   if (loading || !canvas || !manifest) {
-    return (
-      <div style={{ padding: 28, color: "#6B7280" }}>
-        Loading UK Setup canvas…
-      </div>
-    );
+    return <div style={{ padding: 28, color: "#6B7280" }}>Loading UK Setup canvas…</div>;
   }
 
   const rules = deriveUkSetupRules(canvas, {
@@ -154,9 +142,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
   const update = <K extends keyof UkSetupCanvas>(key: K, value: UkSetupCanvas[K]) =>
     setCanvas((cur) => (cur ? { ...cur, [key]: value } : cur));
   const updateCompany = (patch: Partial<UkSetupCanvas["company"]>) =>
-    setCanvas((cur) =>
-      cur ? { ...cur, company: { ...cur.company, ...patch } } : cur
-    );
+    setCanvas((cur) => (cur ? { ...cur, company: { ...cur.company, ...patch } } : cur));
   const updateAddress = (patch: Partial<UkSetupCanvas["company"]["registeredOffice"]>) =>
     setCanvas((cur) =>
       cur
@@ -170,23 +156,13 @@ export function UkSetupTab({ venture, manifest }: Props) {
         : cur
     );
   const updateHmrc = (patch: Partial<UkSetupCanvas["hmrc"]>) =>
-    setCanvas((cur) =>
-      cur ? { ...cur, hmrc: { ...cur.hmrc, ...patch } } : cur
-    );
+    setCanvas((cur) => (cur ? { ...cur, hmrc: { ...cur.hmrc, ...patch } } : cur));
   const updateBanking = (patch: Partial<UkSetupCanvas["banking"]>) =>
-    setCanvas((cur) =>
-      cur ? { ...cur, banking: { ...cur.banking, ...patch } } : cur
-    );
+    setCanvas((cur) => (cur ? { ...cur, banking: { ...cur.banking, ...patch } } : cur));
   const updateInsurance = (patch: Partial<UkSetupCanvas["insurance"]>) =>
-    setCanvas((cur) =>
-      cur ? { ...cur, insurance: { ...cur.insurance, ...patch } } : cur
-    );
+    setCanvas((cur) => (cur ? { ...cur, insurance: { ...cur.insurance, ...patch } } : cur));
   const updateIp = (patch: Partial<UkSetupCanvas["ipAssignment"]>) =>
-    setCanvas((cur) =>
-      cur
-        ? { ...cur, ipAssignment: { ...cur.ipAssignment, ...patch } }
-        : cur
-    );
+    setCanvas((cur) => (cur ? { ...cur, ipAssignment: { ...cur.ipAssignment, ...patch } } : cur));
 
   /**
    * pt.39 — Companies House live name check.
@@ -253,9 +229,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827" }}>
-              UK Setup
-            </h2>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827" }}>UK Setup</h2>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6B7280" }}>
               Entity → registrations → banking → insurance → IP. Saved to{" "}
               <code>04_uk_business/uk-setup.json</code>.
@@ -267,8 +241,8 @@ export function UkSetupTab({ venture, manifest }: Props) {
         {/* 1. Entity type ──────────────────────────────────────── */}
         <Section title="1. Entity Type" icon="🏛️">
           <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-            How will you operate? Manifest set this to{" "}
-            <strong>{manifest.entityType}</strong>; you can revise here.
+            How will you operate? Manifest set this to <strong>{manifest.entityType}</strong>; you
+            can revise here.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {(EntityTypeSchema.options as EntityType[]).map((opt) => {
@@ -318,12 +292,8 @@ export function UkSetupTab({ venture, manifest }: Props) {
                     padding: "0 14px",
                     border: "1px solid #D1D5DB",
                     borderRadius: 4,
-                    background: canvas.company.name.trim().length === 0
-                      ? "#F3F4F6"
-                      : "#FFFFFF",
-                    cursor: canvas.company.name.trim().length === 0
-                      ? "not-allowed"
-                      : "pointer",
+                    background: canvas.company.name.trim().length === 0 ? "#F3F4F6" : "#FFFFFF",
+                    cursor: canvas.company.name.trim().length === 0 ? "not-allowed" : "pointer",
                     fontSize: 12,
                     fontWeight: 600,
                     color: "#374151",
@@ -408,9 +378,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
                   <input
                     type="text"
                     value={canvas.company.registeredOffice.postcode}
-                    onChange={(e) =>
-                      updateAddress({ postcode: e.target.value.toUpperCase() })
-                    }
+                    onChange={(e) => updateAddress({ postcode: e.target.value.toUpperCase() })}
                     style={inputStyle}
                   />
                 </Field>
@@ -582,10 +550,15 @@ export function UkSetupTab({ venture, manifest }: Props) {
           top: 16,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
-            Must-haves
-          </h3>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            marginBottom: 12,
+          }}
+        >
+          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>Must-haves</h3>
           <span
             style={{
               fontSize: 12,
@@ -598,10 +571,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {rules.map((rule) => (
-            <div
-              key={rule.id}
-              style={{ display: "flex", alignItems: "flex-start", gap: 8 }}
-            >
+            <div key={rule.id} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
               <span
                 style={{
                   fontSize: 12,
@@ -728,9 +698,7 @@ function Checkbox({
       />
       <div>
         <div style={{ fontSize: 13, color: "#111827", fontWeight: 500 }}>{label}</div>
-        {hint && (
-          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>{hint}</div>
-        )}
+        {hint && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>{hint}</div>}
       </div>
     </label>
   );

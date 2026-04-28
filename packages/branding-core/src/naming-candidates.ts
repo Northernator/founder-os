@@ -198,14 +198,10 @@ export const NamingCandidateSchema = z.object({
    *   unknown → restricted (we opened the page, can't probe from here)
    * and the user then manually flips to available/taken.
    */
-  trademarkStatus: z
-    .record(z.string(), AvailabilityCheckSchema)
-    .default({}),
+  trademarkStatus: z.record(z.string(), AvailabilityCheckSchema).default({}),
 
   /** Keyed by platform id. */
-  socialStatus: z
-    .record(SocialPlatformSchema, AvailabilityCheckSchema)
-    .default({}),
+  socialStatus: z.record(SocialPlatformSchema, AvailabilityCheckSchema).default({}),
 
   /** Freeform note the founder can leave against this candidate. */
   notes: z.string().default(""),
@@ -276,11 +272,8 @@ export function deriveBrandConfidence(candidate: NamingCandidate): BrandConfiden
 
   // Red: .com claimed or any trademark hit.
   const comCheck = candidate.domainStatus[`${candidate.name.toLowerCase()}.com`];
-  const comBad =
-    comCheck && (comCheck.status === "taken" || comCheck.status === "parked");
-  const trademarkHit = Object.values(candidate.trademarkStatus).some(
-    (c) => c.status === "taken"
-  );
+  const comBad = comCheck && (comCheck.status === "taken" || comCheck.status === "parked");
+  const trademarkHit = Object.values(candidate.trademarkStatus).some((c) => c.status === "taken");
   if (comBad || trademarkHit) return "red";
 
   // Amber: any error/restricted/taken on a non-.com resource.
@@ -295,9 +288,7 @@ export function deriveBrandConfidence(candidate: NamingCandidate): BrandConfiden
 
   // Green requires the core set (at least a .com check) to be positive.
   const hasComCheck = !!comCheck;
-  const allGreen = allChecks.every(
-    (c) => c.status === "available" || c.status === "unknown"
-  );
+  const allGreen = allChecks.every((c) => c.status === "available" || c.status === "unknown");
   if (hasComCheck && allGreen) {
     // Require >= 2 positives to avoid promoting a single "available"
     // click to green. Keeps the confidence honest.

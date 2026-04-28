@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
 import type {
-  SkillSummary,
   SkillBodyResponse,
   SkillSource,
+  SkillSummary,
   SkillsListResponse,
 } from "@founder-os/mission-control-protocol";
+import { useEffect, useState } from "react";
 import type { TabProps } from "../App.js";
 import { request, send } from "../lib/vscode.js";
 
@@ -33,7 +33,9 @@ export function SkillsTab(_props: TabProps) {
     }
   }
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    void refresh();
+  }, []);
 
   async function toggle(s: SkillSummary): Promise<void> {
     const key = s.source + "::" + s.id;
@@ -61,7 +63,11 @@ export function SkillsTab(_props: TabProps) {
       await navigator.clipboard.writeText(text);
     } catch {
       // Webview may block clipboard.writeText on focus loss; fall back to host toast.
-      send({ type: "toast", level: "warn", message: "Copy failed - manual select required." } as never);
+      send({
+        type: "toast",
+        level: "warn",
+        message: "Copy failed - manual select required.",
+      } as never);
     }
   }
 
@@ -71,19 +77,27 @@ export function SkillsTab(_props: TabProps) {
     <>
       <div className="mc-card">
         <div className="mc-row" style={{ justifyContent: "space-between" }}>
-          <h3 className="mc-card-title" style={{ margin: 0 }}>Skills</h3>
+          <h3 className="mc-card-title" style={{ margin: 0 }}>
+            Skills
+          </h3>
           <button className="secondary" onClick={refresh} disabled={busy}>
             {busy ? "Scanning…" : "Refresh"}
           </button>
         </div>
         <p style={{ color: "var(--fc-fg-muted)", fontSize: 12, margin: "8px 0 0" }}>
-          Loaded from three locations (workspace overrides user overrides bundled).
-          Drop a folder containing a <code>SKILL.md</code> into any of these:
+          Loaded from three locations (workspace overrides user overrides bundled). Drop a folder
+          containing a <code>SKILL.md</code> into any of these:
         </p>
         <ul style={{ color: "var(--fc-fg-muted)", fontSize: 12, marginTop: 6, paddingLeft: 20 }}>
-          <li><code>{"<workspace>/.founder-cowork/skills/"}</code></li>
-          <li>VS Code globalStorage <code>/skills/</code> (user-wide)</li>
-          <li>Extension bundle <code>/skills/</code> (ships with the extension)</li>
+          <li>
+            <code>{"<workspace>/.founder-cowork/skills/"}</code>
+          </li>
+          <li>
+            VS Code globalStorage <code>/skills/</code> (user-wide)
+          </li>
+          <li>
+            Extension bundle <code>/skills/</code> (ships with the extension)
+          </li>
         </ul>
       </div>
 
@@ -119,34 +133,34 @@ export function SkillsTab(_props: TabProps) {
                       padding: "10px 12px",
                     }}
                   >
-                    <div className="mc-row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div
+                      className="mc-row"
+                      style={{ justifyContent: "space-between", alignItems: "flex-start" }}
+                    >
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 600 }}>
-                          {s.name}{" "}
-                          {s.version && <span className="mc-pill">v{s.version}</span>}
+                          {s.name} {s.version && <span className="mc-pill">v{s.version}</span>}
                         </div>
                         <div style={{ color: "var(--fc-fg-muted)", fontSize: 12, marginTop: 2 }}>
                           <code>{s.id}</code> · modified {new Date(s.modifiedAt).toLocaleString()}
                         </div>
                         {s.description && (
-                          <p style={{ margin: "6px 0 0", fontSize: 13 }}>
-                            {s.description}
-                          </p>
+                          <p style={{ margin: "6px 0 0", fontSize: 13 }}>{s.description}</p>
                         )}
                       </div>
                       <div className="mc-row" style={{ gap: 6 }}>
-                        <button
-                          className="secondary"
-                          onClick={() => void toggle(s)}
-                        >
+                        <button className="secondary" onClick={() => void toggle(s)}>
                           {isOpen ? "Hide" : "View"}
                         </button>
                       </div>
                     </div>
-                    {isOpen && (
-                      body ? (
+                    {isOpen &&
+                      (body ? (
                         <div style={{ marginTop: 10 }}>
-                          <div className="mc-row" style={{ justifyContent: "flex-end", gap: 6, marginBottom: 6 }}>
+                          <div
+                            className="mc-row"
+                            style={{ justifyContent: "flex-end", gap: 6, marginBottom: 6 }}
+                          >
                             <button
                               className="secondary"
                               onClick={() => void copyToClipboard(body.body)}
@@ -160,14 +174,13 @@ export function SkillsTab(_props: TabProps) {
                               Copy as prompt
                             </button>
                           </div>
-                          <pre style={{ maxHeight: 320, overflow: "auto" }}>
-                            {body.body.trim()}
-                          </pre>
+                          <pre style={{ maxHeight: 320, overflow: "auto" }}>{body.body.trim()}</pre>
                         </div>
                       ) : (
-                        <div className="mc-empty" style={{ marginTop: 10 }}>Loading…</div>
-                      )
-                    )}
+                        <div className="mc-empty" style={{ marginTop: 10 }}>
+                          Loading…
+                        </div>
+                      ))}
                   </div>
                 );
               })}
@@ -178,7 +191,9 @@ export function SkillsTab(_props: TabProps) {
 
       {error && (
         <div className="mc-card" style={{ borderColor: "var(--fc-error)" }}>
-          <h3 className="mc-card-title" style={{ color: "var(--fc-error)" }}>Error</h3>
+          <h3 className="mc-card-title" style={{ color: "var(--fc-error)" }}>
+            Error
+          </h3>
           <pre style={{ whiteSpace: "pre-wrap", color: "var(--fc-error)" }}>{error}</pre>
         </div>
       )}
@@ -188,9 +203,12 @@ export function SkillsTab(_props: TabProps) {
 
 function sourceClass(s: SkillSource): string {
   switch (s) {
-    case "workspace": return "success";
-    case "user":      return "";
-    case "bundled":   return "warn";
+    case "workspace":
+      return "success";
+    case "user":
+      return "";
+    case "bundled":
+      return "warn";
   }
 }
 
@@ -207,7 +225,9 @@ function groupBySource(list: SkillSummary[]): Map<SkillSource, SkillSummary[]> {
 function buildPromptPrefix(body: SkillBodyResponse): string {
   const name = body.frontmatter.name ?? body.id;
   return (
-    "Use the following skill (" + name + ") for this task.\n\n" +
+    "Use the following skill (" +
+    name +
+    ") for this task.\n\n" +
     "---\n" +
     body.body.trim() +
     "\n---\n\n"

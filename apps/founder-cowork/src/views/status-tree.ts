@@ -19,10 +19,13 @@ export class StatusTreeProvider implements vscode.TreeDataProvider<RunEntry> {
       vscode.TreeItemCollapsibleState.None
     );
     const icon =
-      entry.status === "success" ? "check"
-      : entry.status === "failed" ? "error"
-      : entry.status === "running" ? "loading~spin"
-      : "circle-outline";
+      entry.status === "success"
+        ? "check"
+        : entry.status === "failed"
+          ? "error"
+          : entry.status === "running"
+            ? "loading~spin"
+            : "circle-outline";
     item.iconPath = new vscode.ThemeIcon(icon);
     item.description = `${entry.status} ${entry.percent > 0 ? `(${entry.percent}%)` : ""}`;
     return item;

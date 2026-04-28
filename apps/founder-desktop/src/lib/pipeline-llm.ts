@@ -1,3 +1,4 @@
+import type { LlmProviderId } from "@founder-os/llm-providers";
 /**
  * pipeline-llm.ts (pt.27, extended pt.29) — adapter that wraps
  * `streamChat` into the `OrchestratorLlmCaller` shape expected by
@@ -22,8 +23,8 @@
  * Default off, so the pt.27 brand-pipeline path is byte-equivalent.
  */
 import type { OrchestratorLlmCaller } from "@founder-os/pipeline-runner";
-import type { LlmProviderId } from "@founder-os/llm-providers";
-import { streamChat, pickActiveProvider } from "./llm-client.js";
+import { optimize } from "@founder-os/prompt-master";
+import { pickActiveProvider, streamChat } from "./llm-client.js";
 
 export type BuildPipelineLlmCallerOpts = {
   /**
@@ -101,9 +102,27 @@ export async function buildPipelineLlmCaller(
     // Single-user-message shape — the orchestrator steps build a
     // self-contained prompt rather than threading a multi-turn chat,
     // which keeps the adapter trivial and provider-agnostic.
+    //
+    // Run the orchestrator-supplied system prompt through Prompt Master
+    // before each step. Pipeline runs can fire dozens of LLM calls in a
+    // single session — even modest per-call savings add up. optimize()
+    // never throws; on a missing transport it returns the input unchanged
+    // and we send the original prompt.
+    let optimizedSystem = system;
+    if (system && system.trim().length > 0) {
+      const result = await optimize({ prompt: system, context: "other" });
+      optimizedSystem = result.optimized;
+      console.info(
+        "[prompt-master] pipeline-step",
+        result.fallbackUsed
+          ? "(fallback — transport unavailable)"
+          : `tokensSaved=${result.tokensSaved} cacheHit=${result.cacheHit}`
+      );
+    }
+
     return streamChat({
       provider,
-      system,
+      system: optimizedSystem,
       messages: [{ role: "user", content: user }],
       maxTokens,
       temperature,

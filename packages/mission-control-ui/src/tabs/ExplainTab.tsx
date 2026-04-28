@@ -1,5 +1,5 @@
-import { useState } from "react";
 import type { AgentId } from "@founder-os/agent-registry";
+import { useState } from "react";
 import type { TabProps } from "../App.js";
 import { request } from "../lib/vscode.js";
 
@@ -13,7 +13,8 @@ export function ExplainTab(props: TabProps) {
   const [question, setQuestion] = useState("");
   const [agentId, setAgentId] = useState<AgentId | "">(
     (props.agents.find((a) => a.id === "claude")?.id as AgentId) ??
-      (props.agents[0]?.id as AgentId) ?? "",
+      (props.agents[0]?.id as AgentId) ??
+      ""
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,9 +45,8 @@ export function ExplainTab(props: TabProps) {
       <div className="mc-card">
         <h3 className="mc-card-title">Explain</h3>
         <p style={{ color: "var(--fc-fg-muted)", fontSize: 12, margin: "0 0 12px" }}>
-          Paste code or text below. The agent will explain it (defaults to a
-          line-by-line walkthrough; override with a specific question above
-          if you want something else).
+          Paste code or text below. The agent will explain it (defaults to a line-by-line
+          walkthrough; override with a specific question above if you want something else).
         </p>
         <div className="mc-grid" style={{ gridTemplateColumns: "auto 1fr" }}>
           <label htmlFor="explain-agent">Agent</label>
@@ -98,7 +98,9 @@ export function ExplainTab(props: TabProps) {
 
       {error && (
         <div className="mc-card" style={{ borderColor: "var(--fc-error)" }}>
-          <h3 className="mc-card-title" style={{ color: "var(--fc-error)" }}>Error</h3>
+          <h3 className="mc-card-title" style={{ color: "var(--fc-error)" }}>
+            Error
+          </h3>
           <pre style={{ whiteSpace: "pre-wrap", color: "var(--fc-error)" }}>{error}</pre>
         </div>
       )}

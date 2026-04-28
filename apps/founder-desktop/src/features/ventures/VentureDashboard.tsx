@@ -1,53 +1,48 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useVentureStore, usePipelineStore } from "@founder-os/state";
-import { StageGraph } from "@founder-os/graph-ui";
 import { ProjectChat } from "@founder-os/chat-ui";
-import { Card, Button, StageBadge } from "@founder-os/ui";
+import type { ChatMessage } from "@founder-os/chat-ui";
+import type { ChatAttachment } from "@founder-os/chat-ui";
+import type { Venture, VentureManifest, VentureStage } from "@founder-os/domain";
+import { VentureManifestSchema } from "@founder-os/domain";
+import { StageGraph } from "@founder-os/graph-ui";
+import { PROVIDER_CATALOG, getProvider } from "@founder-os/llm-providers";
+import { createSaasResearchReportsStep, runPipeline } from "@founder-os/pipeline-runner";
+import { optimize } from "@founder-os/prompt-master";
 import {
   STAGE_FIRST_MESSAGE,
   baseSystemPrompt,
+  brandStagePrompt,
+  buildStagePrompt,
   researchStagePrompt,
   saasResearchIntakePrompt,
-  brandStagePrompt,
-  ukSetupStagePrompt,
-  specStagePrompt,
   screensStagePrompt,
-  buildStagePrompt,
+  specStagePrompt,
+  ukSetupStagePrompt,
 } from "@founder-os/prompts";
-import type { ChatMessage } from "@founder-os/chat-ui";
-import type { Venture, VentureManifest, VentureStage } from "@founder-os/domain";
-import { VentureManifestSchema } from "@founder-os/domain";
+import { usePipelineStore, useVentureStore } from "@founder-os/state";
+import { Button, Card, StageBadge } from "@founder-os/ui";
+import { invoke } from "@tauri-apps/api/core";
+import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
+import type React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { buildAttachmentBlock, extractAttachment } from "../../lib/chat-attachments.js";
 import * as db from "../../lib/db.js";
-import {
-  openInFileManager,
-  deleteVentureDir,
-  loadVentureManifest,
-} from "../../lib/venture-io.js";
+import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
 import { tauriFs } from "../../lib/pipeline-fs.js";
-import { runPipeline, createSaasResearchReportsStep } from "@founder-os/pipeline-runner";
+import { buildPipelineLlmCaller } from "../../lib/pipeline-llm.js";
+import { pushToast } from "../../lib/toasts.js";
+import { useAbortableTask } from "../../lib/use-abortable-task.js";
+import { deleteVentureDir, loadVentureManifest, openInFileManager } from "../../lib/venture-io.js";
 import { ArtifactsTab } from "./ArtifactsTab.js";
 import { AuditTab } from "./AuditTab.js";
-import { OptionsTab } from "./OptionsTab.js";
-import { IdeaTab } from "./IdeaTab.js";
-import { ResearchTab } from "./ResearchTab.js";
-import { ValidationTab } from "./ValidationTab.js";
 import { BrandTab } from "./BrandTab.js";
-import { UkSetupTab } from "./UkSetupTab.js";
-import { SpecTab } from "./SpecTab.js";
+import { IdeaTab } from "./IdeaTab.js";
+import { OptionsTab } from "./OptionsTab.js";
+import { ResearchTab } from "./ResearchTab.js";
 import { ScreensTab } from "./ScreensTab.js";
+import { SpecTab } from "./SpecTab.js";
+import { UkSetupTab } from "./UkSetupTab.js";
+import { ValidationTab } from "./ValidationTab.js";
 import { VentureProviderPicker } from "./VentureProviderPicker.js";
-import { streamChat, pickActiveProvider } from "../../lib/llm-client.js";
-import { buildPipelineLlmCaller } from "../../lib/pipeline-llm.js";
-import { useAbortableTask } from "../../lib/use-abortable-task.js";
-import { getProvider, PROVIDER_CATALOG } from "@founder-os/llm-providers";
-import {
-  extractAttachment,
-  buildAttachmentBlock,
-} from "../../lib/chat-attachments.js";
-import { pushToast } from "../../lib/toasts.js";
-import type { ChatAttachment } from "@founder-os/chat-ui";
-import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@tauri-apps/api/core";
 
 /**
  * Dashboard-side attachment record. Extends the chat-ui `ChatAttachment`
@@ -60,7 +55,20 @@ import { invoke } from "@tauri-apps/api/core";
  */
 type DashboardAttachment = ChatAttachment & { text?: string };
 
-type Tab = "idea" | "research" | "validation" | "brand" | "uk-setup" | "spec" | "screens" | "overview" | "chat" | "pipeline" | "artifacts" | "audit" | "options";
+type Tab =
+  | "idea"
+  | "research"
+  | "validation"
+  | "brand"
+  | "uk-setup"
+  | "spec"
+  | "screens"
+  | "overview"
+  | "chat"
+  | "pipeline"
+  | "artifacts"
+  | "audit"
+  | "options";
 
 function makeMsgId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -140,10 +148,7 @@ function assistantJustCuedReports(messages: ChatMessage[]): boolean {
 }
 
 /** Same last-assistant-only scan but matching any of the brand cues. */
-function lastAssistantIncludes(
-  messages: ChatMessage[],
-  needle: string
-): boolean {
+function lastAssistantIncludes(messages: ChatMessage[], needle: string): boolean {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m?.role !== "assistant") continue;
@@ -193,10 +198,7 @@ function buildSystemPromptForSend(args: {
     if (manifest.appType === "saas") {
       parts.push(saasResearchIntakePrompt());
     }
-  } else if (
-    ventureStage === "VALIDATED" ||
-    ventureStage === "BRAND_READY"
-  ) {
+  } else if (ventureStage === "VALIDATED" || ventureStage === "BRAND_READY") {
     // VALIDATED also gets the brand overlay — the founder advances into
     // the Brand tab directly from Validation (see STAGE_TAB) so the
     // chat should be coaching on naming / direction even before the
@@ -281,11 +283,7 @@ function buildChatMarkdown(args: {
     // Plain-text role labels — survive copy/paste into any editor or tool
     // without a fallback glyph, and keep the output readable in a terminal.
     const label =
-      msg.role === "user"
-        ? "Founder"
-        : msg.role === "assistant"
-          ? "Assistant"
-          : msg.role;
+      msg.role === "user" ? "Founder" : msg.role === "assistant" ? "Assistant" : msg.role;
     lines.push(`## ${label} — ${msg.createdAt}`);
     lines.push("");
     // content can contain code fences / ATX headers; we don't mutate it.
@@ -324,11 +322,7 @@ const chatExportMenuItemStyle: React.CSSProperties = {
  * lowercased stage + ISO date — sortable in a folder, no colons, no
  * spaces, no slashes.
  */
-function defaultChatExportFilename(
-  ventureId: string,
-  stage: VentureStage,
-  now: Date
-): string {
+function defaultChatExportFilename(ventureId: string, stage: VentureStage, now: Date): string {
   const short = ventureId.slice(0, 8);
   const stageSlug = stage.toLowerCase();
   const date = now.toISOString().slice(0, 10);
@@ -336,15 +330,8 @@ function defaultChatExportFilename(
 }
 
 export function VentureDashboard({ ventureId }: { ventureId: string }) {
-  const {
-    activeVenture,
-    updateVentureStage,
-    removeVenture,
-    setError,
-    error,
-  } = useVentureStore();
-  const { activePlan, setActivePlan, updateActivePlan, setRunning, isRunning } =
-    usePipelineStore();
+  const { activeVenture, updateVentureStage, removeVenture, setError, error } = useVentureStore();
+  const { activePlan, setActivePlan, updateActivePlan, setRunning, isRunning } = usePipelineStore();
   // Default to "idea" tab for IDEA-stage ventures so the guided walkthrough
   // is the first thing the founder sees. Any other stage defaults to "overview".
   const [tab, setTab] = useState<Tab>("overview");
@@ -365,6 +352,11 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   // Bumped after each pipeline run to trigger an Artifacts re-scan. The tab
   // owns its own state, so this is the cheapest way to nudge it from here.
   const [artifactsRescanToken, setArtifactsRescanToken] = useState(0);
+  // Running total of tokens that Prompt Master shaved off this venture's
+  // chat session. Reset on venture switch (see effect below). Surfaced as
+  // a small footer on the chat composer so the founder gets a passive
+  // signal that the optimizer is doing real work.
+  const [promptMasterTokensSaved, setPromptMasterTokensSaved] = useState(0);
   // Same idea for the Audit tab — bumped after a pipeline run so the
   // tab refreshes even if the user wasn't looking at it during the run.
   const [auditRefreshToken, setAuditRefreshToken] = useState(0);
@@ -421,10 +413,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   // the button's pulsing glow + inline "ready" cue. Memoised because
   // scanning messages on every render would run on every token while a
   // stream is in flight (handleSend mutates the array per delta).
-  const reportsCueActive = useMemo(
-    () => assistantJustCuedReports(messages),
-    [messages]
-  );
+  const reportsCueActive = useMemo(() => assistantJustCuedReports(messages), [messages]);
 
   // Brand stage cues. Two tokens, two independent edge detectors —
   // emitting one doesn't imply the other. Same memoisation rationale:
@@ -439,15 +428,9 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   );
   // pt.34a — UK Setup cue. Same last-assistant-only scan + one-shot toast
   // pattern as the brand cues. Edge-detector ref reset on venture switch.
-  const ukSetupCueActive = useMemo(
-    () => lastAssistantIncludes(messages, UK_SETUP_CUE),
-    [messages]
-  );
+  const ukSetupCueActive = useMemo(() => lastAssistantIncludes(messages, UK_SETUP_CUE), [messages]);
   // pt.41g — Spec stage cue. Same shape.
-  const specCueActive = useMemo(
-    () => lastAssistantIncludes(messages, SPEC_CUE),
-    [messages]
-  );
+  const specCueActive = useMemo(() => lastAssistantIncludes(messages, SPEC_CUE), [messages]);
   // pt.45 — Screens (a.k.a. WIREFRAME_READY) stage cue. Same shape.
   // Token matches the legacy stage enum value, see WIREFRAME_CUE.
   const wireframeCueActive = useMemo(
@@ -467,7 +450,8 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
       pushToast({
         kind: "info",
         message: "Research intake complete",
-        detail: "The assistant thinks it has enough to draft the Core 4. Click ✨ Generate Reports when you're ready.",
+        detail:
+          "The assistant thinks it has enough to draft the Core 4. Click ✨ Generate Reports when you're ready.",
         ttlMs: 6000,
       });
     }
@@ -655,6 +639,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   // walkthrough is the first thing the founder sees.
   useEffect(() => {
     setChatAttachments([]);
+    setPromptMasterTokensSaved(0);
     prevCueRef.current = false;
     prevBrandNamingCueRef.current = false;
     prevBrandDirectionCueRef.current = false;
@@ -937,7 +922,9 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
           // pt.30b: distinct "cancelled" status — see notes in the
           // success-path branch above.
           await db.updateRunStatus(runId, "cancelled", {});
-        } catch { /* swallow */ }
+        } catch {
+          /* swallow */
+        }
       } else {
         console.error("[pipeline] run failed", err);
         // Sticky error toast — a broken pipeline run is the single most
@@ -951,7 +938,9 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
         setError(msg);
         try {
           await db.updateRunStatus(runId, "failed", { error: msg });
-        } catch { /* swallow — original error already surfaced */ }
+        } catch {
+          /* swallow — original error already surfaced */
+        }
       }
     } finally {
       // Plan stays in activePlan so the Pipeline tab keeps rendering it
@@ -1028,11 +1017,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   };
 
   if (!venture) {
-    return (
-      <div style={{ padding: 40, color: "#6B7280" }}>
-        Venture not found.
-      </div>
-    );
+    return <div style={{ padding: 40, color: "#6B7280" }}>Venture not found.</div>;
   }
 
   const handleSend = async (content: string) => {
@@ -1071,9 +1056,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
     // imply they're still queued for the next turn.
     if (readyAttachments.length > 0) {
       setChatAttachments((prev) =>
-        prev.filter(
-          (a) => !readyAttachments.some((r) => r.id === a.id)
-        )
+        prev.filter((a) => !readyAttachments.some((r) => r.id === a.id))
       );
     }
 
@@ -1104,9 +1087,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
     // tab with a helpful error instead of silently failing.
     const providerId = await pickActiveProvider(venture.id);
     if (!providerId) {
-      setError(
-        "No AI provider configured. Open the Options tab to paste an API key."
-      );
+      setError("No AI provider configured. Open the Options tab to paste an API key.");
       setChatLoading(false);
       setTab("options");
       return;
@@ -1117,8 +1098,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
     // drives the "via Claude · PRO" / "via ChatGPT · API" caption in the
     // chat bubble. Reads cheap — just the one row we're about to use.
     const activeSetting = await db.getLlmSetting(providerId);
-    const providerMode =
-      activeSetting?.mode === "subscription" ? "subscription" : "api_key";
+    const providerMode = activeSetting?.mode === "subscription" ? "subscription" : "api_key";
 
     // Seed an empty assistant bubble we'll progressively fill with streaming
     // deltas. Using a stable id means the bubble stays in place as tokens
@@ -1144,13 +1124,12 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
     // flushed to DB round-trip yet, but we have it in local scope). We
     // deliberately exclude any previous `welcome`-id placeholder that only
     // exists when the thread is empty, since it's not persisted.
-    const historyForProvider = [
-      ...messages.filter((m) => m.id !== "welcome"),
-      userMsg,
-    ].map((m) => ({
-      role: m.role as "system" | "user" | "assistant",
-      content: m.content,
-    }));
+    const historyForProvider = [...messages.filter((m) => m.id !== "welcome"), userMsg].map(
+      (m) => ({
+        role: m.role as "system" | "user" | "assistant",
+        content: m.content,
+      })
+    );
 
     // Stage-aware system prompt composition. When the full venture manifest
     // has been loaded (venture.yaml on disk), we stack:
@@ -1166,6 +1145,24 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
       ventureStage: venture.stage,
       manifest,
     });
+
+    // Run the system prompt through Prompt Master before sending. By
+    // contract optimize() never throws — when no transport is wired up
+    // (or one fails) it returns the input unchanged with fallbackUsed=true,
+    // so we don't try/catch here.
+    const optimizedSystem = await optimize({
+      prompt: systemPrompt,
+      context: "venture-chat",
+    });
+    if (optimizedSystem.tokensSaved > 0) {
+      setPromptMasterTokensSaved((prev) => prev + optimizedSystem.tokensSaved);
+    }
+    console.info(
+      "[prompt-master] venture-chat",
+      optimizedSystem.fallbackUsed
+        ? "(fallback — transport unavailable)"
+        : `tokensSaved=${optimizedSystem.tokensSaved} cacheHit=${optimizedSystem.cacheHit}`
+    );
 
     // Fresh controller for this send. Abort any stray one first — shouldn't
     // happen (handleSend is gated by chatLoading on the UI side) but it's
@@ -1188,15 +1185,13 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
     try {
       finalText = await streamChat({
         provider: providerId,
-        system: systemPrompt,
+        system: optimizedSystem.optimized,
         messages: historyForProvider,
         signal: controller.signal,
         enableWebSearch,
         onDelta: (delta) => {
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId ? { ...m, content: m.content + delta } : m
-            )
+            prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + delta } : m))
           );
         },
       });
@@ -1258,9 +1253,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
     // the same content. Harmless on the normal done path (both match).
     if (cancelled) {
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId ? { ...m, content: finalText } : m
-        )
+        prev.map((m) => (m.id === assistantId ? { ...m, content: finalText } : m))
       );
     }
 
@@ -1433,7 +1426,8 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
       const transcriptLines: string[] = [];
       for (const m of messages) {
         if (m.id === "welcome") continue;
-        const who = m.role === "assistant" ? "Assistant" : m.role === "system" ? "System" : "Founder";
+        const who =
+          m.role === "assistant" ? "Assistant" : m.role === "system" ? "System" : "Founder";
         transcriptLines.push(`## ${who}\n${m.content.trim()}`);
       }
       const readyAttachments = chatAttachments.filter(
@@ -1442,9 +1436,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
       const attachmentBlock = buildAttachmentBlock(
         readyAttachments.map((a) => ({ name: a.name, text: a.text! }))
       );
-      const intake = [transcriptLines.join("\n\n"), attachmentBlock]
-        .filter(Boolean)
-        .join("\n\n");
+      const intake = [transcriptLines.join("\n\n"), attachmentBlock].filter(Boolean).join("\n\n");
 
       const result = await createSaasResearchReportsStep({
         fs: tauriFs,
@@ -1641,9 +1633,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
       await invoke("write_file", { path: filePath, content: text });
       pushToast({
         kind: "success",
-        message: `Saved chat · ${messages.length} message${
-          messages.length === 1 ? "" : "s"
-        }`,
+        message: `Saved chat · ${messages.length} message${messages.length === 1 ? "" : "s"}`,
         detail: filePath,
       });
     } catch (err) {
@@ -1817,22 +1807,14 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
           // AuditTab key pattern). Manifest is passed through so the
           // tab can derive must-haves from the venture's flags
           // (hiresStaff / handlesPersonalData / takesPayments).
-          <UkSetupTab
-            key={venture.id}
-            venture={venture}
-            manifest={manifest}
-          />
+          <UkSetupTab key={venture.id} venture={venture} manifest={manifest} />
         )}
         {tab === "spec" && (
           // pt.41: same key pattern as UkSetupTab — internal canvas
           // state resets on venture switch. Manifest passed through
           // for parity even though deriveProductSpecRules currently
           // doesn't need flags; future appType-specific gating could.
-          <SpecTab
-            key={venture.id}
-            venture={venture}
-            manifest={manifest}
-          />
+          <SpecTab key={venture.id} venture={venture} manifest={manifest} />
         )}
         {tab === "screens" && (
           // pt.45: Screens tab (legacy stage enum WIREFRAME_READY).
@@ -1841,11 +1823,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
           // beyond the loading guard but kept on the prop signature
           // for future appType-aware gating (e.g. hiding the AUTH
           // shell type for browser_extension/game).
-          <ScreensTab
-            key={venture.id}
-            venture={venture}
-            manifest={manifest}
-          />
+          <ScreensTab key={venture.id} venture={venture} manifest={manifest} />
         )}
         {tab === "overview" && (
           <OverviewTab
@@ -1887,9 +1865,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
                     actually supports it. We compute both conditions
                     inline so the pill is honest: showing it when the
                     user's on a non-Anthropic provider would be a lie. */}
-                {venture.stage === "RESEARCHED" && (
-                  <WebSearchPill ventureId={venture.id} />
-                )}
+                {venture.stage === "RESEARCHED" && <WebSearchPill ventureId={venture.id} />}
                 {/* Inline cue — rendered alongside the message counter
                     when the assistant has signalled readiness. Extra
                     surface for the same signal the button already pulses
@@ -1924,57 +1900,51 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
                     founder can't miss the handoff. We don't auto-fire —
                     4 LLM calls aren't cheap and the founder should
                     approve the moment. */}
-                {venture.stage === "RESEARCHED" &&
-                  manifest?.appType === "saas" &&
-                  !chatLoading && (
-                    <button
-                      type="button"
-                      onClick={handleGenerateResearchReports}
-                      disabled={reportsGenerating}
-                      title={
-                        reportsGenerating
-                          ? "Running 4 LLM calls in parallel…"
-                          : reportsCueActive
-                            ? "Assistant signalled it's ready — click to generate the Core 4 research docs"
-                            : "Generate the Core 4 research docs from this chat"
-                      }
-                      style={{
-                        background: reportsGenerating
-                          ? "#E0E7FF"
-                          : reportsCueActive
-                            ? "#6366F1"
-                            : "#4F46E5",
-                        border: `1px solid ${
-                          reportsGenerating
-                            ? "#C7D2FE"
-                            : reportsCueActive
-                              ? "#818CF8"
-                              : "#4338CA"
-                        }`,
-                        color: reportsGenerating ? "#4338CA" : "#FFFFFF",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        padding: "4px 12px",
-                        borderRadius: 4,
-                        cursor: reportsGenerating ? "not-allowed" : "pointer",
-                        opacity: reportsGenerating ? 0.85 : 1,
-                        // When cued, pulse the box-shadow to draw the eye.
-                        // 2s loop is slow enough to feel inviting, not
-                        // anxious. Kept off otherwise to avoid constant
-                        // motion in the chat header.
-                        animation:
-                          reportsCueActive && !reportsGenerating
-                            ? "cuePulse 2s ease-in-out infinite"
-                            : "none",
-                      }}
-                    >
-                      {reportsGenerating
-                        ? "Generating…"
+                {venture.stage === "RESEARCHED" && manifest?.appType === "saas" && !chatLoading && (
+                  <button
+                    type="button"
+                    onClick={handleGenerateResearchReports}
+                    disabled={reportsGenerating}
+                    title={
+                      reportsGenerating
+                        ? "Running 4 LLM calls in parallel…"
                         : reportsCueActive
-                          ? "✨ Generate Reports"
-                          : "Generate Reports"}
-                    </button>
-                  )}
+                          ? "Assistant signalled it's ready — click to generate the Core 4 research docs"
+                          : "Generate the Core 4 research docs from this chat"
+                    }
+                    style={{
+                      background: reportsGenerating
+                        ? "#E0E7FF"
+                        : reportsCueActive
+                          ? "#6366F1"
+                          : "#4F46E5",
+                      border: `1px solid ${
+                        reportsGenerating ? "#C7D2FE" : reportsCueActive ? "#818CF8" : "#4338CA"
+                      }`,
+                      color: reportsGenerating ? "#4338CA" : "#FFFFFF",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      padding: "4px 12px",
+                      borderRadius: 4,
+                      cursor: reportsGenerating ? "not-allowed" : "pointer",
+                      opacity: reportsGenerating ? 0.85 : 1,
+                      // When cued, pulse the box-shadow to draw the eye.
+                      // 2s loop is slow enough to feel inviting, not
+                      // anxious. Kept off otherwise to avoid constant
+                      // motion in the chat header.
+                      animation:
+                        reportsCueActive && !reportsGenerating
+                          ? "cuePulse 2s ease-in-out infinite"
+                          : "none",
+                    }}
+                  >
+                    {reportsGenerating
+                      ? "Generating…"
+                      : reportsCueActive
+                        ? "✨ Generate Reports"
+                        : "Generate Reports"}
+                  </button>
+                )}
                 {/* pt.29 / pt.30a: Stop button for in-flight reports
                     run via the abort hook. Only rendered while a
                     controller is live (i.e. inside the try block of
@@ -2015,10 +1985,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
                     partial thread. Disabled when the thread is empty or
                     still hydrating from disk. */}
                 {messages.length > 0 && !chatHydrating && (
-                  <div
-                    ref={chatExportMenuRef}
-                    style={{ position: "relative" }}
-                  >
+                  <div ref={chatExportMenuRef} style={{ position: "relative" }}>
                     <button
                       type="button"
                       onClick={() => setChatExportMenuOpen((v) => !v)}
@@ -2156,6 +2123,24 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
                 onRemoveAttachment={handleRemoveAttachment}
               />
             </div>
+            {/* Prompt Master savings ticker. Shown only after a real
+                optimisation has registered savings (>0); otherwise the
+                row is suppressed so a fallback transport doesn't
+                advertise itself with a confusing "0 tokens saved" line. */}
+            {promptMasterTokensSaved > 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  fontSize: 11,
+                  color: "#6B7280",
+                  padding: "4px 12px 0",
+                }}
+                title="Total tokens Prompt Master has shaved off this session's system prompts"
+              >
+                Prompt Master: {promptMasterTokensSaved.toLocaleString()} tokens saved this session
+              </div>
+            )}
           </div>
         )}
         {tab === "pipeline" && (
@@ -2172,9 +2157,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
                 Click a stage to advance this venture.
               </div>
               {stageSaving && (
-                <div style={{ fontSize: 12, color: "#6366F1", fontWeight: 600 }}>
-                  Saving…
-                </div>
+                <div style={{ fontSize: 12, color: "#6366F1", fontWeight: 600 }}>Saving…</div>
               )}
             </div>
             <StageGraph
@@ -2226,13 +2209,17 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
                       fontSize: 13,
                     }}
                   >
-                    <span>{
-                      step.status === "done" ? "✅"
-                      : step.status === "running" ? "⏳"
-                      : step.status === "failed" ? "❌"
-                      : step.status === "skipped" ? "⏭️"
-                      : "○"
-                    }</span>
+                    <span>
+                      {step.status === "done"
+                        ? "✅"
+                        : step.status === "running"
+                          ? "⏳"
+                          : step.status === "failed"
+                            ? "❌"
+                            : step.status === "skipped"
+                              ? "⏭️"
+                              : "○"}
+                    </span>
                     <span style={{ fontWeight: 600 }}>{step.name}</span>
                     <span style={{ color: "#9CA3AF" }}>{step.description}</span>
                   </div>
@@ -2299,7 +2286,13 @@ function OverviewTab({
 }) {
   return (
     <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 16,
+        }}
+      >
         <Card title="Current Stage" description={`${venture.stage.replace(/_/g, " ")}`} />
         <Card title="Venture ID" description={venture.id} />
         <Card title="Artifacts" description="Scan pending" />
@@ -2307,18 +2300,15 @@ function OverviewTab({
       </div>
       <Card title="Quick Actions">
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={onRunPipeline}
-            disabled={isRunning}
-          >
+          <Button variant="primary" size="sm" onClick={onRunPipeline} disabled={isRunning}>
             {isRunning ? "Running…" : "Run Pipeline"}
           </Button>
           <Button variant="secondary" size="sm" onClick={onOpenInFinder}>
             Open in Finder
           </Button>
-          <Button variant="secondary" size="sm">Send to Builder</Button>
+          <Button variant="secondary" size="sm">
+            Send to Builder
+          </Button>
         </div>
         <div
           style={{
@@ -2336,8 +2326,8 @@ function OverviewTab({
       <VentureProviderPicker ventureId={venture.id} />
       <Card title="Danger zone">
         <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 10 }}>
-          Removes this venture from your library. Files on disk are preserved
-          unless you explicitly opt in to deleting them.
+          Removes this venture from your library. Files on disk are preserved unless you explicitly
+          opt in to deleting them.
         </div>
         <button
           type="button"
@@ -2413,8 +2403,8 @@ function DeleteVentureModal({
           Delete "{ventureName}"?
         </h2>
         <p style={{ margin: 0, fontSize: 13, color: "#374151", lineHeight: 1.5 }}>
-          The venture will be removed from your library and its chat history
-          will be lost. You can re-import the folder later if you keep it.
+          The venture will be removed from your library and its chat history will be lost. You can
+          re-import the folder later if you keep it.
         </p>
         <label
           style={{
@@ -2493,11 +2483,7 @@ function DeleteVentureModal({
               cursor: busy ? "not-allowed" : "pointer",
             }}
           >
-            {busy
-              ? "Deleting…"
-              : deleteFromDisk
-                ? "Delete venture + folder"
-                : "Delete venture"}
+            {busy ? "Deleting…" : deleteFromDisk ? "Delete venture + folder" : "Delete venture"}
           </button>
         </div>
       </div>

@@ -1,3 +1,11 @@
+import {
+  ProductSpecCanvasSchema,
+  type ScreensCanvas,
+  ScreensCanvasSchema,
+  type VentureManifest,
+  createEmptyScreensCanvas,
+  renderScreensMarkdown,
+} from "@founder-os/domain";
 /**
  * ensure-screens (pt.43) — deterministic step that scaffolds the
  * Screens canvas at `06_product/wireframes/screens-canvas.json` if
@@ -29,19 +37,11 @@
  */
 import { createLogger } from "@founder-os/logger";
 import {
-  getWireframesDir,
   getScreensCanvasPath,
   getScreensMarkdownPath,
   getSpecCanvasPath,
+  getWireframesDir,
 } from "@founder-os/workspace-core";
-import {
-  ScreensCanvasSchema,
-  createEmptyScreensCanvas,
-  renderScreensMarkdown,
-  ProductSpecCanvasSchema,
-  type ScreensCanvas,
-  type VentureManifest,
-} from "@founder-os/domain";
 import type { Filesystem } from "../fs.js";
 
 const log = createLogger("pipeline-runner:ensure-screens");
@@ -59,9 +59,7 @@ export type EnsureScreensResult = {
   canvas: ScreensCanvas;
 };
 
-export async function ensureScreensStep(
-  ctx: EnsureScreensContext
-): Promise<EnsureScreensResult> {
+export async function ensureScreensStep(ctx: EnsureScreensContext): Promise<EnsureScreensResult> {
   const dir = getWireframesDir(ctx.ventureRoot);
   await ctx.fs.mkdir(dir);
 
@@ -93,10 +91,7 @@ export async function ensureScreensStep(
     }
   } else {
     canvas = createEmptyScreensCanvas(ctx.manifest.id);
-    await ctx.fs.writeFile(
-      canvasPath,
-      JSON.stringify(canvas, null, 2) + "\n"
-    );
+    await ctx.fs.writeFile(canvasPath, JSON.stringify(canvas, null, 2) + "\n");
     log.info(`Created screens canvas at ${canvasPath}`);
   }
 
@@ -129,9 +124,7 @@ export async function ensureScreensStep(
           },
         };
       } else {
-        log.warn(
-          "Spec canvas failed Zod parse — rendering screens.md with raw feature/entity ids"
-        );
+        log.warn("Spec canvas failed Zod parse — rendering screens.md with raw feature/entity ids");
       }
     } catch (err) {
       log.warn(

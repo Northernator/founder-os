@@ -7,13 +7,7 @@
  */
 
 import * as path from "node:path";
-import {
-  listEntries,
-  readEntry,
-  writeEntry,
-  deleteEntry,
-  idFromTitle,
-} from "./markdown-store.js";
+import { deleteEntry, idFromTitle, listEntries, readEntry, writeEntry } from "./markdown-store.js";
 
 export interface VaultDoc {
   id: string;
@@ -60,10 +54,7 @@ export function readVault(workspaceRoot: string, id: string): VaultDocBody {
   };
 }
 
-export function saveVault(
-  workspaceRoot: string,
-  input: VaultSaveInput,
-): VaultDoc {
+export function saveVault(workspaceRoot: string, input: VaultSaveInput): VaultDoc {
   const id = input.id?.trim() || idFromTitle(input.title);
   const written = writeEntry(
     vaultDir(workspaceRoot),
@@ -72,7 +63,7 @@ export function saveVault(
       title: input.title,
       tags: input.tags.join(", "),
     },
-    input.body,
+    input.body
   );
   return {
     id: written.id,

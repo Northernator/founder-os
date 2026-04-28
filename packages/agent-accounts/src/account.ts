@@ -63,7 +63,10 @@ export function makeAccount(input: {
 
 /** Permit only filename-safe chars. Empty strings throw. */
 export function sanitizeAccountId(raw: string): string {
-  const slug = raw.trim().replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 64);
+  const slug = raw
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .slice(0, 64);
   if (!slug) throw new Error("account id is empty after sanitisation");
   return slug;
 }

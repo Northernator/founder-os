@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
 import type {
   OllamaListModelsResponse,
   OllamaRunResponse,
 } from "@founder-os/mission-control-protocol";
+import { useEffect, useState } from "react";
 import type { TabProps } from "../App.js";
 import { request, send } from "../lib/vscode.js";
 
@@ -28,7 +28,9 @@ export function OllamaTab(_props: TabProps) {
     }
   }
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    void refresh();
+  }, []);
 
   async function doRun(): Promise<void> {
     if (!model || !prompt.trim()) return;
@@ -53,14 +55,18 @@ export function OllamaTab(_props: TabProps) {
     <>
       <div className="mc-card">
         <div className="mc-row" style={{ justifyContent: "space-between" }}>
-          <h3 className="mc-card-title" style={{ margin: 0 }}>Local models</h3>
+          <h3 className="mc-card-title" style={{ margin: 0 }}>
+            Local models
+          </h3>
           <div className="mc-row" style={{ gap: 6 }}>
             <button className="secondary" onClick={refresh} disabled={busy !== null}>
               {busy === "models" ? "Loading…" : "Refresh"}
             </button>
             <button
               className="secondary"
-              onClick={() => send({ type: "settings:open", query: "founderCowork.providers.ollama" })}
+              onClick={() =>
+                send({ type: "settings:open", query: "founderCowork.providers.ollama" })
+              }
             >
               Settings
             </button>
@@ -73,11 +79,19 @@ export function OllamaTab(_props: TabProps) {
             </div>
           ) : (
             <table className="mc-table" style={{ marginTop: 8 }}>
-              <thead><tr><th>Name</th><th>Size</th><th>Modified</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Size</th>
+                  <th>Modified</th>
+                </tr>
+              </thead>
               <tbody>
                 {models.models.map((m) => (
                   <tr key={m.name}>
-                    <td><code>{m.name}</code></td>
+                    <td>
+                      <code>{m.name}</code>
+                    </td>
                     <td>{m.sizeBytes ? mb(m.sizeBytes) + " MB" : "—"}</td>
                     <td>{m.modifiedAt ? new Date(m.modifiedAt).toLocaleString() : "—"}</td>
                   </tr>
@@ -106,10 +120,14 @@ export function OllamaTab(_props: TabProps) {
             disabled={!models || models.models.length === 0}
           >
             {models?.models.map((m) => (
-              <option key={m.name} value={m.name}>{m.name}</option>
+              <option key={m.name} value={m.name}>
+                {m.name}
+              </option>
             ))}
           </select>
-          <label htmlFor="ollama-prompt" style={{ alignSelf: "start", marginTop: 6 }}>Prompt</label>
+          <label htmlFor="ollama-prompt" style={{ alignSelf: "start", marginTop: 6 }}>
+            Prompt
+          </label>
           <textarea
             id="ollama-prompt"
             placeholder="Ask the local model anything…"
@@ -128,7 +146,9 @@ export function OllamaTab(_props: TabProps) {
       {response && (
         <div className="mc-card">
           <div className="mc-row" style={{ justifyContent: "space-between" }}>
-            <h3 className="mc-card-title" style={{ margin: 0 }}>Response — {response.model}</h3>
+            <h3 className="mc-card-title" style={{ margin: 0 }}>
+              Response — {response.model}
+            </h3>
             {response.totalDurationMs !== undefined && (
               <span className="mc-pill">{response.totalDurationMs} ms</span>
             )}
@@ -139,7 +159,9 @@ export function OllamaTab(_props: TabProps) {
 
       {error && (
         <div className="mc-card" style={{ borderColor: "var(--fc-error)" }}>
-          <h3 className="mc-card-title" style={{ color: "var(--fc-error)" }}>Error</h3>
+          <h3 className="mc-card-title" style={{ color: "var(--fc-error)" }}>
+            Error
+          </h3>
           <pre style={{ whiteSpace: "pre-wrap", color: "var(--fc-error)" }}>{error}</pre>
         </div>
       )}

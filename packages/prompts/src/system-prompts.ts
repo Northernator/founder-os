@@ -416,8 +416,7 @@ export function specDraftPrompt(args: {
   /** Concatenated research report bodies, or null if none. */
   researchSummary: string | null;
 }): { system: string; user: string } {
-  const { ventureName, appType, manifest, brandBriefJson, researchSummary } =
-    args;
+  const { ventureName, appType, manifest, brandBriefJson, researchSummary } = args;
 
   const system = `You are drafting a complete \`ProductSpecCanvas\` for the venture **${ventureName}** (appType: ${appType}). Your output will be parsed as strict JSON by a UI that lets the founder accept it section-by-section.
 
@@ -566,9 +565,7 @@ Hard rules:
   }
 
   userParts.push("");
-  userParts.push(
-    "Now draft the canvas. One fenced \\`\\`\\`json block, nothing before or after."
-  );
+  userParts.push("Now draft the canvas. One fenced \\`\\`\\`json block, nothing before or after.");
 
   return { system, user: userParts.join("\n") };
 }
@@ -618,8 +615,7 @@ export function screensDraftPrompt(args: {
   /** Concatenated research report bodies, or null if none. */
   researchSummary: string | null;
 }): { system: string; user: string } {
-  const { ventureName, appType, manifest, specCanvasJson, brandBriefJson, researchSummary } =
-    args;
+  const { ventureName, appType, manifest, specCanvasJson, brandBriefJson, researchSummary } = args;
 
   const system = `You are drafting a complete \`ScreensCanvas\` for the venture **${ventureName}** (appType: ${appType}). Your output will be parsed as strict JSON by a UI that lets the founder accept it section-by-section.
 
@@ -758,9 +754,7 @@ Hard rules:
   }
 
   userParts.push("");
-  userParts.push(
-    "Now draft the canvas. One fenced \\`\\`\\`json block, nothing before or after."
-  );
+  userParts.push("Now draft the canvas. One fenced \\`\\`\\`json block, nothing before or after.");
 
   return { system, user: userParts.join("\n") };
 }

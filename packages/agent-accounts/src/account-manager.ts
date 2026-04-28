@@ -21,8 +21,8 @@
 
 import type { AgentDefinition, AgentId } from "@founder-os/agent-registry";
 import type { Account, AccountWithSecrets } from "./account.js";
+import { type MaterialiseHandle, RuntimeHomeService } from "./runtime-home.js";
 import type { AccountStore } from "./store.js";
-import { RuntimeHomeService, type MaterialiseHandle } from "./runtime-home.js";
 
 export interface AccountManagerOptions {
   store: AccountStore;
@@ -76,7 +76,7 @@ export class AccountManager {
   async withAccount<T>(
     agent: AgentDefinition,
     accountId: string,
-    body: (handle: MaterialiseHandle) => Promise<T>,
+    body: (handle: MaterialiseHandle) => Promise<T>
   ): Promise<T> {
     return this.runSerialised(agent.id, async () => {
       const handle = await this.runtimeHome.materialise(agent, accountId);
@@ -90,8 +90,12 @@ export class AccountManager {
           // but we rethrow nothing so the original error (if any) wins.
           // eslint-disable-next-line no-console
           console.warn(
-            "AccountManager: restore() failed for " + agent.id +
-              " account=" + handle.accountId + ": " + String(err),
+            "AccountManager: restore() failed for " +
+              agent.id +
+              " account=" +
+              handle.accountId +
+              ": " +
+              String(err)
           );
         }
       }
@@ -104,10 +108,7 @@ export class AccountManager {
    * runSerialised). Prefer `withAccount` unless you have a long-running
    * non-Promise spawn that needs explicit handle lifetime.
    */
-  async materialise(
-    agent: AgentDefinition,
-    accountId: string,
-  ): Promise<MaterialiseHandle> {
+  async materialise(agent: AgentDefinition, accountId: string): Promise<MaterialiseHandle> {
     return this.runtimeHome.materialise(agent, accountId);
   }
 
@@ -119,8 +120,13 @@ export class AccountManager {
   runSerialised<T>(agentId: AgentId, task: () => Promise<T>): Promise<T> {
     const prev = this.mutexes.get(agentId) ?? Promise.resolve();
     let release!: () => void;
-    const next = new Promise<void>((resolve) => { release = resolve; });
-    this.mutexes.set(agentId, prev.then(() => next));
+    const next = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.mutexes.set(
+      agentId,
+      prev.then(() => next)
+    );
     return prev.then(async () => {
       try {
         return await task();

@@ -1,3 +1,13 @@
+import {
+  type ScreensCanvas,
+  ScreensCanvasSchema,
+  type Venture,
+  type VentureManifest,
+} from "@founder-os/domain";
+import { type LlmProviderId, getProvider } from "@founder-os/llm-providers";
+import { optimize } from "@founder-os/prompt-master";
+import { screensDraftPrompt } from "@founder-os/prompts";
+import { getBrandKitDir, getSpecCanvasPath, getStagePath } from "@founder-os/workspace-core";
 /**
  * Screens drafter (pt.47) — orchestrates the "Draft with AI" flow on
  * the ScreensTab. Reads the venture's spec canvas + brand brief +
@@ -23,19 +33,6 @@
  * promise resolves with `{ ok: false, error: "Drafting cancelled." }`.
  */
 import { invoke } from "@tauri-apps/api/core";
-import {
-  ScreensCanvasSchema,
-  type ScreensCanvas,
-  type Venture,
-  type VentureManifest,
-} from "@founder-os/domain";
-import {
-  getBrandKitDir,
-  getSpecCanvasPath,
-  getStagePath,
-} from "@founder-os/workspace-core";
-import { screensDraftPrompt } from "@founder-os/prompts";
-import { getProvider, type LlmProviderId } from "@founder-os/llm-providers";
 import * as db from "./db.js";
 import { pickActiveProvider, streamChat } from "./llm-client.js";
 
@@ -108,8 +105,7 @@ export async function draftScreensCanvas(
   if (!provider) {
     return {
       ok: false,
-      error:
-        "No LLM provider configured. Open the Options tab to add an API key.",
+      error: "No LLM provider configured. Open the Options tab to add an API key.",
     };
   }
   const setting = await db.getLlmSetting(provider);
@@ -143,12 +139,19 @@ export async function draftScreensCanvas(
   // JSON shape; mirror of spec-drafter's value. maxTokens 6000 is
   // enough for ~12 screens with full notes; lower than spec-drafter's
   // 8000 because the screens canvas is structurally smaller.
+  const optimizedSystem = await optimize({ prompt: system, context: "wireframe" });
+  console.info(
+    "[prompt-master] screens-drafter",
+    optimizedSystem.fallbackUsed
+      ? "(fallback — transport unavailable)"
+      : `tokensSaved=${optimizedSystem.tokensSaved} cacheHit=${optimizedSystem.cacheHit}`
+  );
   let raw: string;
   try {
     raw = await streamChat({
       provider,
       messages: [{ role: "user", content: user }],
-      system,
+      system: optimizedSystem.optimized,
       maxTokens: 6000,
       temperature: 0.3,
       signal: args.signal,
@@ -183,9 +186,7 @@ export async function draftScreensCanvas(
   } catch (err) {
     return {
       ok: false,
-      error: `Model returned invalid JSON: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      error: `Model returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 
@@ -211,9 +212,7 @@ export async function draftScreensCanvas(
     return {
       ok: false,
       error: `Model output didn't match the canvas schema (${summary})${
-        result.error.issues.length > 3
-          ? ` and ${result.error.issues.length - 3} more`
-          : ""
+        result.error.issues.length > 3 ? ` and ${result.error.issues.length - 3} more` : ""
       }. Try again, or switch to a stronger model in the Options tab.`,
     };
   }

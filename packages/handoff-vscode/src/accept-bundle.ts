@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { createLogger } from "@founder-os/logger";
 import type { HandoffBundle } from "@founder-os/handoff-contract";
+import { createLogger } from "@founder-os/logger";
 import { writeProgress } from "./write-result.js";
 
 const log = createLogger("handoff-vscode:accept-bundle");

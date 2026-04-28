@@ -1,16 +1,17 @@
-import React, { useCallback, useMemo } from "react";
 import {
-  ReactFlow,
   Background,
   Controls,
+  type Edge,
+  Handle,
   MiniMap,
   type Node,
-  type Edge,
-  type NodeTypes,
-  Handle,
-  Position,
   type NodeProps,
+  type NodeTypes,
+  Position,
+  ReactFlow,
 } from "@xyflow/react";
+import type React from "react";
+import { useCallback, useMemo } from "react";
 import "@xyflow/react/dist/style.css";
 import { VENTURE_STAGE_ORDER, type VentureStage } from "@founder-os/domain";
 
@@ -31,9 +32,9 @@ export type StageNodeData = {
 // ──────────────────────────────────────────────
 const STATUS_COLOURS: Record<StageNodeStatus, { bg: string; border: string; text: string }> = {
   complete: { bg: "#D1FAE5", border: "#10B981", text: "#064E3B" },
-  active:   { bg: "#EEF2FF", border: "#6366F1", text: "#3730A3" },
-  pending:  { bg: "#F9FAFB", border: "#D1D5DB", text: "#6B7280" },
-  blocked:  { bg: "#FEF2F2", border: "#EF4444", text: "#991B1B" },
+  active: { bg: "#EEF2FF", border: "#6366F1", text: "#3730A3" },
+  pending: { bg: "#F9FAFB", border: "#D1D5DB", text: "#6B7280" },
+  blocked: { bg: "#FEF2F2", border: "#EF4444", text: "#991B1B" },
 };
 
 const STATUS_ICON: Record<StageNodeStatus, string> = {

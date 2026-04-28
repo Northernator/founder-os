@@ -19,17 +19,13 @@
  * didn't launch automatically.
  */
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { type UnlistenFn, listen } from "@tauri-apps/api/event";
 
 /** Only these providers have a subscription CLI today. See
  *  `cli_agent.rs::agent_config` for the canonical source. */
 export type CliAgentId = "anthropic" | "openai" | "gemini";
 
-export const CLI_AGENT_IDS: readonly CliAgentId[] = [
-  "anthropic",
-  "openai",
-  "gemini",
-];
+export const CLI_AGENT_IDS: readonly CliAgentId[] = ["anthropic", "openai", "gemini"];
 
 /** Human-visible CLI metadata — what we show on each subscription card. */
 export const CLI_AGENT_META: Record<
@@ -112,10 +108,7 @@ type LoginDonePayload = {
  * the programming sense — they're user choices. The UI shows "didn't
  * finish" and offers to retry.
  */
-export async function cliLogin(
-  agent: CliAgentId,
-  opts: CliLoginOptions = {}
-): Promise<boolean> {
+export async function cliLogin(agent: CliAgentId, opts: CliLoginOptions = {}): Promise<boolean> {
   const requestId = makeRequestId();
   const unlisteners: UnlistenFn[] = [];
   let settled = false;
@@ -314,10 +307,7 @@ export async function cliStream(
 }
 
 function makeRequestId(): string {
-  if (
-    typeof crypto !== "undefined" &&
-    typeof crypto.randomUUID === "function"
-  ) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
   return `cli-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;

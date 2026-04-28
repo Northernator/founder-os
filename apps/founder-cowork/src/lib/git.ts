@@ -8,12 +8,12 @@
 
 import * as cp from "node:child_process";
 import * as path from "node:path";
-import simpleGit, { type SimpleGit } from "simple-git";
 import type {
-  GitStatusResponse,
   GitCommitResponse,
   GitCreatePrResponse,
+  GitStatusResponse,
 } from "@founder-os/mission-control-protocol";
+import simpleGit, { type SimpleGit } from "simple-git";
 
 function git(cwd: string): SimpleGit {
   return simpleGit(cwd);
@@ -27,9 +27,9 @@ export async function status(repoRoot: string): Promise<GitStatusResponse> {
   // into a single changedFiles list with a one-letter status code.
   const changed: { path: string; status: string }[] = [];
   for (const f of s.modified) changed.push({ path: f, status: "M" });
-  for (const f of s.created)  changed.push({ path: f, status: "A" });
-  for (const f of s.deleted)  changed.push({ path: f, status: "D" });
-  for (const f of s.renamed)  changed.push({ path: typeof f === "string" ? f : f.to, status: "R" });
+  for (const f of s.created) changed.push({ path: f, status: "A" });
+  for (const f of s.deleted) changed.push({ path: f, status: "D" });
+  for (const f of s.renamed) changed.push({ path: typeof f === "string" ? f : f.to, status: "R" });
   for (const f of s.not_added) changed.push({ path: f, status: "?" });
   for (const f of s.conflicted) changed.push({ path: f, status: "U" });
 
@@ -44,10 +44,7 @@ export async function status(repoRoot: string): Promise<GitStatusResponse> {
   };
 }
 
-export async function createBranch(
-  repoRoot: string,
-  name: string,
-): Promise<{ branch: string }> {
+export async function createBranch(repoRoot: string, name: string): Promise<{ branch: string }> {
   const safe = sanitize(name);
   if (!safe) throw new Error("branch name is empty after sanitisation");
   const g = git(repoRoot);
@@ -58,7 +55,7 @@ export async function createBranch(
 export async function commitAndPush(
   repoRoot: string,
   message: string,
-  remote = "origin",
+  remote = "origin"
 ): Promise<GitCommitResponse> {
   const trimmed = message.trim();
   if (!trimmed) throw new Error("commit message cannot be empty");
@@ -89,7 +86,7 @@ export async function commitAndPush(
 export async function createPR(
   repoRoot: string,
   title: string,
-  body: string,
+  body: string
 ): Promise<GitCreatePrResponse> {
   const args = ["pr", "create", "--title", title, "--body", body];
   return new Promise((resolve, reject) => {
@@ -100,14 +97,20 @@ export async function createPR(
     });
     let out = "";
     let err = "";
-    child.stdout?.on("data", (b) => { out += b.toString(); });
-    child.stderr?.on("data", (b) => { err += b.toString(); });
+    child.stdout?.on("data", (b) => {
+      out += b.toString();
+    });
+    child.stderr?.on("data", (b) => {
+      err += b.toString();
+    });
     child.on("error", (e) => {
       if ((e as NodeJS.ErrnoException).code === "ENOENT") {
-        reject(new Error(
-          "Founder Cowork: `gh` CLI not found on PATH. " +
-            "Install GitHub CLI (https://cli.github.com) and run `gh auth login`.",
-        ));
+        reject(
+          new Error(
+            "Founder Cowork: `gh` CLI not found on PATH. " +
+              "Install GitHub CLI (https://cli.github.com) and run `gh auth login`."
+          )
+        );
       } else {
         reject(e);
       }

@@ -1,8 +1,8 @@
-import * as esbuild from "esbuild";
+import * as cp from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import * as cp from "node:child_process";
+import * as esbuild from "esbuild";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const watch = process.argv.includes("--watch");
@@ -24,7 +24,13 @@ const options = {
   external: [
     "vscode",
     "node:*",
-    "fs", "path", "os", "crypto", "util", "stream", "events",
+    "fs",
+    "path",
+    "os",
+    "crypto",
+    "util",
+    "stream",
+    "events",
     ...NATIVE_DEPS,
   ],
   format: "cjs",
@@ -54,13 +60,19 @@ function copyNativeDeps() {
     ];
     let src = null;
     for (const c of candidates) {
-      if (fs.existsSync(c)) { src = fs.realpathSync(c); break; }
+      if (fs.existsSync(c)) {
+        src = fs.realpathSync(c);
+        break;
+      }
     }
     if (!src) {
       console.warn(
-        "[copyNativeDeps] " + dep + " not found - skipping. " +
-          "Run `pnpm install` from the repo root and ensure " + dep +
-          " is in pnpm.onlyBuiltDependencies.",
+        "[copyNativeDeps] " +
+          dep +
+          " not found - skipping. " +
+          "Run `pnpm install` from the repo root and ensure " +
+          dep +
+          " is in pnpm.onlyBuiltDependencies."
       );
       continue;
     }
@@ -68,8 +80,7 @@ function copyNativeDeps() {
     fs.rmSync(dest, { recursive: true, force: true });
     fs.cpSync(src, dest, {
       recursive: true,
-      filter: (s) =>
-        !s.replace(src, "").split(path.sep).includes("node_modules"),
+      filter: (s) => !s.replace(src, "").split(path.sep).includes("node_modules"),
     });
 
     // node-pty's runtime require("./build/Release/pty.node"). On a clean
@@ -82,19 +93,22 @@ function copyNativeDeps() {
 
     const releaseDir = path.join(dest, "build", "Release");
     if (fs.existsSync(releaseDir)) {
-      const binaries = fs
-        .readdirSync(releaseDir)
-        .filter((f) => f.endsWith(".node"));
+      const binaries = fs.readdirSync(releaseDir).filter((f) => f.endsWith(".node"));
       console.log(
-        "[copyNativeDeps] " + dep + ": " + binaries.length +
-          " prebuilt binary(ies) - " + (binaries.join(", ") || "(none)"),
+        "[copyNativeDeps] " +
+          dep +
+          ": " +
+          binaries.length +
+          " prebuilt binary(ies) - " +
+          (binaries.join(", ") || "(none)")
       );
     } else {
       console.warn(
-        "[copyNativeDeps] " + dep +
+        "[copyNativeDeps] " +
+          dep +
           ": no build/Release/ directory found AND no prebuild matched. " +
           "The extension will fail to load node-pty at runtime. Try " +
-          "`pnpm install --force` from the repo root.",
+          "`pnpm install --force` from the repo root."
       );
     }
   }
@@ -103,10 +117,7 @@ function copyNativeDeps() {
 function ensureNodePtyBuildRelease(destPkg) {
   const releaseDir = path.join(destPkg, "build", "Release");
   // Already populated by a prior postinstall? Done.
-  if (
-    fs.existsSync(releaseDir) &&
-    fs.readdirSync(releaseDir).some((f) => f.endsWith(".node"))
-  ) {
+  if (fs.existsSync(releaseDir) && fs.readdirSync(releaseDir).some((f) => f.endsWith(".node"))) {
     return;
   }
 
@@ -120,9 +131,7 @@ function ensureNodePtyBuildRelease(destPkg) {
   const candidate = path.join(prebuildsDir, target);
   let chosen = null;
   if (fs.existsSync(candidate)) {
-    const node = fs
-      .readdirSync(candidate)
-      .find((f) => f.endsWith(".node"));
+    const node = fs.readdirSync(candidate).find((f) => f.endsWith(".node"));
     if (node) chosen = path.join(candidate, node);
   }
   if (!chosen) {
@@ -133,7 +142,11 @@ function ensureNodePtyBuildRelease(destPkg) {
     while (stack.length && !chosen) {
       const dir = stack.pop();
       let entries = [];
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
       for (const e of entries) {
         const p = path.join(dir, e.name);
         if (e.isDirectory()) {
@@ -142,8 +155,11 @@ function ensureNodePtyBuildRelease(destPkg) {
           }
           continue;
         }
-        if (e.isFile() && e.name.endsWith(".node") &&
-            (dir.includes(process.platform) || dir.includes(process.arch))) {
+        if (
+          e.isFile() &&
+          e.name.endsWith(".node") &&
+          (dir.includes(process.platform) || dir.includes(process.arch))
+        ) {
           chosen = p;
           break;
         }
@@ -151,10 +167,7 @@ function ensureNodePtyBuildRelease(destPkg) {
     }
   }
   if (!chosen) {
-    console.warn(
-      "[copyNativeDeps] node-pty: no prebuild for " + target +
-        " under " + prebuildsDir,
-    );
+    console.warn("[copyNativeDeps] node-pty: no prebuild for " + target + " under " + prebuildsDir);
     return;
   }
 
@@ -162,7 +175,8 @@ function ensureNodePtyBuildRelease(destPkg) {
   fs.copyFileSync(chosen, path.join(releaseDir, "pty.node"));
   console.log(
     "[copyNativeDeps] node-pty: materialised " +
-      path.relative(destPkg, chosen) + " -> build/Release/pty.node",
+      path.relative(destPkg, chosen) +
+      " -> build/Release/pty.node"
   );
 }
 
@@ -186,19 +200,17 @@ function buildAndCopyUi() {
 
   const isWin = process.platform === "win32";
   console.log("[buildUi] running `pnpm --filter @founder-os/mission-control-ui build`...");
-  const result = cp.spawnSync(
-    "pnpm",
-    ["--filter", "@founder-os/mission-control-ui", "build"],
-    {
-      cwd: path.join(projectRoot, "..", ".."),
-      stdio: "inherit",
-      shell: isWin, // critical on Windows so .cmd shims resolve
-    },
-  );
+  const result = cp.spawnSync("pnpm", ["--filter", "@founder-os/mission-control-ui", "build"], {
+    cwd: path.join(projectRoot, "..", ".."),
+    stdio: "inherit",
+    shell: isWin, // critical on Windows so .cmd shims resolve
+  });
   if (result.status !== 0) {
     console.error(
-      "[buildUi] vite build failed (exit " + result.status + ")" +
-        (result.error ? " :: " + String(result.error) : ""),
+      "[buildUi] vite build failed (exit " +
+        result.status +
+        ")" +
+        (result.error ? " :: " + String(result.error) : "")
     );
     return;
   }
@@ -212,7 +224,7 @@ function buildAndCopyUi() {
   fs.cpSync(uiDist, outUi, { recursive: true });
   const indexExists = fs.existsSync(path.join(outUi, "index.html"));
   console.log(
-    "[buildUi] copied dist/ -> out/ui/" + (indexExists ? " (index.html OK)" : " (NO index.html!)"),
+    "[buildUi] copied dist/ -> out/ui/" + (indexExists ? " (index.html OK)" : " (NO index.html!)")
   );
 }
 

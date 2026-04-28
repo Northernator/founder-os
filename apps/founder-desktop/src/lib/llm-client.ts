@@ -1,3 +1,4 @@
+import { type LlmMessage, type LlmProviderId, getProvider } from "@founder-os/llm-providers";
 /**
  * Thin wrapper around the Rust `llm_stream` command.
  *
@@ -21,19 +22,9 @@
  * convention so callers can use `err.name === "AbortError"` checks).
  */
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import {
-  getProvider,
-  type LlmMessage,
-  type LlmProviderId,
-} from "@founder-os/llm-providers";
-import { optimize } from "@founder-os/prompt-master";
+import { type UnlistenFn, listen } from "@tauri-apps/api/event";
+import { CLI_AGENT_IDS, type CliAgentId, cliStream } from "./cli-client.js";
 import * as db from "./db.js";
-import {
-  CLI_AGENT_IDS,
-  cliStream,
-  type CliAgentId,
-} from "./cli-client.js";
 
 /** Providers for which a subscription CLI bridge exists. Keeping this as
  *  a Set (not the imported array) lets `isCliSubscriptionProvider` be an
@@ -55,10 +46,7 @@ function isCliSubscriptionProvider(id: string): id is CliAgentId {
  * besides what's in the string, so changing the labels mid-session
  * would reset the model's implicit "who's speaking" prior.
  */
-function messagesToCliPrompt(
-  messages: LlmMessage[],
-  system: string | undefined
-): string {
+function messagesToCliPrompt(messages: LlmMessage[], system: string | undefined): string {
   const parts: string[] = [];
   if (system && system.trim().length > 0) {
     parts.push(`System instructions:\n${system.trim()}`);
@@ -173,20 +161,20 @@ export async function streamChat(opts: StreamChatOptions): Promise<string> {
   const catalog = getProvider(opts.provider);
   const setting = await db.getLlmSetting(opts.provider);
 
-  // Optimize the system prompt once, before either dispatch path. This
-  // covers BOTH the CLI subscription path (system gets flattened into the
-  // prompt by messagesToCliPrompt below) AND the HTTP/Tauri path (system
-  // is sent verbatim in the llm_stream invoke). optimize() never throws —
-  // if Prompt Master isn't configured, the input is returned unchanged.
-  let optimizedSystem = opts.system;
-  if (opts.system && opts.system.trim().length > 0) {
-    const result = await optimize({
-      prompt: opts.system,
-      context: "venture-chat",
-      model: setting?.model || catalog.defaultModel,
-    });
-    optimizedSystem = result.optimized;
-  }
+  // Prompt Master optimisation is the call site's responsibility now.
+  // Two reasons it lives outside this function:
+  //   1. The optimizer transport calls streamChat itself; running optimize
+  //      here would recurse forever (streamChat -> optimize -> transport ->
+  //      streamChat -> optimize -> ...). Doing it at the caller breaks the
+  //      cycle because the transport's inner streamChat skips the wrap.
+  //   2. Each surface (chat, audit-fix, pipeline-step, brand-gen, …) wants
+  //      its own PromptContext label for telemetry. A site-local optimize()
+  //      call is the natural place to set that.
+  // Callers should:
+  //   const { optimized, tokensSaved } = await optimize({
+  //     prompt: systemPrompt, context: "venture-chat",
+  //   });
+  //   await streamChat({ system: optimized, ... });
 
   // Transport dispatch: subscription mode shells out to the vendor CLI
   // (`claude`, `codex`, `gemini`) via `cli-client.ts`. The event channel
@@ -199,11 +187,8 @@ export async function streamChat(opts: StreamChatOptions): Promise<string> {
   // provider that doesn't have a CLI (e.g. DeepSeek) — fall back to the
   // HTTP path rather than erroring in that case; the API key check below
   // will still surface a clear "no key saved" message if relevant.
-  if (
-    setting?.mode === "subscription" &&
-    isCliSubscriptionProvider(opts.provider)
-  ) {
-    const prompt = messagesToCliPrompt(opts.messages, optimizedSystem);
+  if (setting?.mode === "subscription" && isCliSubscriptionProvider(opts.provider)) {
+    const prompt = messagesToCliPrompt(opts.messages, opts.system);
     return cliStream(opts.provider, prompt, {
       onDelta: opts.onDelta,
       onDone: opts.onDone,
@@ -306,8 +291,7 @@ export async function streamChat(opts: StreamChatOptions): Promise<string> {
       // Only forward web-search flags when (a) the caller asked, AND (b)
       // the provider supports it. Saves a round-trip-irrelevant field on
       // every non-Anthropic call and keeps the Rust side simple.
-      const webSearchEnabled =
-        opts.enableWebSearch === true && catalog.supportsWebSearch === true;
+      const webSearchEnabled = opts.enableWebSearch === true && catalog.supportsWebSearch === true;
 
       await invoke("llm_stream", {
         req: {
@@ -318,13 +302,11 @@ export async function streamChat(opts: StreamChatOptions): Promise<string> {
           baseUrl,
           model,
           messages: opts.messages,
-          system: optimizedSystem,
+          system: opts.system,
           maxTokens: opts.maxTokens,
           temperature: opts.temperature,
           enableWebSearch: webSearchEnabled ? true : undefined,
-          webSearchMaxUses: webSearchEnabled
-            ? opts.webSearchMaxUses
-            : undefined,
+          webSearchMaxUses: webSearchEnabled ? opts.webSearchMaxUses : undefined,
         },
       });
 
@@ -360,9 +342,7 @@ export async function streamChat(opts: StreamChatOptions): Promise<string> {
  * The chat caller should surface a helpful error when this returns null,
  * pointing the user at the Options tab.
  */
-export async function pickActiveProvider(
-  ventureId?: string
-): Promise<LlmProviderId | null> {
+export async function pickActiveProvider(ventureId?: string): Promise<LlmProviderId | null> {
   // Pull the venture override in parallel with global settings; the override
   // is just a string column and costs basically nothing vs. the double round
   // trip of fetching it only when needed.

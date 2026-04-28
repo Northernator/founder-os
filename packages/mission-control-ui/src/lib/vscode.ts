@@ -53,9 +53,7 @@ function api(): VsCodeApi {
  *
  * Pt.34d fix — was the source of ~20 TS2353 errors across the tabs.
  */
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-  ? Omit<T, K>
-  : never;
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
 /** Fire-and-forget. */
 export function send(message: WebviewToHostMessage): void {
@@ -68,7 +66,7 @@ export function send(message: WebviewToHostMessage): void {
  * requestId we attach here.
  */
 export function request<TResult = unknown>(
-  message: DistributiveOmit<WebviewToHostMessage, "requestId">,
+  message: DistributiveOmit<WebviewToHostMessage, "requestId">
 ): Promise<TResult> {
   const requestId = "req-" + Math.random().toString(36).slice(2, 10);
   return new Promise<TResult>((resolve, reject) => {
@@ -91,9 +89,7 @@ export function request<TResult = unknown>(
 }
 
 /** Subscribe to host->webview messages. Returns an unsubscribe fn. */
-export function onHostMessage(
-  cb: (m: HostToWebviewMessage) => void,
-): () => void {
+export function onHostMessage(cb: (m: HostToWebviewMessage) => void): () => void {
   const handler = (ev: MessageEvent) => {
     const m = ev.data as HostToWebviewMessage;
     if (m && typeof m === "object" && "type" in m) cb(m);

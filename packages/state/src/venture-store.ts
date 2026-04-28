@@ -1,6 +1,6 @@
+import type { Venture, VentureStage } from "@founder-os/domain";
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import type { Venture, VentureStage } from "@founder-os/domain";
 
 export type VentureStore = {
   // State
@@ -48,8 +48,7 @@ export const useVentureStore = create<VentureStore>()(
         ventures: state.ventures.filter((v) => v.id !== ventureId),
         // If we just deleted the active one, drop the selection so the
         // dashboard falls back to the welcome screen.
-        activeVentureId:
-          state.activeVentureId === ventureId ? null : state.activeVentureId,
+        activeVentureId: state.activeVentureId === ventureId ? null : state.activeVentureId,
       })),
 
     setActiveVenture: (id) => set({ activeVentureId: id }),
@@ -57,9 +56,7 @@ export const useVentureStore = create<VentureStore>()(
     updateVentureStage: (ventureId, stage) =>
       set((state) => ({
         ventures: state.ventures.map((v) =>
-          v.id === ventureId
-            ? { ...v, stage, updatedAt: new Date().toISOString() }
-            : v
+          v.id === ventureId ? { ...v, stage, updatedAt: new Date().toISOString() } : v
         ),
       })),
 

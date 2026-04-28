@@ -3,6 +3,7 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 
 mod brand_checks;
 mod brand_pack;
+mod cache;
 mod cli_agent;
 mod editor;
 mod handoff_watcher;
@@ -311,6 +312,18 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0006-chat-provider-column.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 7,
+            description: "prompt_master_cache",
+            sql: include_str!("../migrations/0007-prompt-master-cache.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 8,
+            description: "prompt_master_events",
+            sql: include_str!("../migrations/0008-prompt-master-events.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -335,6 +348,10 @@ pub fn run() {
         // and bails out with an `llm-cancel` emit.
         .manage(llm::CancelRegistry::default())
         .manage(handoff_watcher::WatcherRegistry::default())
+        // Lazily-initialised connection for the Prompt Master persistent
+        // cache. Opened on the first cache command (the app_config_dir
+        // isn't resolvable until Tauri has finished setup).
+        .manage(cache::CacheState::default())
         .invoke_handler(tauri::generate_handler![
             pick_venture_folder,
             read_file,
@@ -362,6 +379,11 @@ pub fn run() {
             brand_pack::brand_zip_pack,
             handoff_watcher::start_handoff_watcher,
             handoff_watcher::stop_handoff_watcher,
+            cache::pm_cache_get,
+            cache::pm_cache_put,
+            cache::pm_cache_inspect,
+            cache::pm_event_log,
+            cache::pm_event_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

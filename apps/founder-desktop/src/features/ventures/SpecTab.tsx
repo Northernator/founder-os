@@ -1,3 +1,27 @@
+import {
+  type ApiEndpoint,
+  type Entity,
+  type EntityField,
+  type Feature,
+  type FeaturePriority,
+  FeaturePrioritySchema,
+  type HttpMethod,
+  HttpMethodSchema,
+  type Metric,
+  type NonFunctionalCategory,
+  NonFunctionalCategorySchema,
+  type NonFunctionalRequirement,
+  type Persona,
+  type ProductSpecCanvas,
+  ProductSpecCanvasSchema,
+  type Venture,
+  type VentureManifest,
+  createEmptyProductSpecCanvas,
+  deriveProductSpecRules,
+  isProductSpecComplete,
+} from "@founder-os/domain";
+import { getSpecCanvasPath } from "@founder-os/workspace-core";
+import { invoke } from "@tauri-apps/api/core";
 /**
  * SpecTab (pt.41) — guided UI for the SPEC_READY stage.
  *
@@ -19,36 +43,10 @@
  * derived `product-spec.md` from the canvas on every run, so the
  * .md is read-only from the UI's perspective.
  */
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import {
-  ProductSpecCanvasSchema,
-  createEmptyProductSpecCanvas,
-  deriveProductSpecRules,
-  isProductSpecComplete,
-  FeaturePrioritySchema,
-  HttpMethodSchema,
-  NonFunctionalCategorySchema,
-  type FeaturePriority,
-  type HttpMethod,
-  type NonFunctionalCategory,
-  type ProductSpecCanvas,
-  type Persona,
-  type Feature,
-  type Entity,
-  type EntityField,
-  type ApiEndpoint,
-  type NonFunctionalRequirement,
-  type Metric,
-  type Venture,
-  type VentureManifest,
-} from "@founder-os/domain";
-import { getSpecCanvasPath } from "@founder-os/workspace-core";
+import type React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { type SpecDraftResult, draftSpecCanvas } from "../../lib/spec-drafter.js";
 import { pushToast } from "../../lib/toasts.js";
-import {
-  draftSpecCanvas,
-  type SpecDraftResult,
-} from "../../lib/spec-drafter.js";
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -104,16 +102,11 @@ function newId(prefix: string): string {
 }
 
 export function SpecTab({ venture, manifest }: Props) {
-  const canvasPath = useMemo(
-    () => getSpecCanvasPath(venture.rootPath),
-    [venture.rootPath]
-  );
+  const canvasPath = useMemo(() => getSpecCanvasPath(venture.rootPath), [venture.rootPath]);
 
   const [canvas, setCanvas] = useState<ProductSpecCanvas | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">(
-    "saved"
-  );
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratedRef = useRef(false);
@@ -121,15 +114,13 @@ export function SpecTab({ venture, manifest }: Props) {
   // Draft panel state (pt.42a) — separate from saveStatus so a stalled
   // draft never blocks autosave of the founder's existing edits.
   const [draftPhase, setDraftPhase] = useState<DraftPhase>("idle");
-  const [draftCanvas, setDraftCanvas] = useState<ProductSpecCanvas | null>(
-    null
-  );
+  const [draftCanvas, setDraftCanvas] = useState<ProductSpecCanvas | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [draftProvider, setDraftProvider] = useState<string | null>(null);
   const [draftModel, setDraftModel] = useState<string | null>(null);
-  const [sectionStates, setSectionStates] = useState<
-    Partial<Record<DraftSectionId, SectionState>>
-  >({});
+  const [sectionStates, setSectionStates] = useState<Partial<Record<DraftSectionId, SectionState>>>(
+    {}
+  );
   /** Token-pulse counter just for showing liveness during streaming.
    *  We don't render partial JSON; this is a heartbeat the panel reads
    *  to animate the spinner label. */
@@ -176,12 +167,8 @@ export function SpecTab({ venture, manifest }: Props) {
             // File on disk is malformed — start with a fresh canvas
             // but don't overwrite. The audit's same-day tripwire
             // picks this up too.
-            console.warn(
-              "[spec] canvas parse failed, using fresh defaults",
-              parsed.error
-            );
-            if (!cancelled)
-              setCanvas(createEmptyProductSpecCanvas(venture.id));
+            console.warn("[spec] canvas parse failed, using fresh defaults", parsed.error);
+            if (!cancelled) setCanvas(createEmptyProductSpecCanvas(venture.id));
           }
         } else {
           // No canvas on disk yet — happens before the first pipeline
@@ -232,9 +219,7 @@ export function SpecTab({ venture, manifest }: Props) {
   }, [canvas, canvasPath]);
 
   if (loading || !canvas || !manifest) {
-    return (
-      <div style={{ padding: 28, color: "#6B7280" }}>Loading Spec canvas…</div>
-    );
+    return <div style={{ padding: 28, color: "#6B7280" }}>Loading Spec canvas…</div>;
   }
 
   const rules = deriveProductSpecRules(canvas);
@@ -244,10 +229,8 @@ export function SpecTab({ venture, manifest }: Props) {
   // Update helpers
   // ─────────────────────────────────────────────────────────────
 
-  const update = <K extends keyof ProductSpecCanvas>(
-    key: K,
-    value: ProductSpecCanvas[K]
-  ) => setCanvas((cur) => (cur ? { ...cur, [key]: value } : cur));
+  const update = <K extends keyof ProductSpecCanvas>(key: K, value: ProductSpecCanvas[K]) =>
+    setCanvas((cur) => (cur ? { ...cur, [key]: value } : cur));
 
   // Generic list editors — each section's list-of-objects pattern
   // boils down to "replace the whole list" via setCanvas. The
@@ -259,9 +242,7 @@ export function SpecTab({ venture, manifest }: Props) {
       cur
         ? {
             ...cur,
-            personas: cur.personas.map((p) =>
-              p.id === id ? { ...p, ...patch } : p
-            ),
+            personas: cur.personas.map((p) => (p.id === id ? { ...p, ...patch } : p)),
           }
         : cur
     );
@@ -284,20 +265,14 @@ export function SpecTab({ venture, manifest }: Props) {
         : cur
     );
   const removePersona = (id: string) =>
-    setCanvas((cur) =>
-      cur
-        ? { ...cur, personas: cur.personas.filter((p) => p.id !== id) }
-        : cur
-    );
+    setCanvas((cur) => (cur ? { ...cur, personas: cur.personas.filter((p) => p.id !== id) } : cur));
 
   const updateFeature = (id: string, patch: Partial<Feature>) =>
     setCanvas((cur) =>
       cur
         ? {
             ...cur,
-            features: cur.features.map((f) =>
-              f.id === id ? { ...f, ...patch } : f
-            ),
+            features: cur.features.map((f) => (f.id === id ? { ...f, ...patch } : f)),
           }
         : cur
     );
@@ -321,11 +296,7 @@ export function SpecTab({ venture, manifest }: Props) {
         : cur
     );
   const removeFeature = (id: string) =>
-    setCanvas((cur) =>
-      cur
-        ? { ...cur, features: cur.features.filter((f) => f.id !== id) }
-        : cur
-    );
+    setCanvas((cur) => (cur ? { ...cur, features: cur.features.filter((f) => f.id !== id) } : cur));
 
   const updateEntity = (id: string, patch: Partial<Entity>) =>
     setCanvas((cur) =>
@@ -334,9 +305,7 @@ export function SpecTab({ venture, manifest }: Props) {
             ...cur,
             dataModel: {
               ...cur.dataModel,
-              entities: cur.dataModel.entities.map((e) =>
-                e.id === id ? { ...e, ...patch } : e
-              ),
+              entities: cur.dataModel.entities.map((e) => (e.id === id ? { ...e, ...patch } : e)),
             },
           }
         : cur
@@ -428,9 +397,7 @@ export function SpecTab({ venture, manifest }: Props) {
       cur
         ? {
             ...cur,
-            nonFunctional: cur.nonFunctional.map((n) =>
-              n.id === id ? { ...n, ...patch } : n
-            ),
+            nonFunctional: cur.nonFunctional.map((n) => (n.id === id ? { ...n, ...patch } : n)),
           }
         : cur
     );
@@ -453,9 +420,7 @@ export function SpecTab({ venture, manifest }: Props) {
     );
   const removeNfr = (id: string) =>
     setCanvas((cur) =>
-      cur
-        ? { ...cur, nonFunctional: cur.nonFunctional.filter((n) => n.id !== id) }
-        : cur
+      cur ? { ...cur, nonFunctional: cur.nonFunctional.filter((n) => n.id !== id) } : cur
     );
 
   const updateMetric = (id: string, patch: Partial<Metric>) =>
@@ -463,9 +428,7 @@ export function SpecTab({ venture, manifest }: Props) {
       cur
         ? {
             ...cur,
-            metrics: cur.metrics.map((m) =>
-              m.id === id ? { ...m, ...patch } : m
-            ),
+            metrics: cur.metrics.map((m) => (m.id === id ? { ...m, ...patch } : m)),
           }
         : cur
     );
@@ -482,11 +445,7 @@ export function SpecTab({ venture, manifest }: Props) {
         : cur
     );
   const removeMetric = (id: string) =>
-    setCanvas((cur) =>
-      cur
-        ? { ...cur, metrics: cur.metrics.filter((m) => m.id !== id) }
-        : cur
-    );
+    setCanvas((cur) => (cur ? { ...cur, metrics: cur.metrics.filter((m) => m.id !== id) } : cur));
 
   // ─────────────────────────────────────────────────────────────
   // Draft flow (pt.42a)
@@ -583,8 +542,7 @@ export function SpecTab({ venture, manifest }: Props) {
     setCanvas((cur) => {
       if (!cur) return cur;
       if (mode === "replace") return { ...cur, personas: draftCanvas.personas };
-      if (mode === "merge")
-        return { ...cur, personas: [...cur.personas, ...draftCanvas.personas] };
+      if (mode === "merge") return { ...cur, personas: [...cur.personas, ...draftCanvas.personas] };
       return cur;
     });
     stampSection(
@@ -598,8 +556,7 @@ export function SpecTab({ venture, manifest }: Props) {
     setCanvas((cur) => {
       if (!cur) return cur;
       if (mode === "replace") return { ...cur, features: draftCanvas.features };
-      if (mode === "merge")
-        return { ...cur, features: [...cur.features, ...draftCanvas.features] };
+      if (mode === "merge") return { ...cur, features: [...cur.features, ...draftCanvas.features] };
       return cur;
     });
     stampSection(
@@ -650,10 +607,7 @@ export function SpecTab({ venture, manifest }: Props) {
           ...cur,
           dataModel: {
             ...cur.dataModel,
-            entities: [
-              ...cur.dataModel.entities,
-              ...draftCanvas.dataModel.entities,
-            ],
+            entities: [...cur.dataModel.entities, ...draftCanvas.dataModel.entities],
           },
         };
       return cur;
@@ -681,10 +635,7 @@ export function SpecTab({ venture, manifest }: Props) {
           ...cur,
           apiSurface: {
             ...cur.apiSurface,
-            endpoints: [
-              ...cur.apiSurface.endpoints,
-              ...draftCanvas.apiSurface.endpoints,
-            ],
+            endpoints: [...cur.apiSurface.endpoints, ...draftCanvas.apiSurface.endpoints],
           },
         };
       return cur;
@@ -699,8 +650,7 @@ export function SpecTab({ venture, manifest }: Props) {
     if (!draftCanvas) return;
     setCanvas((cur) => {
       if (!cur) return cur;
-      if (mode === "replace")
-        return { ...cur, nonFunctional: draftCanvas.nonFunctional };
+      if (mode === "replace") return { ...cur, nonFunctional: draftCanvas.nonFunctional };
       if (mode === "merge")
         return {
           ...cur,
@@ -719,8 +669,7 @@ export function SpecTab({ venture, manifest }: Props) {
     setCanvas((cur) => {
       if (!cur) return cur;
       if (mode === "replace") return { ...cur, metrics: draftCanvas.metrics };
-      if (mode === "merge")
-        return { ...cur, metrics: [...cur.metrics, ...draftCanvas.metrics] };
+      if (mode === "merge") return { ...cur, metrics: [...cur.metrics, ...draftCanvas.metrics] };
       return cur;
     });
     stampSection(
@@ -782,7 +731,8 @@ export function SpecTab({ venture, manifest }: Props) {
             </h2>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6B7280" }}>
               Purpose → personas → features → scope → data model → API → NFRs → metrics. Saved to{" "}
-              <code>06_product/specs/spec-canvas.json</code>; markdown view re-rendered on each pipeline run.
+              <code>06_product/specs/spec-canvas.json</code>; markdown view re-rendered on each
+              pipeline run.
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -801,7 +751,8 @@ export function SpecTab({ venture, manifest }: Props) {
         {/* 1. Purpose ───────────────────────────────────────────── */}
         <Section title="1. Purpose" icon="🎯">
           <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-            One paragraph: what does this product do, for whom, and why does it matter? Specific noun, specific verb, specific outcome.
+            One paragraph: what does this product do, for whom, and why does it matter? Specific
+            noun, specific verb, specific outcome.
           </p>
           <textarea
             value={canvas.purpose}
@@ -815,7 +766,8 @@ export function SpecTab({ venture, manifest }: Props) {
         {/* 2. Personas ──────────────────────────────────────────── */}
         <Section title="2. Personas" icon="👥">
           <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-            Who are you building this for? Push for one primary persona at v1. Real pain points, real goals.
+            Who are you building this for? Push for one primary persona at v1. Real pain points,
+            real goals.
           </p>
           {canvas.personas.map((p) => (
             <PersonaCard
@@ -831,7 +783,8 @@ export function SpecTab({ venture, manifest }: Props) {
         {/* 3. Features ──────────────────────────────────────────── */}
         <Section title="3. Features" icon="⚙️">
           <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-            MoSCoW-prioritised. Every Must-have feature needs at least one acceptance criterion — a checkable statement.
+            MoSCoW-prioritised. Every Must-have feature needs at least one acceptance criterion — a
+            checkable statement.
           </p>
           {canvas.features.map((f) => (
             <FeatureCard
@@ -889,7 +842,8 @@ export function SpecTab({ venture, manifest }: Props) {
         {/* 5. Data Model ────────────────────────────────────────── */}
         <Section title="5. Data Model" icon="🗄️">
           <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-            Entities and their fields. 3-7 entities is typical for an MVP; more than 10 needs justification.
+            Entities and their fields. 3-7 entities is typical for an MVP; more than 10 needs
+            justification.
           </p>
           {canvas.dataModel.entities.map((e) => (
             <EntityCard
@@ -921,7 +875,8 @@ export function SpecTab({ venture, manifest }: Props) {
         {/* 7. Non-functional Requirements ───────────────────────── */}
         <Section title="7. Non-functional Requirements" icon="🛡️">
           <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-            Performance, security, accessibility, compliance. Pick the few that actually matter; each needs a measurable target.
+            Performance, security, accessibility, compliance. Pick the few that actually matter;
+            each needs a measurable target.
           </p>
           {canvas.nonFunctional.map((n) => (
             <NfrCard
@@ -937,7 +892,8 @@ export function SpecTab({ venture, manifest }: Props) {
         {/* 8. Success Metrics ───────────────────────────────────── */}
         <Section title="8. Success Metrics" icon="📈">
           <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-            How will you know v1 is working? Avoid vanity metrics (signups, page views) without conversion gating.
+            How will you know v1 is working? Avoid vanity metrics (signups, page views) without
+            conversion gating.
           </p>
           {canvas.metrics.map((m) => (
             <MetricCard
@@ -991,86 +947,81 @@ export function SpecTab({ venture, manifest }: Props) {
         />
       ) : (
         <aside
-        style={{
-          padding: 16,
-          background: "#F9FAFB",
-          border: "1px solid #E5E7EB",
-          borderRadius: 8,
-          alignSelf: "start",
-          position: "sticky",
-          top: 16,
-        }}
-      >
-        <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            marginBottom: 12,
+            padding: 16,
+            background: "#F9FAFB",
+            border: "1px solid #E5E7EB",
+            borderRadius: 8,
+            alignSelf: "start",
+            position: "sticky",
+            top: 16,
           }}
         >
-          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
-            Must-haves
-          </h3>
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: passCount === rules.length ? "#059669" : "#6B7280",
-            }}
-          >
-            {passCount} / {rules.length}
-          </span>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {rules.map((rule) => (
-            <div
-              key={rule.id}
-              style={{ display: "flex", alignItems: "flex-start", gap: 8 }}
-            >
-              <span
-                style={{
-                  fontSize: 12,
-                  marginTop: 1,
-                  color: rule.pass ? "#059669" : "#9CA3AF",
-                }}
-              >
-                {rule.pass ? "✅" : "○"}
-              </span>
-              <div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: rule.pass ? "#111827" : "#374151",
-                  }}
-                >
-                  {rule.label}
-                </div>
-                <div style={{ fontSize: 11, color: "#6B7280" }}>
-                  {rule.description}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        {isProductSpecComplete(canvas) && (
           <div
             style={{
-              marginTop: 14,
-              padding: 10,
-              background: "#ECFDF5",
-              border: "1px solid #A7F3D0",
-              borderRadius: 6,
-              fontSize: 12,
-              color: "#065F46",
-              fontWeight: 600,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginBottom: 12,
             }}
           >
-            ✓ All must-haves complete — ready to advance to Wireframe stage.
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
+              Must-haves
+            </h3>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: passCount === rules.length ? "#059669" : "#6B7280",
+              }}
+            >
+              {passCount} / {rules.length}
+            </span>
           </div>
-        )}
-      </aside>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {rules.map((rule) => (
+              <div key={rule.id} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                <span
+                  style={{
+                    fontSize: 12,
+                    marginTop: 1,
+                    color: rule.pass ? "#059669" : "#9CA3AF",
+                  }}
+                >
+                  {rule.pass ? "✅" : "○"}
+                </span>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: rule.pass ? "#111827" : "#374151",
+                    }}
+                  >
+                    {rule.label}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#6B7280" }}>{rule.description}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {isProductSpecComplete(canvas) && (
+            <div
+              style={{
+                marginTop: 14,
+                padding: 10,
+                background: "#ECFDF5",
+                border: "1px solid #A7F3D0",
+                borderRadius: 6,
+                fontSize: 12,
+                color: "#065F46",
+                fontWeight: 600,
+              }}
+            >
+              ✓ All must-haves complete — ready to advance to Wireframe stage.
+            </div>
+          )}
+        </aside>
       )}
     </div>
   );
@@ -1119,9 +1070,7 @@ function Field({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>
-        {label}
-      </span>
+      <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>{label}</span>
       {children}
     </label>
   );
@@ -1283,18 +1232,12 @@ function FeatureCard({
         />
         <select
           value={feature.priority}
-          onChange={(e) =>
-            onChange({ priority: e.target.value as FeaturePriority })
-          }
+          onChange={(e) => onChange({ priority: e.target.value as FeaturePriority })}
           style={{ ...inputStyle, width: "auto" }}
         >
           {FeaturePrioritySchema.options.map((opt) => (
             <option key={opt} value={opt}>
-              {opt === "must"
-                ? "Must"
-                : opt === "should"
-                  ? "Should"
-                  : "Nice"}
+              {opt === "must" ? "Must" : opt === "should" ? "Should" : "Nice"}
             </option>
           ))}
         </select>
@@ -1362,10 +1305,7 @@ function EntityCard({
   };
   const addField = () => {
     onChange({
-      fields: [
-        ...entity.fields,
-        { name: "", type: "", required: false, description: "" },
-      ],
+      fields: [...entity.fields, { name: "", type: "", required: false, description: "" }],
     });
   };
   const removeField = (idx: number) => {
@@ -1394,9 +1334,7 @@ function EntityCard({
         />
       </Field>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>
-          Fields
-        </span>
+        <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>Fields</span>
         {entity.fields.map((f, idx) => (
           <div
             key={idx}
@@ -1477,9 +1415,7 @@ function EndpointCard({
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <select
           value={endpoint.method}
-          onChange={(e) =>
-            onChange({ method: e.target.value as HttpMethod })
-          }
+          onChange={(e) => onChange({ method: e.target.value as HttpMethod })}
           style={{ ...inputStyle, width: 90 }}
         >
           {HttpMethodSchema.options.map((m) => (
@@ -1548,9 +1484,7 @@ function NfrCard({
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <select
           value={nfr.category}
-          onChange={(e) =>
-            onChange({ category: e.target.value as NonFunctionalCategory })
-          }
+          onChange={(e) => onChange({ category: e.target.value as NonFunctionalCategory })}
           style={{ ...inputStyle, width: 150, textTransform: "capitalize" }}
         >
           {NonFunctionalCategorySchema.options.map((opt) => (
@@ -1624,9 +1558,7 @@ function MetricCard({
           <input
             type="text"
             value={metric.currentBaseline}
-            onChange={(e) =>
-              onChange({ currentBaseline: e.target.value })
-            }
+            onChange={(e) => onChange({ currentBaseline: e.target.value })}
             placeholder="—"
             style={inputStyle}
           />
@@ -1648,11 +1580,7 @@ function SaveIndicator({
     saving: { color: "#6366F1", text: "Saving…" },
     unsaved: { color: "#D97706", text: "Unsaved" },
   }[status];
-  return (
-    <span style={{ fontSize: 11, color: cfg.color, fontWeight: 600 }}>
-      {cfg.text}
-    </span>
-  );
+  return <span style={{ fontSize: 11, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1843,7 +1771,8 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
             : "Drafting with the active provider"}
           {phase === "success" && (
             <span style={{ color: "#6B7280" }}>
-              {" "}— Replace overwrites the section, Merge appends.
+              {" "}
+              — Replace overwrites the section, Merge appends.
             </span>
           )}
         </div>
@@ -1852,13 +1781,9 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
       {/* ── Body ───────────────────────────────────────────────── */}
       {phase === "loading" && (
         <div style={{ padding: 16, fontSize: 12, color: "#4B5563" }}>
-          <div style={{ marginBottom: 8 }}>
-            Drafting your spec from brand brief + research…
-          </div>
+          <div style={{ marginBottom: 8 }}>Drafting your spec from brand brief + research…</div>
           <div style={{ fontSize: 11, color: "#9CA3AF" }}>
-            {deltaCount > 0
-              ? `Streaming · ${deltaCount} chunks`
-              : "Waiting for first token…"}
+            {deltaCount > 0 ? `Streaming · ${deltaCount} chunks` : "Waiting for first token…"}
           </div>
           <div style={{ fontSize: 11, color: "#6B7280", marginTop: 12 }}>
             This usually takes 20–60 seconds depending on provider.
@@ -1868,9 +1793,7 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
 
       {phase === "error" && (
         <div style={{ padding: 16, fontSize: 12, color: "#7F1D1D" }}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>
-            Couldn't complete the draft
-          </div>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>Couldn't complete the draft</div>
           <div
             style={{
               padding: 10,
@@ -1970,9 +1893,7 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
             count={draftCanvas.purpose.trim().length > 0 ? 1 : 0}
             singleton
             state={sectionStates.purpose ?? "pending"}
-            onAction={(m) =>
-              onApplyPurpose(m === "merge" ? "replace" : (m as "replace" | "skip"))
-            }
+            onAction={(m) => onApplyPurpose(m === "merge" ? "replace" : (m as "replace" | "skip"))}
           />
 
           <DraftSectionRow
@@ -1984,9 +1905,7 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
                 .map((p) => p.name)
                 .join(", ") || "(none)"
             }
-            count={
-              draftCanvas.personas.filter((p) => p.name.trim().length > 0).length
-            }
+            count={draftCanvas.personas.filter((p) => p.name.trim().length > 0).length}
             state={sectionStates.personas ?? "pending"}
             onAction={onApplyPersonas}
           />
@@ -2001,9 +1920,7 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
                 .map((f) => `${f.priority === "must" ? "★" : "·"} ${f.name}`)
                 .join("; ") || "(none)"
             }
-            count={
-              draftCanvas.features.filter((f) => f.name.trim().length > 0).length
-            }
+            count={draftCanvas.features.filter((f) => f.name.trim().length > 0).length}
             state={sectionStates.features ?? "pending"}
             onAction={onApplyFeatures}
           />
@@ -2026,11 +1943,7 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
                 .map((e) => e.name)
                 .join(", ") || "(none)"
             }
-            count={
-              draftCanvas.dataModel.entities.filter(
-                (e) => e.name.trim().length > 0
-              ).length
-            }
+            count={draftCanvas.dataModel.entities.filter((e) => e.name.trim().length > 0).length}
             state={sectionStates.entities ?? "pending"}
             onAction={onApplyEntities}
           />
@@ -2045,11 +1958,7 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
                 .map((e) => `${e.method} ${e.path}`)
                 .join(", ") || "(none)"
             }
-            count={
-              draftCanvas.apiSurface.endpoints.filter(
-                (e) => e.path.trim().length > 0
-              ).length
-            }
+            count={draftCanvas.apiSurface.endpoints.filter((e) => e.path.trim().length > 0).length}
             state={sectionStates.endpoints ?? "pending"}
             onAction={onApplyEndpoints}
           />
@@ -2064,11 +1973,7 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
                 .map((n) => `${n.category}: ${n.description}`)
                 .join("; ") || "(none)"
             }
-            count={
-              draftCanvas.nonFunctional.filter(
-                (n) => n.description.trim().length > 0
-              ).length
-            }
+            count={draftCanvas.nonFunctional.filter((n) => n.description.trim().length > 0).length}
             state={sectionStates.nfrs ?? "pending"}
             onAction={onApplyNfrs}
           />
@@ -2083,9 +1988,7 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
                 .map((m) => `${m.name}: ${m.target || "—"}`)
                 .join(", ") || "(none)"
             }
-            count={
-              draftCanvas.metrics.filter((m) => m.name.trim().length > 0).length
-            }
+            count={draftCanvas.metrics.filter((m) => m.name.trim().length > 0).length}
             state={sectionStates.metrics ?? "pending"}
             onAction={onApplyMetrics}
           />
@@ -2097,9 +2000,7 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
             count={draftCanvas.notes.trim().length > 0 ? 1 : 0}
             singleton
             state={sectionStates.notes ?? "pending"}
-            onAction={(m) =>
-              onApplyNotes(m === "merge" ? "replace" : (m as "replace" | "skip"))
-            }
+            onAction={(m) => onApplyNotes(m === "merge" ? "replace" : (m as "replace" | "skip"))}
           />
         </div>
       )}
@@ -2198,11 +2099,7 @@ function DraftSectionRow({
               fontSize: 10,
               fontWeight: 600,
               color:
-                state === "skipped"
-                  ? "#6B7280"
-                  : state === "applied-merge"
-                    ? "#0E7490"
-                    : "#059669",
+                state === "skipped" ? "#6B7280" : state === "applied-merge" ? "#0E7490" : "#059669",
             }}
           >
             {state === "skipped"
@@ -2230,27 +2127,15 @@ function DraftSectionRow({
       </div>
       {!isCommitted && (
         <div style={{ display: "flex", gap: 4 }}>
-          <button
-            type="button"
-            onClick={() => onAction("replace")}
-            style={trioBtn("primary")}
-          >
+          <button type="button" onClick={() => onAction("replace")} style={trioBtn("primary")}>
             Replace
           </button>
           {!singleton && (
-            <button
-              type="button"
-              onClick={() => onAction("merge")}
-              style={trioBtn("secondary")}
-            >
+            <button type="button" onClick={() => onAction("merge")} style={trioBtn("secondary")}>
               Merge
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => onAction("skip")}
-            style={trioBtn("muted")}
-          >
+          <button type="button" onClick={() => onAction("skip")} style={trioBtn("muted")}>
             Skip
           </button>
         </div>
@@ -2259,9 +2144,7 @@ function DraftSectionRow({
   );
 }
 
-function trioBtn(
-  variant: "primary" | "secondary" | "muted"
-): React.CSSProperties {
+function trioBtn(variant: "primary" | "secondary" | "muted"): React.CSSProperties {
   if (variant === "primary") {
     return {
       flex: 1,

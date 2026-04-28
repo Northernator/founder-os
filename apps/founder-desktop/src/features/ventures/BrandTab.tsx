@@ -1,3 +1,40 @@
+import { materializeBrandPack } from "@founder-os/branding-assets";
+import {
+  type AvailabilityCheck,
+  type AvailabilityStatus,
+  type BrandBrief,
+  BrandBriefSchema,
+  type BrandPersonality,
+  BrandPersonalitySchema,
+  type ColorPalette,
+  DEFAULT_DOMAIN_TLDS,
+  type NamingCandidate,
+  type NamingScan,
+  NamingScanSchema,
+  SOCIAL_PLATFORMS,
+  SOCIAL_PLATFORM_LABELS,
+  type SocialPlatform,
+  TRADEMARK_JURISDICTIONS,
+  TRADEMARK_JURISDICTION_LABELS,
+  type TrademarkJurisdiction,
+  type Typography,
+  createEmptyCandidate,
+  createEmptyNamingScan,
+  deriveBrandConfidence,
+  socialProfileUrl,
+  trademarkSearchUrl,
+} from "@founder-os/branding-core";
+import type { Venture, VentureManifest, VentureStage } from "@founder-os/domain";
+import type { LlmProviderId } from "@founder-os/llm-providers";
+import { optimize } from "@founder-os/prompt-master";
+import {
+  getBrandKitDir,
+  getBrandNamesDir,
+  getLogoConceptsDir,
+  getLogoExportsDir,
+  getStagePath,
+} from "@founder-os/workspace-core";
+import { invoke } from "@tauri-apps/api/core";
 /**
  * Brand tab — covers the four phases of the BRAND_READY stage:
  *   1. Name        — candidates + live availability checks + confidence
@@ -24,63 +61,24 @@
  *   5. brand-brief.json exists
  *   6. logo.svg + tokens.json exist
  */
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import type {
-  Venture,
-  VentureManifest,
-  VentureStage,
-} from "@founder-os/domain";
+import type React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BrandBriefSchema,
-  type BrandBrief,
-  type BrandPersonality,
-  BrandPersonalitySchema,
-  type ColorPalette,
-  type Typography,
-  NamingScanSchema,
-  createEmptyNamingScan,
-  createEmptyCandidate,
-  type NamingScan,
-  type NamingCandidate,
-  type AvailabilityStatus,
-  type AvailabilityCheck,
-  deriveBrandConfidence,
-  SOCIAL_PLATFORMS,
-  SOCIAL_PLATFORM_LABELS,
-  type SocialPlatform,
-  trademarkSearchUrl,
-  TRADEMARK_JURISDICTIONS,
-  TRADEMARK_JURISDICTION_LABELS,
-  type TrademarkJurisdiction,
-  socialProfileUrl,
-  DEFAULT_DOMAIN_TLDS,
-} from "@founder-os/branding-core";
-import { materializeBrandPack } from "@founder-os/branding-assets";
-import {
-  getBrandKitDir,
-  getBrandNamesDir,
-  getLogoExportsDir,
-  getLogoConceptsDir,
-  getStagePath,
-} from "@founder-os/workspace-core";
-import { joinPath } from "../../lib/venture-io.js";
-import { pushToast } from "../../lib/toasts.js";
-import { streamChat, pickActiveProvider } from "../../lib/llm-client.js";
-import { useAbortableTask } from "../../lib/use-abortable-task.js";
-import {
-  generateLogoCandidates,
-  generateFullPack,
-  extractPaletteFromSvg,
+  type BrandAssetSpec,
+  type BrandGenBrief,
   FULL_PACK_SPECS,
   type LogoArchetype,
   type LogoCandidate,
-  type BrandGenBrief,
   type PackAssetResult,
-  type BrandAssetSpec,
+  extractPaletteFromSvg,
+  generateFullPack,
+  generateLogoCandidates,
 } from "../../lib/brand-gen.js";
+import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
+import { pushToast } from "../../lib/toasts.js";
+import { useAbortableTask } from "../../lib/use-abortable-task.js";
+import { joinPath } from "../../lib/venture-io.js";
 import { ProviderPickerDialog } from "./ProviderPickerDialog.js";
-import type { LlmProviderId } from "@founder-os/llm-providers";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -266,7 +264,7 @@ function isValidHex(v: string): boolean {
  * Returns 0..1.
  */
 function relativeLuminance(hex: string): number {
-  const n = parseInt(hex.slice(1), 16);
+  const n = Number.parseInt(hex.slice(1), 16);
   const r = ((n >> 16) & 0xff) / 255;
   const g = ((n >> 8) & 0xff) / 255;
   const b = (n & 0xff) / 255;
@@ -420,9 +418,7 @@ export function BrandTab({
   // flight, otherwise the filename of the concept currently regenerating.
   // Drives the per-tile button label / disabled state. Only one concept
   // can regenerate at a time (no UI affordance to fire two in parallel).
-  const [regeneratingConcept, setRegeneratingConcept] = useState<string | null>(
-    null
-  );
+  const [regeneratingConcept, setRegeneratingConcept] = useState<string | null>(null);
   // pt.32b: abort plumbing for the active regen. Lets the user click ✕
   // to cancel a slow concept regen. The hook bundles the controller +
   // stopping flag + cancel discriminator (same shape used by pipeline
@@ -454,14 +450,11 @@ export function BrandTab({
   //   3. `brandLocked` gates the "Generate full pack" button. Both the
   //      chosen logo and the palette must be reviewed before we start
   //      rolling email headers / social banners / guide MD.
-  const [logoCandidates, setLogoCandidates] = useState<
-    (LogoCandidate & { error?: string })[]
-  >([]);
+  const [logoCandidates, setLogoCandidates] = useState<(LogoCandidate & { error?: string })[]>([]);
   const [generatingCandidates, setGeneratingCandidates] = useState(false);
   const [candidateError, setCandidateError] = useState<string | null>(null);
   const [chosenLogoSvg, setChosenLogoSvg] = useState<string>("");
-  const [chosenLogoArchetype, setChosenLogoArchetype] =
-    useState<LogoArchetype | null>(null);
+  const [chosenLogoArchetype, setChosenLogoArchetype] = useState<LogoArchetype | null>(null);
   const [brandLocked, setBrandLocked] = useState(false);
 
   // Full-pack generation progress — one entry per FULL_PACK_SPECS asset.
@@ -483,9 +476,7 @@ export function BrandTab({
   // full-pack generation. `pickerIntent` records which action to fire
   // on confirm so one dialog serves both flows.
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerIntent, setPickerIntent] = useState<
-    "logo-candidates" | "full-pack" | null
-  >(null);
+  const [pickerIntent, setPickerIntent] = useState<"logo-candidates" | "full-pack" | null>(null);
 
   const chosenCandidate = useMemo(
     () => scan.candidates.find((c) => c.id === scan.chosenCandidateId) ?? null,
@@ -583,11 +574,7 @@ export function BrandTab({
           await invoke("write_file", {
             path: canvasPath(venture.rootPath),
             content:
-              JSON.stringify(
-                { ...next, updatedAt: new Date().toISOString() },
-                null,
-                2
-              ) + "\n",
+              JSON.stringify({ ...next, updatedAt: new Date().toISOString() }, null, 2) + "\n",
           });
           setSaveStatus("saved");
         } catch (err) {
@@ -627,12 +614,7 @@ export function BrandTab({
       try {
         await invoke("write_file", {
           path: namingScanPath(venture.rootPath),
-          content:
-            JSON.stringify(
-              { ...next, updatedAt: new Date().toISOString() },
-              null,
-              2
-            ) + "\n",
+          content: JSON.stringify({ ...next, updatedAt: new Date().toISOString() }, null, 2) + "\n",
         });
       } catch (err) {
         pushToast({
@@ -656,10 +638,7 @@ export function BrandTab({
     [saveScan]
   );
 
-  const updateCandidate = (
-    id: string,
-    patch: Partial<NamingCandidate>
-  ) => {
+  const updateCandidate = (id: string, patch: Partial<NamingCandidate>) => {
     updateScan((prev) => ({
       ...prev,
       candidates: prev.candidates.map((c) =>
@@ -713,6 +692,13 @@ Rules:
 - UK context: don't clash with well-known UK brands.
 - Return ONLY the JSON block. No preamble, no commentary.`;
 
+      const optimizedSystem = await optimize({ prompt: system, context: "wireframe" });
+      console.info(
+        "[prompt-master] brand-naming",
+        optimizedSystem.fallbackUsed
+          ? "(fallback — transport unavailable)"
+          : `tokensSaved=${optimizedSystem.tokensSaved} cacheHit=${optimizedSystem.cacheHit}`
+      );
       let response = "";
       await streamChat({
         provider: providerId,
@@ -722,7 +708,7 @@ Rules:
             content: `Generate 8 name candidates.\n\n${ventureBits}\n\nReturn JSON only.`,
           },
         ],
-        system,
+        system: optimizedSystem.optimized,
         maxTokens: 1200,
         temperature: 0.7,
         onDelta: (d) => {
@@ -777,11 +763,7 @@ Rules:
   const addManualCandidate = () => {
     const name = newCandidateName.trim();
     if (!name) return;
-    if (
-      scan.candidates.some(
-        (c) => c.name.toLowerCase() === name.toLowerCase()
-      )
-    ) {
+    if (scan.candidates.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
       pushToast({ kind: "warn", message: `"${name}" is already in the scan` });
       return;
     }
@@ -796,8 +778,7 @@ Rules:
     updateScan((prev) => ({
       ...prev,
       candidates: prev.candidates.filter((c) => c.id !== id),
-      chosenCandidateId:
-        prev.chosenCandidateId === id ? null : prev.chosenCandidateId,
+      chosenCandidateId: prev.chosenCandidateId === id ? null : prev.chosenCandidateId,
     }));
   };
 
@@ -847,9 +828,7 @@ Rules:
     });
 
     // Socials — staggered to stay below rate limits.
-    const socialPromises: Array<
-      Promise<readonly [SocialPlatform, AvailabilityCheck]>
-    > = [];
+    const socialPromises: Array<Promise<readonly [SocialPlatform, AvailabilityCheck]>> = [];
     SOCIAL_PLATFORMS.forEach((platform, i) => {
       socialPromises.push(
         new Promise((resolve) => {
@@ -1169,6 +1148,21 @@ Rules:
       const SPECS = CONCEPT_SPECS;
       const system = buildConceptSystemPrompt(brief, manifest?.appType);
 
+      // Optimise the shared concept system prompt once, then fan out to
+      // each spec. The closure inside Promise.allSettled re-uses the
+      // result so we don't burn N parallel optimizer round-trips on the
+      // same input.
+      const optimizedSystem = await optimize({
+        prompt: system,
+        context: "wireframe",
+      });
+      console.info(
+        "[prompt-master] brand-concepts",
+        optimizedSystem.fallbackUsed
+          ? "(fallback — transport unavailable)"
+          : `tokensSaved=${optimizedSystem.tokensSaved} cacheHit=${optimizedSystem.cacheHit}`
+      );
+
       const results = await Promise.allSettled(
         SPECS.map(async (spec) => {
           const outPath = joinPath(conceptsDir, spec.filename);
@@ -1185,7 +1179,7 @@ Rules:
                 content: `Write **${spec.title}** for ${brief.companyName}.\n\nDirection: ${spec.direction}\n\nWrite the full brief now.`,
               },
             ],
-            system,
+            system: optimizedSystem.optimized,
             maxTokens: 1600,
             temperature: 0.7,
             onDelta: (d) => {
@@ -1305,6 +1299,16 @@ Rules:
       const conceptsDir = getLogoConceptsDir(venture.rootPath);
       await invoke("mkdir_p", { path: conceptsDir });
       const system = buildConceptSystemPrompt(brief, manifest?.appType);
+      const optimizedSystem = await optimize({
+        prompt: system,
+        context: "wireframe",
+      });
+      console.info(
+        "[prompt-master] brand-concept-regen",
+        optimizedSystem.fallbackUsed
+          ? "(fallback — transport unavailable)"
+          : `tokensSaved=${optimizedSystem.tokensSaved} cacheHit=${optimizedSystem.cacheHit}`
+      );
       const outPath = joinPath(conceptsDir, spec.filename);
       let text = "";
       await streamChat({
@@ -1315,7 +1319,7 @@ Rules:
             content: `Write **${spec.title}** for ${brief.companyName}.\n\nDirection: ${spec.direction}\n\nWrite the full brief now.`,
           },
         ],
-        system,
+        system: optimizedSystem.optimized,
         maxTokens: 1600,
         temperature: 0.7,
         signal: controller.signal,
@@ -1456,9 +1460,7 @@ Rules:
         onArchetypeDone: (candidate) => {
           setLogoCandidates((prev) => {
             // Stable slot order: replace-or-append by archetype id.
-            const idx = prev.findIndex(
-              (c) => c.archetype === candidate.archetype
-            );
+            const idx = prev.findIndex((c) => c.archetype === candidate.archetype);
             if (idx >= 0) {
               const next = [...prev];
               next[idx] = candidate;
@@ -1551,9 +1553,7 @@ Rules:
     setPackZipPath(null);
     // Seed the progress list so all 6 cards render immediately in idle
     // state and flip to running/done/error as generators settle.
-    setPackEntries(
-      FULL_PACK_SPECS.map((spec) => ({ spec, status: "idle" }))
-    );
+    setPackEntries(FULL_PACK_SPECS.map((spec) => ({ spec, status: "idle" })));
     try {
       const brief = composeBrief();
       const results = await generateFullPack({
@@ -1562,9 +1562,7 @@ Rules:
         lockedLogoSvg: chosenLogoSvg,
         onAssetStart: (spec) => {
           setPackEntries((prev) =>
-            prev.map((e) =>
-              e.spec.key === spec.key ? { ...e, status: "running" } : e
-            )
+            prev.map((e) => (e.spec.key === spec.key ? { ...e, status: "running" } : e))
           );
         },
         onAssetDone: (r: PackAssetResult) => {
@@ -1586,10 +1584,7 @@ Rules:
       // Persist every successful asset to disk. We write even if some
       // errored so the user doesn't lose the ones that worked.
       // joinPath is binary so we nest it for deeper paths.
-      const exportsDir = joinPath(
-        joinPath(venture.rootPath, "03_brand"),
-        "exports"
-      );
+      const exportsDir = joinPath(joinPath(venture.rootPath, "03_brand"), "exports");
       await invoke("mkdir_p", { path: exportsDir });
       for (const r of results) {
         if (r.error || !r.content) continue;
@@ -1607,11 +1602,7 @@ Rules:
           await invoke("mkdir_p", { path: dirForWrite });
           await invoke("write_file", { path: filePath, content: r.content });
         } catch (err) {
-          console.warn(
-            "[brand] failed to persist asset",
-            r.spec.key,
-            err
-          );
+          console.warn("[brand] failed to persist asset", r.spec.key, err);
         }
       }
 
@@ -1635,9 +1626,7 @@ Rules:
           detail: `All ${results.length} assets ready under 03_brand/exports/.`,
         });
       } else {
-        setPackError(
-          `${failed} of ${results.length} assets failed. Hit Retry on the red cards.`
-        );
+        setPackError(`${failed} of ${results.length} assets failed. Hit Retry on the red cards.`);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -1687,9 +1676,7 @@ Rules:
     try {
       await invoke("write_file", {
         path: canvasPath(venture.rootPath),
-        content:
-          JSON.stringify({ ...canvas, updatedAt: new Date().toISOString() }, null, 2) +
-          "\n",
+        content: JSON.stringify({ ...canvas, updatedAt: new Date().toISOString() }, null, 2) + "\n",
       });
     } catch (err) {
       pushToast({
@@ -1704,9 +1691,19 @@ Rules:
 
   // ── Render ──────────────────────────────────────────────────────────
   return (
-    <div style={{ height: "100%", overflow: "auto", padding: "24px 28px", boxSizing: "border-box" }}>
+    <div
+      style={{ height: "100%", overflow: "auto", padding: "24px 28px", boxSizing: "border-box" }}
+    >
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, gap: 20 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          marginBottom: 24,
+          gap: 20,
+        }}
+      >
         <div>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>
             Brand Workshop
@@ -1722,7 +1719,11 @@ Rules:
             type="button"
             onClick={handleAdvance}
             disabled={!allChecks || advancing}
-            title={allChecks ? "All 6 must-haves complete — advance" : `${checkCount}/6 complete — finish the checklist`}
+            title={
+              allChecks
+                ? "All 6 must-haves complete — advance"
+                : `${checkCount}/6 complete — finish the checklist`
+            }
             style={{
               padding: "8px 16px",
               background: allChecks ? "#6366F1" : "#E5E7EB",
@@ -1752,13 +1753,25 @@ Rules:
             onToggle={() => setOpenSections((s) => ({ ...s, name: !s.name }))}
           >
             <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-              Generate candidates, check domains / trademarks / socials, pick a winner.
-              Saved to <code>03_brand/names/name-candidates.json</code>.
+              Generate candidates, check domains / trademarks / socials, pick a winner. Saved to{" "}
+              <code>03_brand/names/name-candidates.json</code>.
             </p>
 
             {/* AI generate */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, background: "#F9FAFB", borderRadius: 8 }}>
-              <Field label="Hints for the AI (optional)" hint="Values, keywords, names to avoid, industry slang, etc.">
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                padding: 12,
+                background: "#F9FAFB",
+                borderRadius: 8,
+              }}
+            >
+              <Field
+                label="Hints for the AI (optional)"
+                hint="Values, keywords, names to avoid, industry slang, etc."
+              >
                 <Textarea
                   value={aiSeedHints}
                   onChange={setAiSeedHints}
@@ -1819,7 +1832,17 @@ Rules:
 
             {/* Candidates */}
             {scan.candidates.length === 0 ? (
-              <div style={{ padding: 20, background: "#F9FAFB", border: "1px dashed #E5E7EB", borderRadius: 8, textAlign: "center", fontSize: 13, color: "#9CA3AF" }}>
+              <div
+                style={{
+                  padding: 20,
+                  background: "#F9FAFB",
+                  border: "1px dashed #E5E7EB",
+                  borderRadius: 8,
+                  textAlign: "center",
+                  fontSize: 13,
+                  color: "#9CA3AF",
+                }}
+              >
                 No candidates yet. Generate some or add one manually above.
               </div>
             ) : (
@@ -1850,10 +1873,15 @@ Rules:
             onToggle={() => setOpenSections((s) => ({ ...s, direction: !s.direction }))}
           >
             <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-              Personality, palette, typography, voice. This powers the brand brief and downstream logo / site generation.
+              Personality, palette, typography, voice. This powers the brand brief and downstream
+              logo / site generation.
             </p>
 
-            <Field label="Tagline" required hint="8-14 words. What you do, for whom, how you're different.">
+            <Field
+              label="Tagline"
+              required
+              hint="8-14 words. What you do, for whom, how you're different."
+            >
               <Textarea
                 value={canvas.tagline}
                 onChange={(v) => updateCanvas({ tagline: v })}
@@ -1862,7 +1890,11 @@ Rules:
               />
               <CharCount value={canvas.tagline} min={20} />
             </Field>
-            <Field label="Mission" required hint="One sentence. The change you're trying to make in the world.">
+            <Field
+              label="Mission"
+              required
+              hint="One sentence. The change you're trying to make in the world."
+            >
               <Textarea
                 value={canvas.mission}
                 onChange={(v) => updateCanvas({ mission: v })}
@@ -1921,7 +1953,14 @@ Rules:
 
             {/* Palette */}
             <div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 8,
+                }}
+              >
                 <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>Palette</span>
                 <div style={{ display: "flex", gap: 6 }}>
                   {Object.entries(PRESET_PALETTES).map(([key, p]) => (
@@ -2021,7 +2060,11 @@ Rules:
                 title={!hasBrief ? "Save the brief first" : "Generate SVGs + tokens"}
                 style={primaryButton(generatingLogo || !hasBrief, "#059669")}
               >
-                {generatingLogo ? "Generating…" : hasLogo ? "Regenerate logo pack" : "Generate logo pack"}
+                {generatingLogo
+                  ? "Generating…"
+                  : hasLogo
+                    ? "Regenerate logo pack"
+                    : "Generate logo pack"}
               </button>
               <button
                 type="button"
@@ -2047,8 +2090,7 @@ Rules:
                   // handleRegenerateConcept blocks parallel fires.
                   const isThisRegenerating = regeneratingConcept === name;
                   const otherInFlight =
-                    (regeneratingConcept !== null && !isThisRegenerating) ||
-                    generatingConcepts;
+                    (regeneratingConcept !== null && !isThisRegenerating) || generatingConcepts;
                   // Only canonical concepts (01-04) match a spec — old
                   // or hand-named files in the dir won't have a regen
                   // affordance.
@@ -2090,9 +2132,7 @@ Rules:
                             ...iconButtonStyle,
                             color: isThisRegenerating ? "#DC2626" : "#6B7280",
                             cursor:
-                              otherInFlight && !isThisRegenerating
-                                ? "not-allowed"
-                                : "pointer",
+                              otherInFlight && !isThisRegenerating ? "not-allowed" : "pointer",
                             opacity: otherInFlight && !isThisRegenerating ? 0.4 : 1,
                             fontSize: 12,
                             fontWeight: 600,
@@ -2128,9 +2168,7 @@ Rules:
             )}
 
             {/* Logo preview */}
-            {hasLogo && (
-              <LogoPreview rootPath={venture.rootPath} />
-            )}
+            {hasLogo && <LogoPreview rootPath={venture.rootPath} />}
           </Section>
 
           {/*
@@ -2153,29 +2191,22 @@ Rules:
             }
           >
             <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-              Four SVG logo archetypes generated in parallel. Pick one to
-              seed the palette and unlock the full brand pack.
+              Four SVG logo archetypes generated in parallel. Pick one to seed the palette and
+              unlock the full brand pack.
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               <button
                 type="button"
                 onClick={handleGenerateCandidatesClick}
                 disabled={generatingCandidates || !chosenName}
-                title={
-                  !chosenName
-                    ? "Pick a name candidate first"
-                    : "Generate 4 logo candidates"
-                }
-                style={primaryButton(
-                  generatingCandidates || !chosenName,
-                  "#6366F1"
-                )}
+                title={!chosenName ? "Pick a name candidate first" : "Generate 4 logo candidates"}
+                style={primaryButton(generatingCandidates || !chosenName, "#6366F1")}
               >
                 {generatingCandidates
                   ? "Generating candidates…"
                   : logoCandidates.length > 0
-                  ? "Regenerate candidates"
-                  : "✨ Generate 4 logo candidates"}
+                    ? "Regenerate candidates"
+                    : "✨ Generate 4 logo candidates"}
               </button>
               {chosenLogoSvg && !brandLocked && (
                 <button
@@ -2233,12 +2264,14 @@ Rules:
                   ? logoCandidates
                   : // Placeholder slots so the grid layout appears
                     // immediately; cards transition as SVGs land.
-                    ([
-                      "wordmark",
-                      "lettermark",
-                      "icon-wordmark",
-                      "abstract-mark",
-                    ] as LogoArchetype[]).map((a) => ({
+                    (
+                      [
+                        "wordmark",
+                        "lettermark",
+                        "icon-wordmark",
+                        "abstract-mark",
+                      ] as LogoArchetype[]
+                    ).map((a) => ({
                       archetype: a,
                       svg: "",
                       description: "",
@@ -2250,9 +2283,7 @@ Rules:
                     candidate={candidate as LogoCandidate & { error?: string }}
                     isChosen={chosenLogoArchetype === candidate.archetype}
                     isGenerating={generatingCandidates && !candidate.svg}
-                    onUse={() =>
-                      handleUseCandidate(candidate as LogoCandidate)
-                    }
+                    onUse={() => handleUseCandidate(candidate as LogoCandidate)}
                   />
                 ))}
               </div>
@@ -2270,35 +2301,25 @@ Rules:
             title="Full Brand Pack"
             icon="📦"
             open={openSections.fullPack}
-            onToggle={() =>
-              setOpenSections((s) => ({ ...s, fullPack: !s.fullPack }))
-            }
+            onToggle={() => setOpenSections((s) => ({ ...s, fullPack: !s.fullPack }))}
           >
             <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-              Email header, social banners (X, LinkedIn, OG), email
-              signature template, brand guide MD — generated in parallel
-              off your locked logo and palette.
+              Email header, social banners (X, LinkedIn, OG), email signature template, brand guide
+              MD — generated in parallel off your locked logo and palette.
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               <button
                 type="button"
                 onClick={handleGeneratePackClick}
                 disabled={generatingPack || !brandLocked}
-                title={
-                  !brandLocked
-                    ? "Lock a logo first"
-                    : "Generate the full brand pack"
-                }
-                style={primaryButton(
-                  generatingPack || !brandLocked,
-                  "#0EA5E9"
-                )}
+                title={!brandLocked ? "Lock a logo first" : "Generate the full brand pack"}
+                style={primaryButton(generatingPack || !brandLocked, "#0EA5E9")}
               >
                 {generatingPack
                   ? "Generating pack…"
                   : packEntries.some((e) => e.status === "done")
-                  ? "Regenerate full pack"
-                  : "✨ Generate full brand pack"}
+                    ? "Regenerate full pack"
+                    : "✨ Generate full brand pack"}
               </button>
               {packEntries.some((e) => e.status === "done") && (
                 <button
@@ -2384,7 +2405,14 @@ Rules:
               padding: 16,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: 12,
+              }}
+            >
               <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
                 Must-haves
               </h4>
@@ -2681,7 +2709,14 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 10, overflow: "hidden" }}>
+    <div
+      style={{
+        background: "#FFFFFF",
+        border: "1px solid #E5E7EB",
+        borderRadius: 10,
+        overflow: "hidden",
+      }}
+    >
       <button
         type="button"
         onClick={onToggle}
@@ -2864,16 +2899,18 @@ function CandidateCard({
    * per jurisdiction in TRADEMARK_JURISDICTIONS, so the parent needs
    * the jurisdiction key to know which slot to update.
    */
-  onSetTrademark: (
-    jurisdiction: TrademarkJurisdiction,
-    s: AvailabilityStatus
-  ) => void;
+  onSetTrademark: (jurisdiction: TrademarkJurisdiction, s: AvailabilityStatus) => void;
   onUpdateNotes: (s: string) => void;
 }) {
   const confidence = deriveBrandConfidence(candidate);
   const confCfg = {
     green: { bg: "#ECFDF5", border: "#A7F3D0", color: "#065F46", label: "Green — safe to proceed" },
-    amber: { bg: "#FFFBEB", border: "#FDE68A", color: "#92400E", label: "Amber — build but don't brand-lock yet" },
+    amber: {
+      bg: "#FFFBEB",
+      border: "#FDE68A",
+      color: "#92400E",
+      label: "Amber — build but don't brand-lock yet",
+    },
     red: { bg: "#FEF2F2", border: "#FECACA", color: "#991B1B", label: "Red — don't use" },
     unknown: { bg: "#F9FAFB", border: "#E5E7EB", color: "#6B7280", label: "Unknown — run checks" },
   }[confidence];
@@ -2902,7 +2939,14 @@ function CandidateCard({
           {candidate.name}
         </span>
         {candidate.style && (
-          <span style={{ fontSize: 10, color: "#6B7280", textTransform: "uppercase", letterSpacing: 0.5 }}>
+          <span
+            style={{
+              fontSize: 10,
+              color: "#6B7280",
+              textTransform: "uppercase",
+              letterSpacing: 0.5,
+            }}
+          >
             {candidate.style}
           </span>
         )}
@@ -2937,12 +2981,7 @@ function CandidateCard({
         >
           {chosen ? "✓ Chosen" : "Choose"}
         </button>
-        <button
-          type="button"
-          onClick={onRemove}
-          title="Remove candidate"
-          style={iconButtonStyle}
-        >
+        <button type="button" onClick={onRemove} title="Remove candidate" style={iconButtonStyle}>
           ×
         </button>
       </div>
@@ -3024,8 +3063,7 @@ function CandidateCard({
           launcher. The fixed-width label keeps the rows visually
           aligned regardless of which office is currently set. */}
       {TRADEMARK_JURISDICTIONS.map((jurisdiction) => {
-        const cur =
-          candidate.trademarkStatus[jurisdiction]?.status ?? "unknown";
+        const cur = candidate.trademarkStatus[jurisdiction]?.status ?? "unknown";
         return (
           <div
             key={jurisdiction}
@@ -3036,38 +3074,32 @@ function CandidateCard({
               fontSize: 11,
             }}
           >
-            <span
-              style={{ color: "#6B7280", fontWeight: 600, minWidth: 110 }}
-            >
+            <span style={{ color: "#6B7280", fontWeight: 600, minWidth: 110 }}>
               Trademark ({TRADEMARK_JURISDICTION_LABELS[jurisdiction]}):
             </span>
-            {(["available", "taken", "restricted", "unknown"] as const).map(
-              (s) => {
-                const active = cur === s;
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => onSetTrademark(jurisdiction, s)}
-                    style={{
-                      padding: "3px 8px",
-                      fontSize: 10,
-                      background: active ? statusColors(s).bg : "#FFFFFF",
-                      color: active ? statusColors(s).fg : "#6B7280",
-                      border: `1px solid ${
-                        active ? statusColors(s).fg : "#E5E7EB"
-                      }`,
-                      borderRadius: 4,
-                      cursor: "pointer",
-                      fontWeight: 600,
-                      textTransform: "capitalize",
-                    }}
-                  >
-                    {s}
-                  </button>
-                );
-              }
-            )}
+            {(["available", "taken", "restricted", "unknown"] as const).map((s) => {
+              const active = cur === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => onSetTrademark(jurisdiction, s)}
+                  style={{
+                    padding: "3px 8px",
+                    fontSize: 10,
+                    background: active ? statusColors(s).bg : "#FFFFFF",
+                    color: active ? statusColors(s).fg : "#6B7280",
+                    border: `1px solid ${active ? statusColors(s).fg : "#E5E7EB"}`,
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {s}
+                </button>
+              );
+            })}
           </div>
         );
       })}
@@ -3236,7 +3268,12 @@ function PaletteEditor({
       {/* WCAG contrast pills */}
       <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11 }}>
         <ContrastPill label="Body text on background" ratio={bgText} min={4.5} />
-        <ContrastPill label="Primary on background" ratio={bgPrimary} min={3.0} note="UI elements (≥ 3:1)" />
+        <ContrastPill
+          label="Primary on background"
+          ratio={bgPrimary}
+          min={3.0}
+          note="UI elements (≥ 3:1)"
+        />
       </div>
     </div>
   );
@@ -3347,9 +3384,15 @@ function LogoPreview({ rootPath }: { rootPath: string }) {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      invoke<string>("read_file", { path: joinPath(getLogoExportsDir(rootPath), "logo.svg") }).catch(() => ""),
-      invoke<string>("read_file", { path: joinPath(getLogoExportsDir(rootPath), "logo-dark.svg") }).catch(() => ""),
-      invoke<string>("read_file", { path: joinPath(getLogoExportsDir(rootPath), "logo-icon.svg") }).catch(() => ""),
+      invoke<string>("read_file", {
+        path: joinPath(getLogoExportsDir(rootPath), "logo.svg"),
+      }).catch(() => ""),
+      invoke<string>("read_file", {
+        path: joinPath(getLogoExportsDir(rootPath), "logo-dark.svg"),
+      }).catch(() => ""),
+      invoke<string>("read_file", {
+        path: joinPath(getLogoExportsDir(rootPath), "logo-icon.svg"),
+      }).catch(() => ""),
     ]).then(([light, dark, icon]) => {
       if (cancelled) return;
       setSvg({ light, dark, icon });
@@ -3371,13 +3414,49 @@ function LogoPreview({ rootPath }: { rootPath: string }) {
         borderRadius: 8,
       }}
     >
-      <div style={{ background: "#FFFFFF", padding: 14, borderRadius: 6, border: "1px solid #E5E7EB", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div dangerouslySetInnerHTML={{ __html: svg.light }} style={{ width: "100%", maxHeight: 80 }} />
+      <div
+        style={{
+          background: "#FFFFFF",
+          padding: 14,
+          borderRadius: 6,
+          border: "1px solid #E5E7EB",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          dangerouslySetInnerHTML={{ __html: svg.light }}
+          style={{ width: "100%", maxHeight: 80 }}
+        />
       </div>
-      <div style={{ background: "#111827", padding: 14, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div dangerouslySetInnerHTML={{ __html: svg.dark }} style={{ width: "100%", maxHeight: 80 }} />
+      <div
+        style={{
+          background: "#111827",
+          padding: 14,
+          borderRadius: 6,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          dangerouslySetInnerHTML={{ __html: svg.dark }}
+          style={{ width: "100%", maxHeight: 80 }}
+        />
       </div>
-      <div style={{ background: "#FFFFFF", padding: 14, borderRadius: 6, border: "1px solid #E5E7EB", display: "flex", alignItems: "center", justifyContent: "center", width: 80 }}>
+      <div
+        style={{
+          background: "#FFFFFF",
+          padding: 14,
+          borderRadius: 6,
+          border: "1px solid #E5E7EB",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 80,
+        }}
+      >
         <div dangerouslySetInnerHTML={{ __html: svg.icon }} style={{ width: 48, height: 48 }} />
       </div>
     </div>
@@ -3405,7 +3484,11 @@ function PackSummary({
     { label: "Brand brief", path: "03_brand/brand-kit/brand-brief.json", ok: hasBrief },
     { label: "Logo pack", path: "03_brand/logo/exports/", ok: hasLogo },
     { label: "Design tokens", path: "03_brand/logo/exports/tokens.json", ok: hasTokens },
-    { label: "Concept briefs", path: `03_brand/logo/concepts/ (${conceptCount} files)`, ok: conceptCount > 0 },
+    {
+      label: "Concept briefs",
+      path: `03_brand/logo/concepts/ (${conceptCount} files)`,
+      ok: conceptCount > 0,
+    },
   ];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -3426,7 +3509,14 @@ function PackSummary({
           >
             <span style={{ fontSize: 14 }}>{r.ok ? "✅" : "⬜"}</span>
             <span style={{ fontWeight: 600, color: "#111827", minWidth: 120 }}>{r.label}</span>
-            <span style={{ flex: 1, color: "#6B7280", fontFamily: "'SFMono-Regular', Consolas, monospace", fontSize: 12 }}>
+            <span
+              style={{
+                flex: 1,
+                color: "#6B7280",
+                fontFamily: "'SFMono-Regular', Consolas, monospace",
+                fontSize: 12,
+              }}
+            >
               {r.path}
             </span>
           </div>
@@ -3483,26 +3573,27 @@ function extractCandidatesFromResponse(raw: string): Array<{
         Array.isArray((parsed as Record<string, unknown>).candidates)
       ) {
         const candidates = (parsed as { candidates: unknown[] }).candidates;
-        return candidates
-          .map((c) => {
-            if (!c || typeof c !== "object") return null;
-            const r = c as Record<string, unknown>;
-            const name = typeof r.name === "string" ? r.name.trim() : "";
-            if (!name) return null;
-            return {
-              name,
-              style: typeof r.style === "string" ? r.style.trim() : undefined,
-              rationale:
-                typeof r.rationale === "string" ? r.rationale.trim() : undefined,
-            };
-          })
-          // Predicate must match the .map() output shape exactly. The map
-          // returns `{ name; style: string | undefined; rationale: string | undefined }`
-          // (properties always present, value may be undefined) — that is
-          // NOT the same TS shape as `{ style?: string }` (property
-          // optional). NonNullable strips the `| null` from the inferred
-          // type without restating the whole shape and risking drift.
-          .filter((x): x is NonNullable<typeof x> => x !== null);
+        return (
+          candidates
+            .map((c) => {
+              if (!c || typeof c !== "object") return null;
+              const r = c as Record<string, unknown>;
+              const name = typeof r.name === "string" ? r.name.trim() : "";
+              if (!name) return null;
+              return {
+                name,
+                style: typeof r.style === "string" ? r.style.trim() : undefined,
+                rationale: typeof r.rationale === "string" ? r.rationale.trim() : undefined,
+              };
+            })
+            // Predicate must match the .map() output shape exactly. The map
+            // returns `{ name; style: string | undefined; rationale: string | undefined }`
+            // (properties always present, value may be undefined) — that is
+            // NOT the same TS shape as `{ style?: string }` (property
+            // optional). NonNullable strips the `| null` from the inferred
+            // type without restating the whole shape and risking drift.
+            .filter((x): x is NonNullable<typeof x> => x !== null)
+        );
       }
     } catch {
       /* try next matcher */

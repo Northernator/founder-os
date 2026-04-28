@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 
 export type CardProps = {
   title?: string;
@@ -24,7 +24,12 @@ export function Card({ title, description, children, footer, style, onClick }: C
       }}
     >
       {(title || description) && (
-        <div style={{ padding: "16px 20px", borderBottom: children || footer ? "1px solid #F3F4F6" : undefined }}>
+        <div
+          style={{
+            padding: "16px 20px",
+            borderBottom: children || footer ? "1px solid #F3F4F6" : undefined,
+          }}
+        >
           {title && (
             <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#111827" }}>{title}</h3>
           )}
@@ -33,9 +38,7 @@ export function Card({ title, description, children, footer, style, onClick }: C
           )}
         </div>
       )}
-      {children && (
-        <div style={{ padding: "16px 20px" }}>{children}</div>
-      )}
+      {children && <div style={{ padding: "16px 20px" }}>{children}</div>}
       {footer && (
         <div
           style={{

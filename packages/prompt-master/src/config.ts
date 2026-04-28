@@ -15,9 +15,9 @@
  * apps/founder-desktop/src/lib/prompt-master-config.ts that reads/writes
  * the same file via @tauri-apps/plugin-fs.
  */
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 
 export interface PromptMasterConfig {
   /**

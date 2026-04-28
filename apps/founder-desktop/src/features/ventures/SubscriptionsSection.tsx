@@ -1,3 +1,4 @@
+import { Button, Card } from "@founder-os/ui";
 /**
  * Subscriptions section — subscription-mode providers via vendor CLIs.
  *
@@ -17,16 +18,15 @@
  * credentials file, that's the CLI's business.
  */
 import React, { useEffect, useRef, useState } from "react";
-import { Card, Button } from "@founder-os/ui";
-import * as db from "../../lib/db.js";
 import {
   CLI_AGENT_IDS,
   CLI_AGENT_META,
-  cliCheckInstalled,
-  cliLogin,
   type CliAgentId,
   type CliStatus,
+  cliCheckInstalled,
+  cliLogin,
 } from "../../lib/cli-client.js";
+import * as db from "../../lib/db.js";
 
 type CardState = {
   loading: boolean;
@@ -58,10 +58,12 @@ type Props = {
 };
 
 export function SubscriptionsSection({ onChanged }: Props) {
-  const [cards, setCards] = useState<Record<CliAgentId, CardState>>(() =>
-    Object.fromEntries(
-      CLI_AGENT_IDS.map((id) => [id, emptyCardState()])
-    ) as Record<CliAgentId, CardState>
+  const [cards, setCards] = useState<Record<CliAgentId, CardState>>(
+    () =>
+      Object.fromEntries(CLI_AGENT_IDS.map((id) => [id, emptyCardState()])) as Record<
+        CliAgentId,
+        CardState
+      >
   );
   // In-flight login abort controllers, keyed by agent. Kept in a ref so
   // the button render doesn't re-create them when cards state changes.
@@ -128,14 +130,9 @@ export function SubscriptionsSection({ onChanged }: Props) {
     });
     const currentActive = await db.getAppSetting(db.ACTIVE_PROVIDER_KEY);
     const claudeSetting = await db.getLlmSetting("anthropic");
-    const claudeReady =
-      claudeSetting?.enabled === true &&
-      claudeSetting.mode === "subscription";
+    const claudeReady = claudeSetting?.enabled === true && claudeSetting.mode === "subscription";
     if (!currentActive || currentActive === "") {
-      await db.setAppSetting(
-        db.ACTIVE_PROVIDER_KEY,
-        claudeReady ? "anthropic" : agent
-      );
+      await db.setAppSetting(db.ACTIVE_PROVIDER_KEY, claudeReady ? "anthropic" : agent);
     } else if (agent === "anthropic" && currentActive !== "anthropic") {
       await db.setAppSetting(db.ACTIVE_PROVIDER_KEY, "anthropic");
     }
@@ -273,10 +270,9 @@ export function SubscriptionsSection({ onChanged }: Props) {
           lineHeight: 1.5,
         }}
       >
-        Use your existing Claude Pro, ChatGPT Plus, or Gemini Advanced
-        subscription instead of an API key. Founder OS spawns the vendor's
-        CLI (<code>claude</code>, <code>codex</code>, <code>gemini</code>) to
-        handle sign-in and inference. Usage counts against your monthly
+        Use your existing Claude Pro, ChatGPT Plus, or Gemini Advanced subscription instead of an
+        API key. Founder OS spawns the vendor's CLI (<code>claude</code>, <code>codex</code>,{" "}
+        <code>gemini</code>) to handle sign-in and inference. Usage counts against your monthly
         subscription, not API billing.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -366,9 +362,7 @@ function SubscriptionCard({
               marginBottom: 4,
             }}
           >
-            <span style={{ fontSize: 14, fontWeight: 600 }}>
-              {meta.displayName}
-            </span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{meta.displayName}</span>
             {isDefault && (
               <span
                 style={{
@@ -508,10 +502,7 @@ function SubscriptionCard({
           {state.loginLog.length === 0
             ? "Waiting for CLI output…"
             : state.loginLog.map((l, i) => (
-                <div
-                  key={i}
-                  style={{ color: l.stream === "stderr" ? "#FCA5A5" : "#E5E7EB" }}
-                >
+                <div key={i} style={{ color: l.stream === "stderr" ? "#FCA5A5" : "#E5E7EB" }}>
                   {l.line}
                 </div>
               ))}

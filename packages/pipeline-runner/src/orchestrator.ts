@@ -1,19 +1,19 @@
-import { createLogger } from "@founder-os/logger";
-import { createRunPlan, updateStep, planProgress, type RunPlan } from "@founder-os/pipeline-core";
-import type { VentureManifest, VentureStage } from "@founder-os/domain";
 import type { AuditFinding } from "@founder-os/audit-contract";
-import { ensureBriefStep } from "./steps/ensure-brief.js";
-import { ensureSpecStep } from "./steps/ensure-spec.js";
-import { ensureScreensStep } from "./steps/ensure-screens.js";
+import type { VentureManifest, VentureStage } from "@founder-os/domain";
+import { createLogger } from "@founder-os/logger";
+import { type RunPlan, createRunPlan, planProgress, updateStep } from "@founder-os/pipeline-core";
+import { type Filesystem, nodeFs } from "./fs.js";
+import { auditVentureStep } from "./steps/audit-venture.js";
 import { createBrandBriefStep } from "./steps/create-brand-brief.js";
+import { createBuildHandoffStep } from "./steps/create-build-handoff.js";
 import { createLogoPackStep } from "./steps/create-logo-pack.js";
 import { createStitchPackStep } from "./steps/create-stitch-pack.js";
-import { createBuildHandoffStep } from "./steps/create-build-handoff.js";
-import { auditVentureStep } from "./steps/audit-venture.js";
-import { generateNamingCandidatesStep } from "./steps/generate-naming-candidates.js";
-import { generateLogoConceptsStep } from "./steps/generate-logo-concepts.js";
+import { ensureBriefStep } from "./steps/ensure-brief.js";
+import { ensureScreensStep } from "./steps/ensure-screens.js";
+import { ensureSpecStep } from "./steps/ensure-spec.js";
 import { ensureUkSetupStep } from "./steps/ensure-uk-setup.js";
-import { nodeFs, type Filesystem } from "./fs.js";
+import { generateLogoConceptsStep } from "./steps/generate-logo-concepts.js";
+import { generateNamingCandidatesStep } from "./steps/generate-naming-candidates.js";
 
 /**
  * Shared signature for LLM steps invoked from the orchestrator (pt.26).
@@ -94,17 +94,63 @@ export type OrchestratorResult = {
 };
 
 const STEP_DEFS = [
-  { id: "ensure-brief", name: "Ensure Dev Brief", description: "Scaffold a development brief if none exists" },
-  { id: "generate-naming-candidates", name: "Generate Naming Candidates", description: "AI-generated venture name candidates (skipped without an LLM caller)" },
-  { id: "create-brand-brief", name: "Create Brand Brief", description: "Generate brand identity - colours, fonts, personality" },
-  { id: "create-logo-pack", name: "Create Logo Pack", description: "Materialize SVG logo assets from the brand brief" },
-  { id: "generate-logo-concepts", name: "Generate Logo Concepts", description: "Write 4 logo concept briefs (skipped without an LLM caller)" },
-  { id: "ensure-uk-setup", name: "Ensure UK Setup Canvas", description: "Scaffold the UK admin canvas (entity, HMRC, banking, insurance, IP)" },
-  { id: "ensure-spec", name: "Ensure Product Spec", description: "Scaffold the spec canvas (purpose, personas, features, scope, data model, API, NFRs, metrics) and render the derived product-spec.md" },
-  { id: "ensure-screens", name: "Ensure Screens Canvas", description: "Scaffold the screen inventory canvas (name + shell type + feature/entity mapping per screen) and render the derived screens.md" },
-  { id: "create-stitch-pack", name: "Create Stitch Pack", description: "Generate design-to-code prompts for Stitch / v0 / Figma Make" },
-  { id: "create-build-handoff", name: "Create Build Handoff", description: "Write the handoff bundle for the VS Code extension" },
-  { id: "audit-venture", name: "Audit Venture", description: "Run sanity checks against artifacts and manifest" },
+  {
+    id: "ensure-brief",
+    name: "Ensure Dev Brief",
+    description: "Scaffold a development brief if none exists",
+  },
+  {
+    id: "generate-naming-candidates",
+    name: "Generate Naming Candidates",
+    description: "AI-generated venture name candidates (skipped without an LLM caller)",
+  },
+  {
+    id: "create-brand-brief",
+    name: "Create Brand Brief",
+    description: "Generate brand identity - colours, fonts, personality",
+  },
+  {
+    id: "create-logo-pack",
+    name: "Create Logo Pack",
+    description: "Materialize SVG logo assets from the brand brief",
+  },
+  {
+    id: "generate-logo-concepts",
+    name: "Generate Logo Concepts",
+    description: "Write 4 logo concept briefs (skipped without an LLM caller)",
+  },
+  {
+    id: "ensure-uk-setup",
+    name: "Ensure UK Setup Canvas",
+    description: "Scaffold the UK admin canvas (entity, HMRC, banking, insurance, IP)",
+  },
+  {
+    id: "ensure-spec",
+    name: "Ensure Product Spec",
+    description:
+      "Scaffold the spec canvas (purpose, personas, features, scope, data model, API, NFRs, metrics) and render the derived product-spec.md",
+  },
+  {
+    id: "ensure-screens",
+    name: "Ensure Screens Canvas",
+    description:
+      "Scaffold the screen inventory canvas (name + shell type + feature/entity mapping per screen) and render the derived screens.md",
+  },
+  {
+    id: "create-stitch-pack",
+    name: "Create Stitch Pack",
+    description: "Generate design-to-code prompts for Stitch / v0 / Figma Make",
+  },
+  {
+    id: "create-build-handoff",
+    name: "Create Build Handoff",
+    description: "Write the handoff bundle for the VS Code extension",
+  },
+  {
+    id: "audit-venture",
+    name: "Audit Venture",
+    description: "Run sanity checks against artifacts and manifest",
+  },
 ] as const;
 
 export async function runPipeline(opts: OrchestratorOpts): Promise<OrchestratorResult> {

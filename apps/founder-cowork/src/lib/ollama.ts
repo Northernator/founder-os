@@ -44,7 +44,7 @@ export async function listModels(baseUrl: string): Promise<OllamaListModelsRespo
 export async function generate(
   baseUrl: string,
   model: string,
-  prompt: string,
+  prompt: string
 ): Promise<OllamaRunResponse> {
   const url = baseUrl.replace(/\/+$/, "") + "/api/generate";
   const body = {
@@ -75,16 +75,19 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new Error(
-        "Ollama " + res.status + " " + res.statusText +
-          (text ? " :: " + text.slice(0, 200) : ""),
+        "Ollama " + res.status + " " + res.statusText + (text ? " :: " + text.slice(0, 200) : "")
       );
     }
     return (await res.json()) as T;
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new Error(
-        "Ollama request to " + url + " timed out after " + TIMEOUT_MS + "ms. " +
-          "Is the Ollama server running?",
+        "Ollama request to " +
+          url +
+          " timed out after " +
+          TIMEOUT_MS +
+          "ms. " +
+          "Is the Ollama server running?"
       );
     }
     if (
@@ -93,8 +96,10 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
       (err as NodeJS.ErrnoException).code === "ECONNREFUSED"
     ) {
       throw new Error(
-        "Connection refused at " + url + ". " +
-          "Start Ollama (`ollama serve`) or check founderCowork.providers.ollama.baseUrl.",
+        "Connection refused at " +
+          url +
+          ". " +
+          "Start Ollama (`ollama serve`) or check founderCowork.providers.ollama.baseUrl."
       );
     }
     throw err;

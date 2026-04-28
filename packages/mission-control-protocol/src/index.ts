@@ -193,15 +193,9 @@ export interface AccountSaveInput {
   source?: "imported" | "captured";
 }
 
-
 // Truth tab (Phase 1b.4)
 
-export type HandoffRunStatus =
-  | "accepted"
-  | "running"
-  | "success"
-  | "failed"
-  | "cancelled";
+export type HandoffRunStatus = "accepted" | "running" | "success" | "failed" | "cancelled";
 
 export interface TruthRunResponse {
   runId: string;
@@ -238,7 +232,6 @@ interface BaseWebviewRequest {
 export type WebviewToHostMessage =
   | (BaseWebviewRequest & { type: "ready" })
   | (BaseWebviewRequest & { type: "refresh:init" })
-
   | (BaseWebviewRequest & {
       type: "session:spawn";
       agentId: AgentId;
@@ -253,11 +246,9 @@ export type WebviewToHostMessage =
     })
   | (BaseWebviewRequest & { type: "session:show"; sessionId: string })
   | (BaseWebviewRequest & { type: "session:kill"; sessionId: string })
-
   | (BaseWebviewRequest & { type: "agents:rerunPreflight" })
   | (BaseWebviewRequest & { type: "settings:open"; query?: string })
   | (BaseWebviewRequest & { type: "ventureRoot:pick" })
-
   | (BaseWebviewRequest & { type: "github:status" })
   | (BaseWebviewRequest & { type: "github:createBranch"; name: string })
   | (BaseWebviewRequest & { type: "github:commitAndPush"; message: string })
@@ -266,27 +257,23 @@ export type WebviewToHostMessage =
       title: string;
       body: string;
     })
-
   | (BaseWebviewRequest & { type: "ollama:listModels" })
   | (BaseWebviewRequest & {
       type: "ollama:run";
       model: string;
       prompt: string;
     })
-
   | (BaseWebviewRequest & { type: "skills:list" })
   | (BaseWebviewRequest & {
       type: "skills:read";
       id: string;
       source: SkillSource;
     })
-
   | (BaseWebviewRequest & { type: "memory:list" })
   | (BaseWebviewRequest & { type: "memory:read"; id: string })
   | (BaseWebviewRequest & { type: "memory:save"; entry: MemorySaveInput })
   | (BaseWebviewRequest & { type: "memory:delete"; id: string })
   | (BaseWebviewRequest & { type: "memory:saveCurrent" })
-
   | (BaseWebviewRequest & { type: "vault:list" })
   | (BaseWebviewRequest & { type: "vault:read"; id: string })
   | (BaseWebviewRequest & { type: "vault:save"; doc: VaultSaveInput })
@@ -304,7 +291,6 @@ export type WebviewToHostMessage =
       question?: string;
       agentId?: AgentId;
     })
-
 
   // Accounts (Phase 3.2)
   | (BaseWebviewRequest & { type: "accounts:list" })

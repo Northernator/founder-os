@@ -14,20 +14,9 @@
     "vscode": "^1.89.0"
   },
   "icon": "images/icon.png",
-  "categories": [
-    "Other",
-    "Machine Learning"
-  ],
-  "keywords": [
-    "ai",
-    "claude",
-    "codegen",
-    "scaffolding",
-    "founder-os"
-  ],
-  "activationEvents": [
-    "onStartupFinished"
-  ],
+  "categories": ["Other", "Machine Learning"],
+  "keywords": ["ai", "claude", "codegen", "scaffolding", "founder-os"],
+  "activationEvents": ["onStartupFinished"],
   "main": "./out/extension.js",
   "type": "commonjs",
   "contributes": {

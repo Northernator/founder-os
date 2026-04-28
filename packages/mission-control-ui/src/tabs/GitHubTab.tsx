@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
 import type {
-  GitStatusResponse,
   GitCommitResponse,
   GitCreatePrResponse,
+  GitStatusResponse,
 } from "@founder-os/mission-control-protocol";
+import { useEffect, useState } from "react";
 import type { TabProps } from "../App.js";
 import { request } from "../lib/vscode.js";
 
@@ -30,7 +30,9 @@ export function GitHubTab(_props: TabProps) {
     }
   }
 
-  useEffect(() => { void refresh(); /* on mount */ }, []);
+  useEffect(() => {
+    void refresh(); /* on mount */
+  }, []);
 
   async function doCreateBranch(): Promise<void> {
     if (!branchName.trim()) return;
@@ -59,8 +61,9 @@ export function GitHubTab(_props: TabProps) {
       setCommitMsg("");
       await refresh();
       if (!r.pushed) {
-        setError("Committed " + r.commitSha.slice(0, 8) +
-          " but push failed: " + (r.pushHint ?? "unknown"));
+        setError(
+          "Committed " + r.commitSha.slice(0, 8) + " but push failed: " + (r.pushHint ?? "unknown")
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -93,7 +96,9 @@ export function GitHubTab(_props: TabProps) {
     <>
       <div className="mc-card">
         <div className="mc-row" style={{ justifyContent: "space-between" }}>
-          <h3 className="mc-card-title" style={{ margin: 0 }}>Status</h3>
+          <h3 className="mc-card-title" style={{ margin: 0 }}>
+            Status
+          </h3>
           <button className="secondary" onClick={refresh} disabled={busy !== null}>
             {busy === "status" ? "Refreshing…" : "Refresh"}
           </button>
@@ -112,12 +117,21 @@ export function GitHubTab(_props: TabProps) {
             </div>
             {status.changedFiles.length > 0 && (
               <table className="mc-table" style={{ marginTop: 10 }}>
-                <thead><tr><th style={{ width: 40 }}>St</th><th>Path</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th style={{ width: 40 }}>St</th>
+                    <th>Path</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {status.changedFiles.map((f) => (
                     <tr key={f.path + f.status}>
-                      <td><code>{f.status}</code></td>
-                      <td><code>{f.path}</code></td>
+                      <td>
+                        <code>{f.status}</code>
+                      </td>
+                      <td>
+                        <code>{f.path}</code>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -158,8 +172,8 @@ export function GitHubTab(_props: TabProps) {
           </button>
         </div>
         <p style={{ color: "var(--fc-fg-muted)", fontSize: 12, margin: "8px 0 0" }}>
-          Stages all changes (`git add -A`), commits, and pushes with `--set-upstream`
-          if needed. Push errors don't block the commit — you'll get a warning.
+          Stages all changes (`git add -A`), commits, and pushes with `--set-upstream` if needed.
+          Push errors don't block the commit — you'll get a warning.
         </p>
       </div>
 
@@ -184,18 +198,23 @@ export function GitHubTab(_props: TabProps) {
         </div>
         {lastPrUrl && (
           <p style={{ marginTop: 10 }}>
-            <strong>PR created:</strong> <a href={lastPrUrl} target="_blank" rel="noreferrer">{lastPrUrl}</a>
+            <strong>PR created:</strong>{" "}
+            <a href={lastPrUrl} target="_blank" rel="noreferrer">
+              {lastPrUrl}
+            </a>
           </p>
         )}
         <p style={{ color: "var(--fc-fg-muted)", fontSize: 12, margin: "8px 0 0" }}>
-          Requires the GitHub CLI (`gh`) on PATH and `gh auth login`. Token-based PR
-          creation lands with packages/agent-accounts in Phase 3.
+          Requires the GitHub CLI (`gh`) on PATH and `gh auth login`. Token-based PR creation lands
+          with packages/agent-accounts in Phase 3.
         </p>
       </div>
 
       {error && (
         <div className="mc-card" style={{ borderColor: "var(--fc-error)" }}>
-          <h3 className="mc-card-title" style={{ color: "var(--fc-error)" }}>Error</h3>
+          <h3 className="mc-card-title" style={{ color: "var(--fc-error)" }}>
+            Error
+          </h3>
           <pre style={{ whiteSpace: "pre-wrap", color: "var(--fc-error)" }}>{error}</pre>
         </div>
       )}

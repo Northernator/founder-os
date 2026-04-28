@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
 import type { Venture, VentureManifest, VentureStage } from "@founder-os/domain";
+import { optimize } from "@founder-os/prompt-master";
 import { invoke } from "@tauri-apps/api/core";
-import { joinPath } from "../../lib/venture-io.js";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
 import { pushToast } from "../../lib/toasts.js";
-import { streamChat, pickActiveProvider } from "../../lib/llm-client.js";
+import { joinPath } from "../../lib/venture-io.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -100,12 +102,9 @@ function computeChecks(canvas: ValidationCanvas): ChecksMap {
     (e) => e.status === "done" && e.description.trim().length > 0
   );
   return {
-    icpDefined:
-      canvas.icpDescription.trim().length >= 30 &&
-      canvas.icpPain.trim().length >= 20,
+    icpDefined: canvas.icpDescription.trim().length >= 30 && canvas.icpPain.trim().length >= 20,
     offerDefined:
-      canvas.valueProposition.trim().length >= 20 &&
-      canvas.whatsIncluded.trim().length >= 10,
+      canvas.valueProposition.trim().length >= 20 && canvas.whatsIncluded.trim().length >= 10,
     pricingDecided: canvas.pricePoint.trim().length >= 2,
     experimentRun: doneExperiments.length >= 1,
     resultsDocumented: canvas.keyLearnings.trim().length >= 30,
@@ -146,10 +145,14 @@ const DECISION_CONFIG: Record<
   ValidationDecision,
   { color: string; label: string; sublabel: string }
 > = {
-  validated: { color: "#059669", label: "✅ Validated", sublabel: "Customers confirmed they'd pay" },
-  pivot:     { color: "#D97706", label: "🔄 Pivot", sublabel: "Core idea needs adjustment" },
+  validated: {
+    color: "#059669",
+    label: "✅ Validated",
+    sublabel: "Customers confirmed they'd pay",
+  },
+  pivot: { color: "#D97706", label: "🔄 Pivot", sublabel: "Core idea needs adjustment" },
   invalidated: { color: "#DC2626", label: "🛑 Invalidated", sublabel: "Not worth building as-is" },
-  undecided:   { color: "#9CA3AF", label: "⏳ Undecided", sublabel: "Still running experiments" },
+  undecided: { color: "#9CA3AF", label: "⏳ Undecided", sublabel: "Still running experiments" },
 };
 
 // ---------------------------------------------------------------------------
@@ -159,7 +162,11 @@ const DECISION_CONFIG: Record<
 function errDetail(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
-  try { return JSON.stringify(err); } catch { return String(err); }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
 }
 
 function makeid(): string {
@@ -206,7 +213,9 @@ export function ValidationTab({
   const [advancing, setAdvancing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [aiFillingDocs, setAiFillingDocs] = useState(false);
-  const [uploadedDocs, setUploadedDocs] = useState<{ id: string; name: string; savedPath: string; sizeKb: number }[]>([]);
+  const [uploadedDocs, setUploadedDocs] = useState<
+    { id: string; name: string; savedPath: string; sizeKb: number }[]
+  >([]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -216,10 +225,18 @@ export function ValidationTab({
     invoke<string>("read_file", { path: canvasPath(venture.rootPath) })
       .then((raw) => {
         if (cancelled) return;
-        try { setCanvas({ ...DEFAULT_CANVAS, ...JSON.parse(raw) }); } catch { /* fresh */ }
+        try {
+          setCanvas({ ...DEFAULT_CANVAS, ...JSON.parse(raw) });
+        } catch {
+          /* fresh */
+        }
       })
-      .catch(() => { if (!cancelled) setCanvas(DEFAULT_CANVAS); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled) setCanvas(DEFAULT_CANVAS);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [venture.id, venture.rootPath]);
 
   // Debounced save
@@ -232,10 +249,15 @@ export function ValidationTab({
         try {
           await invoke("write_file", {
             path: canvasPath(venture.rootPath),
-            content: JSON.stringify({ ...next, updatedAt: new Date().toISOString() }, null, 2) + "\n",
+            content:
+              JSON.stringify({ ...next, updatedAt: new Date().toISOString() }, null, 2) + "\n",
           });
         } catch (err) {
-          pushToast({ kind: "warn", message: "Couldn't save validation canvas", detail: errDetail(err) });
+          pushToast({
+            kind: "warn",
+            message: "Couldn't save validation canvas",
+            detail: errDetail(err),
+          });
         }
         setSaveStatus("saved");
       }, 800);
@@ -262,19 +284,29 @@ export function ValidationTab({
       .then((paths) => {
         if (cancelled) return;
         const docs = paths
-          .map((p) => { const parts = p.replace(/\\/g, "/").split("/"); const name = parts[parts.length - 1] ?? p; return { id: p, name, savedPath: p, sizeKb: 0 }; })
+          .map((p) => {
+            const parts = p.replace(/\\/g, "/").split("/");
+            const name = parts[parts.length - 1] ?? p;
+            return { id: p, name, savedPath: p, sizeKb: 0 };
+          })
           .filter((d) => !d.name.startsWith("."));
         setUploadedDocs(docs);
       })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [venture.id, venture.rootPath]);
 
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setUploading(true);
     const dir = uploadsDir(venture.rootPath);
-    try { await invoke("mkdir_p", { path: dir }); } catch { /* ignore */ }
+    try {
+      await invoke("mkdir_p", { path: dir });
+    } catch {
+      /* ignore */
+    }
     for (const file of Array.from(files)) {
       try {
         const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -286,22 +318,59 @@ export function ValidationTab({
           const b64 = arrayBufferToBase64(buf);
           try {
             const extracted = await invoke<string>("pdf_extract_text", { base64Bytes: b64 });
-            if (!extracted.trim()) { pushToast({ kind: "warn", message: `"${file.name}" — scanned PDF, no text extracted`, ttlMs: 6000 }); continue; }
+            if (!extracted.trim()) {
+              pushToast({
+                kind: "warn",
+                message: `"${file.name}" — scanned PDF, no text extracted`,
+                ttlMs: 6000,
+              });
+              continue;
+            }
             const saveName = file.name.replace(/\.pdf$/i, ".extracted.txt");
             content = `[Extracted from PDF: ${file.name}]\n\n${extracted}`;
             await invoke("write_file", { path: joinPath(dir, saveName), content: content + "\n" });
-            setUploadedDocs((prev) => [...prev.filter((d) => d.id !== saveName), { id: saveName, name: saveName, savedPath: joinPath(dir, saveName), sizeKb: Math.round(content.length / 1024) }]);
+            setUploadedDocs((prev) => [
+              ...prev.filter((d) => d.id !== saveName),
+              {
+                id: saveName,
+                name: saveName,
+                savedPath: joinPath(dir, saveName),
+                sizeKb: Math.round(content.length / 1024),
+              },
+            ]);
             pushToast({ kind: "success", message: `Saved "${saveName}"`, ttlMs: 3000 });
             continue;
-          } catch { pushToast({ kind: "warn", message: `Couldn't extract text from "${file.name}"` }); continue; }
+          } catch {
+            pushToast({ kind: "warn", message: `Couldn't extract text from "${file.name}"` });
+            continue;
+          }
         } else {
-          pushToast({ kind: "warn", message: `"${file.name}" — unsupported type`, detail: "Upload .txt .md .csv .json or .pdf", ttlMs: 5000 });
+          pushToast({
+            kind: "warn",
+            message: `"${file.name}" — unsupported type`,
+            detail: "Upload .txt .md .csv .json or .pdf",
+            ttlMs: 5000,
+          });
           continue;
         }
         await invoke("write_file", { path: joinPath(dir, file.name), content: content + "\n" });
-        setUploadedDocs((prev) => [...prev.filter((d) => d.id !== file.name), { id: file.name, name: file.name, savedPath: joinPath(dir, file.name), sizeKb: Math.round(content.length / 1024) }]);
+        setUploadedDocs((prev) => [
+          ...prev.filter((d) => d.id !== file.name),
+          {
+            id: file.name,
+            name: file.name,
+            savedPath: joinPath(dir, file.name),
+            sizeKb: Math.round(content.length / 1024),
+          },
+        ]);
         pushToast({ kind: "success", message: `Saved "${file.name}"`, ttlMs: 3000 });
-      } catch (err) { pushToast({ kind: "error", message: `Couldn't save "${file.name}"`, detail: errDetail(err) }); }
+      } catch (err) {
+        pushToast({
+          kind: "error",
+          message: `Couldn't save "${file.name}"`,
+          detail: errDetail(err),
+        });
+      }
     }
     setUploading(false);
   };
@@ -311,19 +380,35 @@ export function ValidationTab({
     setAiFillingDocs(true);
     try {
       const providerId = await pickActiveProvider(venture.id);
-      if (!providerId) { pushToast({ kind: "warn", message: "No AI provider configured", detail: "Open Options tab to add an API key." }); return; }
+      if (!providerId) {
+        pushToast({
+          kind: "warn",
+          message: "No AI provider configured",
+          detail: "Open Options tab to add an API key.",
+        });
+        return;
+      }
       const docTexts: string[] = [];
       for (const doc of uploadedDocs) {
-        try { const text = await invoke<string>("read_file", { path: doc.savedPath }); docTexts.push(`[${doc.name}]\n${text}`); } catch { /* skip */ }
+        try {
+          const text = await invoke<string>("read_file", { path: doc.savedPath });
+          docTexts.push(`[${doc.name}]\n${text}`);
+        } catch {
+          /* skip */
+        }
       }
-      if (docTexts.length === 0) { pushToast({ kind: "warn", message: "Couldn't read any uploaded documents" }); return; }
+      if (docTexts.length === 0) {
+        pushToast({ kind: "warn", message: "Couldn't read any uploaded documents" });
+        return;
+      }
       const combined = docTexts.join("\n\n---\n\n").slice(0, 15000);
       const system = `You extract validation and customer information from documents to pre-fill a validation canvas.
 Only extract information clearly stated. Never invent facts. Return raw JSON only — no markdown, no explanation.
 Omit any field where the document has no relevant info.`;
       const fields = {
         icpRole: "Job title or role of the ideal customer",
-        icpDescription: "Full description of the ideal customer persona (demographics, situation, context)",
+        icpDescription:
+          "Full description of the ideal customer persona (demographics, situation, context)",
         icpPain: "Their #1 pain point — ideally in their own words",
         icpCurrentSolution: "What they currently use or do to solve the problem",
         icpTrigger: "What event triggers them to look for a new solution",
@@ -333,34 +418,90 @@ Omit any field where the document has no relevant info.`;
         pricingModel: "How the pricing is structured (subscription, one-off, usage-based, etc.)",
         keyLearnings: "Key learnings from customer interviews or validation experiments",
       };
+      const optimizedSystem = await optimize({ prompt: system, context: "research" });
+      console.info(
+        "[prompt-master] validation-extract",
+        optimizedSystem.fallbackUsed
+          ? "(fallback — transport unavailable)"
+          : `tokensSaved=${optimizedSystem.tokensSaved} cacheHit=${optimizedSystem.cacheHit}`
+      );
       let responseText = "";
       await streamChat({
         provider: providerId,
-        messages: [{ role: "user", content: `Documents:\n\n${combined}\n\n---\nExtract these fields if present:\n${JSON.stringify(fields, null, 2)}\n\nReturn JSON only.` }],
-        system,
+        messages: [
+          {
+            role: "user",
+            content: `Documents:\n\n${combined}\n\n---\nExtract these fields if present:\n${JSON.stringify(fields, null, 2)}\n\nReturn JSON only.`,
+          },
+        ],
+        system: optimizedSystem.optimized,
         maxTokens: 1200,
         temperature: 0.1,
-        onDelta: (d) => { responseText += d; },
+        onDelta: (d) => {
+          responseText += d;
+        },
       });
-      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/) || responseText.match(/(\{[\s\S]*\})/);
-      const result = JSON.parse((jsonMatch ? jsonMatch[1] : responseText).trim()) as Record<string, string>;
+      const jsonMatch =
+        responseText.match(/```(?:json)?\s*([\s\S]*?)```/) || responseText.match(/(\{[\s\S]*\})/);
+      const result = JSON.parse((jsonMatch ? jsonMatch[1] : responseText).trim()) as Record<
+        string,
+        string
+      >;
       const patch: Partial<ValidationCanvas> = {};
       let filled = 0;
-      if (result.icpRole)           { patch.icpRole = result.icpRole; filled++; }
-      if (result.icpDescription)    { patch.icpDescription = result.icpDescription; filled++; }
-      if (result.icpPain)           { patch.icpPain = result.icpPain; filled++; }
-      if (result.icpCurrentSolution){ patch.icpCurrentSolution = result.icpCurrentSolution; filled++; }
-      if (result.icpTrigger)        { patch.icpTrigger = result.icpTrigger; filled++; }
-      if (result.valueProposition)  { patch.valueProposition = result.valueProposition; filled++; }
-      if (result.whatsIncluded)     { patch.whatsIncluded = result.whatsIncluded; filled++; }
-      if (result.pricePoint)        { patch.pricePoint = result.pricePoint; filled++; }
-      if (result.pricingModel)      { patch.pricingModel = result.pricingModel; filled++; }
-      if (result.keyLearnings)      { patch.keyLearnings = result.keyLearnings; filled++; }
+      if (result.icpRole) {
+        patch.icpRole = result.icpRole;
+        filled++;
+      }
+      if (result.icpDescription) {
+        patch.icpDescription = result.icpDescription;
+        filled++;
+      }
+      if (result.icpPain) {
+        patch.icpPain = result.icpPain;
+        filled++;
+      }
+      if (result.icpCurrentSolution) {
+        patch.icpCurrentSolution = result.icpCurrentSolution;
+        filled++;
+      }
+      if (result.icpTrigger) {
+        patch.icpTrigger = result.icpTrigger;
+        filled++;
+      }
+      if (result.valueProposition) {
+        patch.valueProposition = result.valueProposition;
+        filled++;
+      }
+      if (result.whatsIncluded) {
+        patch.whatsIncluded = result.whatsIncluded;
+        filled++;
+      }
+      if (result.pricePoint) {
+        patch.pricePoint = result.pricePoint;
+        filled++;
+      }
+      if (result.pricingModel) {
+        patch.pricingModel = result.pricingModel;
+        filled++;
+      }
+      if (result.keyLearnings) {
+        patch.keyLearnings = result.keyLearnings;
+        filled++;
+      }
       if (filled > 0) {
         update(patch);
-        pushToast({ kind: "success", message: `✨ AI filled ${filled} field${filled > 1 ? "s" : ""} from your documents`, ttlMs: 5000 });
+        pushToast({
+          kind: "success",
+          message: `✨ AI filled ${filled} field${filled > 1 ? "s" : ""} from your documents`,
+          ttlMs: 5000,
+        });
       } else {
-        pushToast({ kind: "warn", message: "AI couldn't find matching fields in your documents", ttlMs: 5000 });
+        pushToast({
+          kind: "warn",
+          message: "AI couldn't find matching fields in your documents",
+          ttlMs: 5000,
+        });
       }
     } catch (err) {
       pushToast({ kind: "error", message: "AI fill failed", detail: errDetail(err) });
@@ -374,7 +515,14 @@ Omit any field where the document has no relevant info.`;
     update({
       experiments: [
         ...canvas.experiments,
-        { id: makeid(), type: "customer_interview", description: "", hypothesis: "", result: "", status: "planned" },
+        {
+          id: makeid(),
+          type: "customer_interview",
+          description: "",
+          hypothesis: "",
+          result: "",
+          status: "planned",
+        },
       ],
     });
   };
@@ -394,25 +542,44 @@ Omit any field where the document has no relevant info.`;
   const handleAdvance = async () => {
     if (!allDone || advancing) return;
     setAdvancing(true);
-    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
     try {
       await invoke("write_file", {
         path: canvasPath(venture.rootPath),
         content: JSON.stringify({ ...canvas, updatedAt: new Date().toISOString() }, null, 2) + "\n",
       });
     } catch (err) {
-      pushToast({ kind: "warn", message: "Couldn't save before advancing", detail: errDetail(err) });
+      pushToast({
+        kind: "warn",
+        message: "Couldn't save before advancing",
+        detail: errDetail(err),
+      });
     }
     onAdvanceStage("BRAND_READY");
     setAdvancing(false);
   };
 
   return (
-    <div style={{ height: "100%", overflow: "auto", padding: "24px 28px", boxSizing: "border-box" }}>
+    <div
+      style={{ height: "100%", overflow: "auto", padding: "24px 28px", boxSizing: "border-box" }}
+    >
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, gap: 20 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          marginBottom: 24,
+          gap: 20,
+        }}
+      >
         <div>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>Validation Canvas</h3>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>
+            Validation Canvas
+          </h3>
           <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6B7280" }}>
             Test your riskiest assumptions before spending a penny on code. Saves automatically.
           </p>
@@ -423,7 +590,11 @@ Omit any field where the document has no relevant info.`;
             type="button"
             onClick={handleAdvance}
             disabled={!allDone || advancing}
-            title={allDone ? "All must-haves complete — advance to Brand stage" : "Complete the checklist first"}
+            title={
+              allDone
+                ? "All must-haves complete — advance to Brand stage"
+                : "Complete the checklist first"
+            }
             style={{
               padding: "8px 16px",
               background: allDone ? "#6366F1" : "#E5E7EB",
@@ -444,33 +615,47 @@ Omit any field where the document has no relevant info.`;
 
       {/* Two-column layout */}
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-
         {/* LEFT */}
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
-
           {/* Section 1 — Supporting Documents */}
           <Section title="1. Supporting Documents" icon="📎">
             <p style={{ margin: "0 0 8px", fontSize: 12, color: "#6B7280" }}>
-              Upload customer interview notes, survey results, landing page analytics, or any validation evidence.
-              AI will read them and auto-fill matching fields below. Saved to{" "}
+              Upload customer interview notes, survey results, landing page analytics, or any
+              validation evidence. AI will read them and auto-fill matching fields below. Saved to{" "}
               <code>02_validation/experiments/</code>. Supports .txt, .md, .csv, .json and .pdf.
             </p>
             <div
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); handleFileUpload(e.dataTransfer.files); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                handleFileUpload(e.dataTransfer.files);
+              }}
               onClick={() => fileInputRef.current?.click()}
               style={{
-                border: "2px dashed #D1D5DB", borderRadius: 8, padding: "20px 16px",
-                textAlign: "center", cursor: "pointer",
-                background: uploading ? "#F0FDF4" : "#F9FAFB", color: "#6B7280",
-                fontSize: 13, transition: "border-color 0.15s",
+                border: "2px dashed #D1D5DB",
+                borderRadius: 8,
+                padding: "20px 16px",
+                textAlign: "center",
+                cursor: "pointer",
+                background: uploading ? "#F0FDF4" : "#F9FAFB",
+                color: "#6B7280",
+                fontSize: 13,
+                transition: "border-color 0.15s",
               }}
             >
               <div style={{ fontSize: 22, marginBottom: 6 }}>📂</div>
               {uploading ? "Saving…" : "Click or drag files here to upload"}
-              <div style={{ fontSize: 11, marginTop: 4, color: "#9CA3AF" }}>.txt · .md · .csv · .json · .pdf</div>
-              <input ref={fileInputRef} type="file" multiple accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.pdf"
-                style={{ display: "none" }} onChange={(e) => handleFileUpload(e.target.files)} />
+              <div style={{ fontSize: 11, marginTop: 4, color: "#9CA3AF" }}>
+                .txt · .md · .csv · .json · .pdf
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.pdf"
+                style={{ display: "none" }}
+                onChange={(e) => handleFileUpload(e.target.files)}
+              />
             </div>
             {uploadedDocs.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -479,25 +664,68 @@ Omit any field where the document has no relevant info.`;
                   onClick={handleAiFill}
                   disabled={aiFillingDocs}
                   style={{
-                    alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6,
+                    alignSelf: "flex-start",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
                     padding: "8px 14px",
                     background: aiFillingDocs ? "#F9FAFB" : "#EEF2FF",
                     border: `1px solid ${aiFillingDocs ? "#E5E7EB" : "#C7D2FE"}`,
-                    borderRadius: 6, fontSize: 13,
+                    borderRadius: 6,
+                    fontSize: 13,
                     color: aiFillingDocs ? "#9CA3AF" : "#4F46E5",
-                    cursor: aiFillingDocs ? "not-allowed" : "pointer", fontWeight: 600,
+                    cursor: aiFillingDocs ? "not-allowed" : "pointer",
+                    fontWeight: 600,
                   }}
                 >
                   <span>{aiFillingDocs ? "⏳" : "🤖"}</span>
                   {aiFillingDocs ? "AI reading documents…" : "AI fill from documents"}
                 </button>
                 {uploadedDocs.map((doc) => (
-                  <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 6, fontSize: 13 }}>
+                  <div
+                    key={doc.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "8px 12px",
+                      background: "#FFFFFF",
+                      border: "1px solid #E5E7EB",
+                      borderRadius: 6,
+                      fontSize: 13,
+                    }}
+                  >
                     <span style={{ fontSize: 16 }}>📄</span>
-                    <span style={{ flex: 1, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</span>
-                    {doc.sizeKb > 0 && <span style={{ fontSize: 11, color: "#9CA3AF" }}>{doc.sizeKb} KB</span>}
-                    <button type="button" onClick={() => invoke("open_path", { path: doc.savedPath }).catch(() => {})}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, padding: "2px 4px", borderRadius: 4, color: "#6366F1" }} title="Open in file manager">↗</button>
+                    <span
+                      style={{
+                        flex: 1,
+                        color: "#111827",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {doc.name}
+                    </span>
+                    {doc.sizeKb > 0 && (
+                      <span style={{ fontSize: 11, color: "#9CA3AF" }}>{doc.sizeKb} KB</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => invoke("open_path", { path: doc.savedPath }).catch(() => {})}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        fontSize: 14,
+                        padding: "2px 4px",
+                        borderRadius: 4,
+                        color: "#6366F1",
+                      }}
+                      title="Open in file manager"
+                    >
+                      ↗
+                    </button>
                   </div>
                 ))}
               </div>
@@ -507,7 +735,8 @@ Omit any field where the document has no relevant info.`;
           {/* Section 2 — ICP */}
           <Section title="2. Ideal Customer Profile (ICP)" icon="🎯">
             <p style={{ margin: "0 0 4px", fontSize: 12, color: "#6B7280" }}>
-              Get ultra-specific. The narrower your ICP now, the easier everything downstream becomes.
+              Get ultra-specific. The narrower your ICP now, the easier everything downstream
+              becomes.
             </p>
 
             <div style={{ display: "flex", gap: 12 }}>
@@ -522,7 +751,11 @@ Omit any field where the document has no relevant info.`;
               </Field>
             </div>
 
-            <Field label="Full ICP description" required hint="Demographics, firmographics, situation — paint a picture of one specific person.">
+            <Field
+              label="Full ICP description"
+              required
+              hint="Demographics, firmographics, situation — paint a picture of one specific person."
+            >
               <Textarea
                 value={canvas.icpDescription}
                 onChange={(v) => update({ icpDescription: v })}
@@ -532,7 +765,11 @@ Omit any field where the document has no relevant info.`;
               <CharCount value={canvas.icpDescription} min={30} />
             </Field>
 
-            <Field label="Their #1 pain point (in their words)" required hint="What frustrates them most about the current way they solve this problem?">
+            <Field
+              label="Their #1 pain point (in their words)"
+              required
+              hint="What frustrates them most about the current way they solve this problem?"
+            >
               <Textarea
                 value={canvas.icpPain}
                 onChange={(v) => update({ icpPain: v })}
@@ -542,7 +779,10 @@ Omit any field where the document has no relevant info.`;
               <CharCount value={canvas.icpPain} min={20} />
             </Field>
 
-            <Field label="What they currently use to solve it" hint="Manual process, spreadsheet, competitor tool, or nothing?">
+            <Field
+              label="What they currently use to solve it"
+              hint="Manual process, spreadsheet, competitor tool, or nothing?"
+            >
               <input
                 type="text"
                 value={canvas.icpCurrentSolution}
@@ -552,7 +792,10 @@ Omit any field where the document has no relevant info.`;
               />
             </Field>
 
-            <Field label="What triggers them to look for a new solution?" hint="What event or threshold makes them finally act?">
+            <Field
+              label="What triggers them to look for a new solution?"
+              hint="What event or threshold makes them finally act?"
+            >
               <input
                 type="text"
                 value={canvas.icpTrigger}
@@ -565,7 +808,11 @@ Omit any field where the document has no relevant info.`;
 
           {/* Section 3 — Offer */}
           <Section title="3. Your Offer" icon="📦">
-            <Field label="One-sentence value proposition" required hint="Complete the sentence: 'We help [ICP] to [outcome] without [pain/obstacle].'">
+            <Field
+              label="One-sentence value proposition"
+              required
+              hint="Complete the sentence: 'We help [ICP] to [outcome] without [pain/obstacle].'"
+            >
               <Textarea
                 value={canvas.valueProposition}
                 onChange={(v) => update({ valueProposition: v })}
@@ -575,7 +822,11 @@ Omit any field where the document has no relevant info.`;
               <CharCount value={canvas.valueProposition} min={20} />
             </Field>
 
-            <Field label="What's included in v1?" required hint="Features and capabilities in the first release. Be specific — this becomes your scope.">
+            <Field
+              label="What's included in v1?"
+              required
+              hint="Features and capabilities in the first release. Be specific — this becomes your scope."
+            >
               <Textarea
                 value={canvas.whatsIncluded}
                 onChange={(v) => update({ whatsIncluded: v })}
@@ -585,7 +836,10 @@ Omit any field where the document has no relevant info.`;
               <CharCount value={canvas.whatsIncluded} min={10} />
             </Field>
 
-            <Field label="What's NOT in v1?" hint="Explicitly cut features to avoid scope creep. Sets expectations with early users.">
+            <Field
+              label="What's NOT in v1?"
+              hint="Explicitly cut features to avoid scope creep. Sets expectations with early users."
+            >
               <Textarea
                 value={canvas.whatsExcluded}
                 onChange={(v) => update({ whatsExcluded: v })}
@@ -617,7 +871,10 @@ Omit any field where the document has no relevant info.`;
                 />
               </Field>
             </div>
-            <Field label="Price sensitivity notes" hint="How did prospects react when you told them the price? What's the ceiling?">
+            <Field
+              label="Price sensitivity notes"
+              hint="How did prospects react when you told them the price? What's the ceiling?"
+            >
               <Textarea
                 value={canvas.priceSensitivityNotes}
                 onChange={(v) => update({ priceSensitivityNotes: v })}
@@ -634,7 +891,17 @@ Omit any field where the document has no relevant info.`;
             </p>
 
             {canvas.experiments.length === 0 && (
-              <div style={{ padding: "16px", textAlign: "center", background: "#F9FAFB", borderRadius: 8, border: "1px dashed #D1D5DB", color: "#9CA3AF", fontSize: 13 }}>
+              <div
+                style={{
+                  padding: "16px",
+                  textAlign: "center",
+                  background: "#F9FAFB",
+                  borderRadius: 8,
+                  border: "1px dashed #D1D5DB",
+                  color: "#9CA3AF",
+                  fontSize: 13,
+                }}
+              >
                 No experiments yet. Add one below to get started.
               </div>
             )}
@@ -670,7 +937,11 @@ Omit any field where the document has no relevant info.`;
 
           {/* Section 6 — Results & Decision */}
           <Section title="6. Results & Decision" icon="📋">
-            <Field label="Key learnings" required hint="What did you learn from your experiments? Surprises, confirmations, doubts?">
+            <Field
+              label="Key learnings"
+              required
+              hint="What did you learn from your experiments? Surprises, confirmations, doubts?"
+            >
               <Textarea
                 value={canvas.keyLearnings}
                 onChange={(v) => update({ keyLearnings: v })}
@@ -680,7 +951,10 @@ Omit any field where the document has no relevant info.`;
               <CharCount value={canvas.keyLearnings} min={30} />
             </Field>
 
-            <Field label="What changed from your original assumptions?" hint="Were you wrong about anything? Did the ICP shift? Did the solution change?">
+            <Field
+              label="What changed from your original assumptions?"
+              hint="Were you wrong about anything? Did the ICP shift? Did the solution change?"
+            >
               <Textarea
                 value={canvas.whatChanged}
                 onChange={(v) => update({ whatChanged: v })}
@@ -694,32 +968,36 @@ Omit any field where the document has no relevant info.`;
                 Validation decision <span style={{ color: "#EF4444" }}>*</span>
               </p>
               <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-                {(["validated", "pivot", "invalidated", "undecided"] as ValidationDecision[]).map((d) => {
-                  const cfg = DECISION_CONFIG[d];
-                  const active = canvas.validationDecision === d;
-                  return (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => update({ validationDecision: d })}
-                      style={{
-                        flex: 1,
-                        minWidth: 120,
-                        padding: "10px 8px",
-                        border: `2px solid ${active ? cfg.color : "#E5E7EB"}`,
-                        borderRadius: 8,
-                        background: active ? `${cfg.color}14` : "#FFFFFF",
-                        color: active ? cfg.color : "#6B7280",
-                        cursor: "pointer",
-                        transition: "all 0.15s",
-                        textAlign: "center",
-                      }}
-                    >
-                      <div style={{ fontSize: 13, fontWeight: 700 }}>{cfg.label}</div>
-                      <div style={{ fontSize: 10, marginTop: 2, opacity: 0.8 }}>{cfg.sublabel}</div>
-                    </button>
-                  );
-                })}
+                {(["validated", "pivot", "invalidated", "undecided"] as ValidationDecision[]).map(
+                  (d) => {
+                    const cfg = DECISION_CONFIG[d];
+                    const active = canvas.validationDecision === d;
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => update({ validationDecision: d })}
+                        style={{
+                          flex: 1,
+                          minWidth: 120,
+                          padding: "10px 8px",
+                          border: `2px solid ${active ? cfg.color : "#E5E7EB"}`,
+                          borderRadius: 8,
+                          background: active ? `${cfg.color}14` : "#FFFFFF",
+                          color: active ? cfg.color : "#6B7280",
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{cfg.label}</div>
+                        <div style={{ fontSize: 10, marginTop: 2, opacity: 0.8 }}>
+                          {cfg.sublabel}
+                        </div>
+                      </button>
+                    );
+                  }
+                )}
               </div>
 
               {canvas.validationDecision !== "undecided" && (
@@ -730,15 +1008,14 @@ Omit any field where the document has no relevant info.`;
                     canvas.validationDecision === "validated"
                       ? "What evidence confirms this is worth building? e.g. 9 verbal commitments, 34% landing page conversion, £12/mo price point confirmed."
                       : canvas.validationDecision === "pivot"
-                      ? "What needs to change? e.g. Shifting ICP from solo freelancers to small agencies — higher willingness to pay and more invoices to chase."
-                      : "Why not? What would need to be true for this to work? e.g. Market too small, competitors too entrenched, no willingness to pay above £5/mo."
+                        ? "What needs to change? e.g. Shifting ICP from solo freelancers to small agencies — higher willingness to pay and more invoices to chase."
+                        : "Why not? What would need to be true for this to work? e.g. Market too small, competitors too entrenched, no willingness to pay above £5/mo."
                   }
                   rows={3}
                 />
               )}
             </div>
           </Section>
-
         </div>
 
         {/* RIGHT — sticky checklist */}
@@ -752,11 +1029,28 @@ Omit any field where the document has no relevant info.`;
               boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 12, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#374151",
+                marginBottom: 12,
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+              }}
+            >
               Must-haves
             </div>
 
-            <div style={{ height: 6, background: "#E5E7EB", borderRadius: 3, marginBottom: 14, overflow: "hidden" }}>
+            <div
+              style={{
+                height: 6,
+                background: "#E5E7EB",
+                borderRadius: 3,
+                marginBottom: 14,
+                overflow: "hidden",
+              }}
+            >
               <div
                 style={{
                   height: "100%",
@@ -772,7 +1066,12 @@ Omit any field where the document has no relevant info.`;
             </div>
 
             {(Object.keys(checks) as CheckKey[]).map((key) => (
-              <ChecklistItem key={key} done={checks[key]} label={CHECK_LABELS[key]} hint={CHECK_HINTS[key]} />
+              <ChecklistItem
+                key={key}
+                done={checks[key]}
+                label={CHECK_LABELS[key]}
+                hint={CHECK_HINTS[key]}
+              />
             ))}
 
             <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid #E5E7EB" }}>
@@ -793,17 +1092,22 @@ Omit any field where the document has no relevant info.`;
                   transition: "background 0.2s",
                 }}
               >
-                {advancing ? "Advancing…" : allDone ? "Advance to Brand →" : "Complete checklist first"}
+                {advancing
+                  ? "Advancing…"
+                  : allDone
+                    ? "Advance to Brand →"
+                    : "Complete checklist first"}
               </button>
               {allDone && (
-                <p style={{ margin: "8px 0 0", fontSize: 11, color: "#059669", textAlign: "center" }}>
+                <p
+                  style={{ margin: "8px 0 0", fontSize: 11, color: "#059669", textAlign: "center" }}
+                >
                   Validated! Moves you to BRAND_READY.
                 </p>
               )}
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );
@@ -854,7 +1158,9 @@ function ExperimentRow({
           style={{ ...selectStyle, flex: 1 }}
         >
           {EXPERIMENT_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
           ))}
         </select>
 
@@ -882,7 +1188,16 @@ function ExperimentRow({
         <button
           type="button"
           onClick={onRemove}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "#9CA3AF", fontSize: 16, padding: "2px 4px", borderRadius: 4, lineHeight: 1 }}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color: "#9CA3AF",
+            fontSize: 16,
+            padding: "2px 4px",
+            borderRadius: 4,
+            lineHeight: 1,
+          }}
           title="Remove"
         >
           ×
@@ -934,10 +1249,30 @@ function ExperimentRow({
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function Section({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
+function Section({
+  title,
+  icon,
+  children,
+}: { title: string; icon: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 10, overflow: "hidden" }}>
-      <div style={{ padding: "14px 18px", borderBottom: "1px solid #F3F4F6", background: "#F9FAFB", display: "flex", alignItems: "center", gap: 8 }}>
+    <div
+      style={{
+        background: "#FFFFFF",
+        border: "1px solid #E5E7EB",
+        borderRadius: 10,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          padding: "14px 18px",
+          borderBottom: "1px solid #F3F4F6",
+          background: "#F9FAFB",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
         <span style={{ fontSize: 16 }}>{icon}</span>
         <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>{title}</h4>
       </div>
@@ -949,14 +1284,23 @@ function Section({ title, icon, children }: { title: string; icon: string; child
 }
 
 function Field({
-  label, required, hint, style: styleProp, children,
+  label,
+  required,
+  hint,
+  style: styleProp,
+  children,
 }: {
-  label: string; required?: boolean; hint?: string; style?: React.CSSProperties; children: React.ReactNode;
+  label: string;
+  required?: boolean;
+  hint?: string;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 5, ...styleProp }}>
       <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
-        {label}{required && <span style={{ color: "#EF4444", marginLeft: 4 }}>*</span>}
+        {label}
+        {required && <span style={{ color: "#EF4444", marginLeft: 4 }}>*</span>}
       </span>
       {hint && <span style={{ fontSize: 11, color: "#9CA3AF", marginTop: -2 }}>{hint}</span>}
       {children}
@@ -964,8 +1308,16 @@ function Field({
   );
 }
 
-function Textarea({ value, onChange, placeholder, rows = 3 }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; rows?: number;
+function Textarea({
+  value,
+  onChange,
+  placeholder,
+  rows = 3,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  rows?: number;
 }) {
   return (
     <textarea
@@ -974,9 +1326,17 @@ function Textarea({ value, onChange, placeholder, rows = 3 }: {
       placeholder={placeholder}
       rows={rows}
       style={{
-        fontSize: 13, padding: "9px 11px", borderRadius: 6, border: "1px solid #D1D5DB",
-        background: "#FFFFFF", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5,
-        outline: "none", width: "100%", boxSizing: "border-box",
+        fontSize: 13,
+        padding: "9px 11px",
+        borderRadius: 6,
+        border: "1px solid #D1D5DB",
+        background: "#FFFFFF",
+        resize: "vertical",
+        fontFamily: "inherit",
+        lineHeight: 1.5,
+        outline: "none",
+        width: "100%",
+        boxSizing: "border-box",
       }}
     />
   );
@@ -994,24 +1354,41 @@ function CharCount({ value, min }: { value: string; min: number }) {
 
 function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hint: string }) {
   return (
-    <div title={done ? "Complete" : hint} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
+    <div
+      title={done ? "Complete" : hint}
+      style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}
+    >
       <div
         style={{
-          width: 18, height: 18, borderRadius: "50%",
+          width: 18,
+          height: 18,
+          borderRadius: "50%",
           background: done ? "#059669" : "#E5E7EB",
           border: done ? "none" : "2px solid #D1D5DB",
-          flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-          marginTop: 1, transition: "background 0.2s",
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          marginTop: 1,
+          transition: "background 0.2s",
         }}
       >
         {done && (
           <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-            <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M1 4L3.5 6.5L9 1"
+              stroke="white"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         )}
       </div>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "#111827" : "#6B7280" }}>{label}</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "#111827" : "#6B7280" }}>
+          {label}
+        </div>
         {!done && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>{hint}</div>}
       </div>
     </div>
@@ -1019,7 +1396,11 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
 }
 
 function SaveIndicator({ status }: { status: "saved" | "saving" | "unsaved" }) {
-  const cfg = { saved: { color: "#059669", text: "Saved" }, saving: { color: "#6366F1", text: "Saving…" }, unsaved: { color: "#D97706", text: "Unsaved" } }[status];
+  const cfg = {
+    saved: { color: "#059669", text: "Saved" },
+    saving: { color: "#6366F1", text: "Saving…" },
+    unsaved: { color: "#D97706", text: "Unsaved" },
+  }[status];
   return <span style={{ fontSize: 11, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
 }
 
@@ -1028,8 +1409,15 @@ function SaveIndicator({ status }: { status: "saved" | "saving" | "unsaved" }) {
 // ---------------------------------------------------------------------------
 
 const inputStyle: React.CSSProperties = {
-  fontSize: 13, padding: "7px 10px", borderRadius: 6, border: "1px solid #D1D5DB",
-  background: "#FFFFFF", fontFamily: "inherit", outline: "none", width: "100%", boxSizing: "border-box",
+  fontSize: 13,
+  padding: "7px 10px",
+  borderRadius: 6,
+  border: "1px solid #D1D5DB",
+  background: "#FFFFFF",
+  fontFamily: "inherit",
+  outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const selectStyle: React.CSSProperties = { ...inputStyle };

@@ -1,5 +1,5 @@
-import { VentureStage } from "@founder-os/domain";
-import { ArtifactRef } from "@founder-os/domain";
+import type { VentureStage } from "@founder-os/domain";
+import type { ArtifactRef } from "@founder-os/domain";
 
 export type StageRequirement = {
   stage: VentureStage;
@@ -99,9 +99,7 @@ export function evaluateStageCompletion(
   };
 }
 
-export function evaluateAllStages(
-  artifacts: ArtifactRef[]
-): Map<VentureStage, StageEvaluation> {
+export function evaluateAllStages(artifacts: ArtifactRef[]): Map<VentureStage, StageEvaluation> {
   const results = new Map<VentureStage, StageEvaluation>();
   for (const req of STAGE_REQUIREMENTS) {
     results.set(req.stage, evaluateStageCompletion(req.stage, artifacts));

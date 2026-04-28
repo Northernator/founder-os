@@ -1,17 +1,17 @@
-import { useEffect, useState } from "react";
 import type {
   MemoryEntry,
   MemoryEntryBody,
   MemoryListResponse,
   MemoryType,
 } from "@founder-os/mission-control-protocol";
+import { useEffect, useState } from "react";
 import type { TabProps } from "../App.js";
 import { request } from "../lib/vscode.js";
 
 const MEMORY_TYPES: MemoryType[] = ["user", "feedback", "project", "reference"];
 
 interface DraftEntry {
-  id: string;          // empty = new
+  id: string; // empty = new
   name: string;
   description: string;
   type: MemoryType;
@@ -45,7 +45,9 @@ export function MemoryTab(_props: TabProps) {
     }
   }
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    void refresh();
+  }, []);
 
   async function loadEntry(id: string): Promise<void> {
     setBusy("load");
@@ -130,7 +132,9 @@ export function MemoryTab(_props: TabProps) {
     <>
       <div className="mc-card">
         <div className="mc-row" style={{ justifyContent: "space-between" }}>
-          <h3 className="mc-card-title" style={{ margin: 0 }}>Memory</h3>
+          <h3 className="mc-card-title" style={{ margin: 0 }}>
+            Memory
+          </h3>
           <div className="mc-row" style={{ gap: 6 }}>
             <button className="secondary" onClick={() => setDraft(EMPTY_DRAFT)}>
               New entry
@@ -144,12 +148,15 @@ export function MemoryTab(_props: TabProps) {
           </div>
         </div>
         <p style={{ color: "var(--fc-fg-muted)", fontSize: 12, margin: "8px 0 0" }}>
-          Stored at <code>{"<workspace>/.founder-cowork/memory/<id>.md"}</code>.
-          Phase 4 swaps this for InsForge-backed storage behind the same shape.
+          Stored at <code>{"<workspace>/.founder-cowork/memory/<id>.md"}</code>. Phase 4 swaps this
+          for InsForge-backed storage behind the same shape.
         </p>
       </div>
 
-      <div className="mc-grid" style={{ gridTemplateColumns: "minmax(220px, 280px) 1fr", alignItems: "start", gap: 14 }}>
+      <div
+        className="mc-grid"
+        style={{ gridTemplateColumns: "minmax(220px, 280px) 1fr", alignItems: "start", gap: 14 }}
+      >
         <div className="mc-card" style={{ marginBottom: 0 }}>
           <h3 className="mc-card-title">Entries</h3>
           {entries === null && !error && <div className="mc-empty">Loading…</div>}
@@ -220,9 +227,15 @@ export function MemoryTab(_props: TabProps) {
               value={draft.type}
               onChange={(e) => setDraft({ ...draft, type: e.target.value as MemoryType })}
             >
-              {MEMORY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              {MEMORY_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
             </select>
-            <label htmlFor="mem-body" style={{ alignSelf: "start", marginTop: 6 }}>Body</label>
+            <label htmlFor="mem-body" style={{ alignSelf: "start", marginTop: 6 }}>
+              Body
+            </label>
             <textarea
               id="mem-body"
               rows={10}
@@ -232,10 +245,7 @@ export function MemoryTab(_props: TabProps) {
             />
           </div>
           <div className="mc-row" style={{ marginTop: 10, justifyContent: "flex-end" }}>
-            <button
-              onClick={saveDraft}
-              disabled={!draft.name.trim() || busy !== null}
-            >
+            <button onClick={saveDraft} disabled={!draft.name.trim() || busy !== null}>
               {busy === "save" ? "Saving…" : draft.id ? "Save" : "Create"}
             </button>
           </div>
@@ -244,7 +254,9 @@ export function MemoryTab(_props: TabProps) {
 
       {error && (
         <div className="mc-card" style={{ borderColor: "var(--fc-error)" }}>
-          <h3 className="mc-card-title" style={{ color: "var(--fc-error)" }}>Error</h3>
+          <h3 className="mc-card-title" style={{ color: "var(--fc-error)" }}>
+            Error
+          </h3>
           <pre style={{ whiteSpace: "pre-wrap", color: "var(--fc-error)" }}>{error}</pre>
         </div>
       )}

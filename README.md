@@ -60,3 +60,9 @@ ventures/<slug>/
 ## Pipeline stages
 
 `IDEA → RESEARCHED → VALIDATED → BRAND_READY → UK_SETUP_READY → SPEC_READY → WIREFRAME_READY → STITCH_READY → BUILD_READY → AUDIT_READY → LAUNCH_READY → LIVE`
+
+## Contributing
+
+After cloning, run `pnpm install` once. This installs the pre-commit hook (via `simple-git-hooks`) that runs Biome on staged files only — fast on small diffs, blocks on lint or format violations. JSON/Markdown/YAML are auto-formatted; TypeScript and JavaScript are checked but never silently rewritten.
+
+If a commit is blocked by Biome, fix the reported issues and re-stage. To bypass the hook in an emergency: `git commit --no-verify` (don't make a habit of it — full-repo lint also runs in CI).

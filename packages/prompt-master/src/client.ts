@@ -1,3 +1,4 @@
+import { NULL_TRANSPORT } from "./fallback.js";
 /**
  * Transport registry.
  *
@@ -13,7 +14,6 @@
  * choose keeps the package itself zero-config.
  */
 import type { OptimizeInput, PromptMasterTransport } from "./types.js";
-import { NULL_TRANSPORT } from "./fallback.js";
 
 let activeTransport: PromptMasterTransport = NULL_TRANSPORT;
 
@@ -41,7 +41,7 @@ export function resetTransport(): void {
  */
 export function asTransport(
   name: string,
-  fn: (input: OptimizeInput) => Promise<{ optimized: string }>,
+  fn: (input: OptimizeInput) => Promise<{ optimized: string }>
 ): PromptMasterTransport {
   return { name, optimize: fn };
 }

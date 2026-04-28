@@ -1,3 +1,5 @@
+import { type ArtifactType, computeArtifactId } from "@founder-os/artifacts-core";
+import { ventureArtifactDirs } from "@founder-os/workspace-core";
 /**
  * Desktop-side artifact scanner.
  *
@@ -9,8 +11,6 @@
  * — keep the two in sync if you change one.
  */
 import { invoke } from "@tauri-apps/api/core";
-import { ventureArtifactDirs } from "@founder-os/workspace-core";
-import { computeArtifactId, type ArtifactType } from "@founder-os/artifacts-core";
 
 /** Return shape from the Rust `list_dir_recursive` command. */
 type RustDirEntry = {
@@ -81,7 +81,8 @@ export function inferArtifactType(relativePath: string, ext: string): ArtifactTy
   if (p.includes("audit")) return "audit-report";
   if (p.includes("market") || p.includes("research")) return "research-summary";
   if (p.includes("validation") || p.includes("validated")) return "research-summary";
-  if (p.includes("uk") || p.includes("setup") || p.includes("incorporation")) return "uk-setup-checklist";
+  if (p.includes("uk") || p.includes("setup") || p.includes("incorporation"))
+    return "uk-setup-checklist";
   if (p.includes("budget") || p.includes("finance")) return "budget-model";
   if (p.includes("names") || p.includes("naming")) return "naming-scan";
   if (p.includes("trademark")) return "trademark-scan";

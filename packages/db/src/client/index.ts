@@ -1,7 +1,7 @@
-import Database from "better-sqlite3";
-import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import * as schema from "../schema";
 import { createLogger } from "@founder-os/logger";
+import Database from "better-sqlite3";
+import { type BetterSQLite3Database, drizzle } from "drizzle-orm/better-sqlite3";
+import * as schema from "../schema";
 
 const logger = createLogger("db");
 

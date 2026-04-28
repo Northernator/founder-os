@@ -1,5 +1,10 @@
-import { generateRunId, HandoffBundle, HandoffBundleSchema, HandoffRequestType } from "@founder-os/handoff-contract";
 import type { ArtifactRef } from "@founder-os/domain";
+import {
+  type HandoffBundle,
+  HandoffBundleSchema,
+  type HandoffRequestType,
+  generateRunId,
+} from "@founder-os/handoff-contract";
 
 export type CreateBundleOpts = {
   ventureId: string;

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { readFile, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 /**
  * Tier-1 build-time optimization runner.
  *
@@ -17,14 +19,8 @@
  * ship via env flag (see packages/prompts/src/index.ts).
  */
 import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-import {
-  setTransport,
-  optimize,
-  createAnthropicFetchTransport,
-} from "@founder-os/prompt-master";
+import { createAnthropicFetchTransport, optimize, setTransport } from "@founder-os/prompt-master";
 import { installNodeBackends } from "@founder-os/prompt-master/node";
-import { readFile, writeFile } from "node:fs/promises";
 
 // Node script — wire the disk-backed cache + telemetry so repeated
 // optimize-prompts runs can reuse cached optimizations across invocations.
@@ -45,7 +41,7 @@ if (apiKey) {
     createAnthropicFetchTransport({
       apiKey,
       model: "claude-haiku-4-5-20251001",
-    }),
+    })
   );
 }
 
@@ -60,7 +56,7 @@ const TARGETS = [
     "packages",
     "prompt-engine",
     "src",
-    "templates.ts",
+    "templates.ts"
   ),
 ];
 

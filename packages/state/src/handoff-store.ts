@@ -1,8 +1,5 @@
+import type { HandoffProgressEvent, HandoffResult } from "@founder-os/handoff-contract";
 import { create } from "zustand";
-import type {
-  HandoffProgressEvent,
-  HandoffResult,
-} from "@founder-os/handoff-contract";
 
 export type HandoffEntry = {
   runId: string;
@@ -41,9 +38,7 @@ export const useHandoffStore = create<HandoffStore>()((set, get) => ({
       const existing = state.handoffs.find((h) => h.runId === entry.runId);
       if (existing) {
         return {
-          handoffs: state.handoffs.map((h) =>
-            h.runId === entry.runId ? { ...h, ...entry } : h,
-          ),
+          handoffs: state.handoffs.map((h) => (h.runId === entry.runId ? { ...h, ...entry } : h)),
         };
       }
       return { handoffs: [...state.handoffs, entry] };
@@ -87,7 +82,7 @@ export const useHandoffStore = create<HandoffStore>()((set, get) => ({
                   ? { completedAt: evt.emittedAt }
                   : {}),
               }
-            : h,
+            : h
         ),
       };
     }),
@@ -108,7 +103,7 @@ export const useHandoffStore = create<HandoffStore>()((set, get) => ({
       if (existing) {
         return {
           handoffs: state.handoffs.map((h) =>
-            h.runId === result.runId ? { ...h, ...baseFields } : h,
+            h.runId === result.runId ? { ...h, ...baseFields } : h
           ),
         };
       }

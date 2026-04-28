@@ -1,9 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
 import type { AgentId } from "@founder-os/agent-registry";
-import type {
-  ApproveResponse,
-  SessionsStatsResponse,
-} from "@founder-os/mission-control-protocol";
+import type { ApproveResponse, SessionsStatsResponse } from "@founder-os/mission-control-protocol";
+import { type ReactNode, useEffect, useState } from "react";
 import type { TabProps } from "../App.js";
 import { request, send } from "../lib/vscode.js";
 
@@ -13,9 +10,7 @@ import { request, send } from "../lib/vscode.js";
  * Bottom: collapsible "PM workflow" card driving the 9 task: commands.
  */
 export function TaskTab(props: TabProps) {
-  const [agentId, setAgentId] = useState<AgentId | "">(
-    (props.agents[0]?.id as AgentId) ?? "",
-  );
+  const [agentId, setAgentId] = useState<AgentId | "">((props.agents[0]?.id as AgentId) ?? "");
   const [prompt, setPrompt] = useState("");
   const [orchestrating, setOrchestrating] = useState(false);
   const [pmAgent, setPmAgent] = useState<AgentId | "">("");
@@ -92,14 +87,12 @@ export function TaskTab(props: TabProps) {
         {orchestrating && (
           <div className="mc-grid" style={{ gridTemplateColumns: "auto 1fr" }}>
             <label htmlFor="pm">PM agent</label>
-            <select
-              id="pm"
-              value={pmAgent}
-              onChange={(e) => setPmAgent(e.target.value as AgentId)}
-            >
+            <select id="pm" value={pmAgent} onChange={(e) => setPmAgent(e.target.value as AgentId)}>
               <option value="">— pick one —</option>
               {props.agents.map((a) => (
-                <option key={a.id} value={a.id}>{a.icon} {a.label}</option>
+                <option key={a.id} value={a.id}>
+                  {a.icon} {a.label}
+                </option>
               ))}
             </select>
             <label htmlFor="exec">Executor</label>
@@ -110,10 +103,14 @@ export function TaskTab(props: TabProps) {
             >
               <option value="">— pick one —</option>
               {props.agents.map((a) => (
-                <option key={a.id} value={a.id}>{a.icon} {a.label}</option>
+                <option key={a.id} value={a.id}>
+                  {a.icon} {a.label}
+                </option>
               ))}
             </select>
-            <label htmlFor="goal" style={{ alignSelf: "start", marginTop: 6 }}>Goal</label>
+            <label htmlFor="goal" style={{ alignSelf: "start", marginTop: 6 }}>
+              Goal
+            </label>
             <textarea
               id="goal"
               placeholder="High-level goal — PM writes TASK.md, Executor implements"
@@ -156,21 +153,31 @@ function SessionsCard(props: { sessions: TabProps["sessions"] }) {
         <table className="mc-table">
           <thead>
             <tr>
-              <th>Agent</th><th>Branch</th><th>Status</th><th>PID</th><th>Started</th><th></th>
+              <th>Agent</th>
+              <th>Branch</th>
+              <th>Status</th>
+              <th>PID</th>
+              <th>Started</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {props.sessions.map((s) => (
               <tr key={s.id}>
                 <td>{s.agentLabel}</td>
-                <td><code>{s.branch}</code></td>
+                <td>
+                  <code>{s.branch}</code>
+                </td>
                 <td>
                   <span className={"mc-pill " + statusClass(s.status)}>{s.status}</span>
                 </td>
                 <td>{s.pid}</td>
                 <td>{new Date(s.startedAt).toLocaleTimeString()}</td>
                 <td className="mc-row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                  <button className="secondary" onClick={() => send({ type: "session:show", sessionId: s.id })}>
+                  <button
+                    className="secondary"
+                    onClick={() => send({ type: "session:show", sessionId: s.id })}
+                  >
                     Show
                   </button>
                   <button
@@ -197,9 +204,12 @@ function SessionsCard(props: { sessions: TabProps["sessions"] }) {
 
 function statusClass(s: "running" | "exited" | "killed"): string {
   switch (s) {
-    case "running": return "success";
-    case "exited":  return "";
-    case "killed":  return "warn";
+    case "running":
+      return "success";
+    case "exited":
+      return "";
+    case "killed":
+      return "warn";
   }
 }
 
@@ -217,7 +227,8 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
   const [planGoal, setPlanGoal] = useState("");
   const [executor, setExecutor] = useState<AgentId | "">(
     (props.agents.find((a) => a.id !== "claude")?.id as AgentId) ??
-      (props.agents[0]?.id as AgentId) ?? "",
+      (props.agents[0]?.id as AgentId) ??
+      ""
   );
   const [revisionNotes, setRevisionNotes] = useState("");
   const [askGeminiQ, setAskGeminiQ] = useState("");
@@ -240,7 +251,9 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
     }
   }
 
-  useEffect(() => { void refreshStats(); }, []);
+  useEffect(() => {
+    void refreshStats();
+  }, []);
 
   async function fire(label: string, msg: Parameters<typeof request>[0]): Promise<void> {
     setBusy(label);
@@ -287,12 +300,11 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
       {open && (
         <>
           <p style={{ color: "var(--fc-fg-muted)", fontSize: 12, margin: "0 0 12px" }}>
-            Each step spawns an agent that lands in the Sessions table above.
-            Files written: <code>ANALYSIS.md</code>, <code>TASK.md</code>, <code>REVIEW.md</code>.
+            Each step spawns an agent that lands in the Sessions table above. Files written:{" "}
+            <code>ANALYSIS.md</code>, <code>TASK.md</code>, <code>REVIEW.md</code>.
           </p>
 
           <div className="mc-grid" style={{ gap: 14 }}>
-
             <SubCard title="1. Analyze repo">
               <p style={{ color: "var(--fc-fg-muted)", fontSize: 12, margin: 0 }}>
                 Claude reads the repo and writes <code>ANALYSIS.md</code>.
@@ -336,7 +348,9 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
                   onChange={(e) => setExecutor(e.target.value as AgentId)}
                 >
                   {props.agents.map((a) => (
-                    <option key={a.id} value={a.id}>{a.icon} {a.label}</option>
+                    <option key={a.id} value={a.id}>
+                      {a.icon} {a.label}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -375,9 +389,7 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
                 <button onClick={approve} disabled={busy !== null}>
                   {busy === "approve" ? "Committing…" : "Approve (commit)"}
                 </button>
-                {lastApprove && (
-                  <span className="mc-pill success">{lastApprove.slice(0, 8)}</span>
-                )}
+                {lastApprove && <span className="mc-pill success">{lastApprove.slice(0, 8)}</span>}
               </div>
               <textarea
                 placeholder="Revision notes for the executor"
@@ -465,14 +477,18 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
           </div>
 
           {error && (
-            <pre style={{
-              marginTop: 10,
-              color: "var(--fc-error)",
-              whiteSpace: "pre-wrap",
-              border: "1px solid var(--fc-error)",
-              padding: 10,
-              borderRadius: "var(--fc-radius)",
-            }}>{error}</pre>
+            <pre
+              style={{
+                marginTop: 10,
+                color: "var(--fc-error)",
+                whiteSpace: "pre-wrap",
+                border: "1px solid var(--fc-error)",
+                padding: 10,
+                borderRadius: "var(--fc-radius)",
+              }}
+            >
+              {error}
+            </pre>
           )}
         </>
       )}
@@ -482,11 +498,13 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
 
 function SubCard(props: { title: string; children: ReactNode }) {
   return (
-    <div style={{
-      border: "1px solid var(--fc-border)",
-      borderRadius: "var(--fc-radius)",
-      padding: "10px 12px",
-    }}>
+    <div
+      style={{
+        border: "1px solid var(--fc-border)",
+        borderRadius: "var(--fc-radius)",
+        padding: "10px 12px",
+      }}
+    >
       <div style={{ fontWeight: 600, marginBottom: 6 }}>{props.title}</div>
       {props.children}
     </div>

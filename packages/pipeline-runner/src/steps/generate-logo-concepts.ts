@@ -1,3 +1,4 @@
+import type { BrandBrief } from "@founder-os/branding-core";
 /**
  * Logo concept generator — writes 4 `concept-0N.md` files under
  * `03_brand/logo/concepts/` describing four distinct visual directions
@@ -19,7 +20,6 @@
  */
 import { createLogger } from "@founder-os/logger";
 import { getLogoConceptsDir } from "@founder-os/workspace-core";
-import type { BrandBrief } from "@founder-os/branding-core";
 import type { Filesystem } from "../fs.js";
 
 const log = createLogger("pipeline-runner:generate-logo-concepts");
@@ -134,9 +134,7 @@ ${spec.directions}
 Write the full brief now.`;
 }
 
-export async function generateLogoConceptsStep(
-  ctx: GenerateLogoConceptsContext
-): Promise<{
+export async function generateLogoConceptsStep(ctx: GenerateLogoConceptsContext): Promise<{
   status: "done" | "partial" | "failed";
   outcomes: ConceptOutcome[];
 }> {
@@ -145,35 +143,33 @@ export async function generateLogoConceptsStep(
 
   const system = sharedSystemPrompt(ctx.brief);
 
-  const tasks = CONCEPT_SPECS.map(
-    (spec) => async (): Promise<ConceptOutcome> => {
-      const path = `${outDir}/${spec.filename}`;
+  const tasks = CONCEPT_SPECS.map((spec) => async (): Promise<ConceptOutcome> => {
+    const path = `${outDir}/${spec.filename}`;
 
-      if (await ctx.fs.exists(path)) {
-        log.info(`Skipping ${spec.filename} — already exists`);
-        return {
-          spec,
-          status: "skipped",
-          path,
-          reason: "File already exists — delete to regenerate",
-        };
-      }
-
-      try {
-        const user = buildUserPrompt(spec, ctx.brief);
-        log.info(`Generating ${spec.filename}…`);
-        const text = await ctx.callLlm({ system, user });
-        const cleaned = ensureTitle(text, spec.title);
-        await ctx.fs.writeFile(path, cleaned);
-        log.info(`Wrote ${spec.filename} (${cleaned.length} chars)`);
-        return { spec, status: "written", path };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error(`Failed ${spec.filename}: ${msg}`);
-        return { spec, status: "failed", path, error: msg };
-      }
+    if (await ctx.fs.exists(path)) {
+      log.info(`Skipping ${spec.filename} — already exists`);
+      return {
+        spec,
+        status: "skipped",
+        path,
+        reason: "File already exists — delete to regenerate",
+      };
     }
-  );
+
+    try {
+      const user = buildUserPrompt(spec, ctx.brief);
+      log.info(`Generating ${spec.filename}…`);
+      const text = await ctx.callLlm({ system, user });
+      const cleaned = ensureTitle(text, spec.title);
+      await ctx.fs.writeFile(path, cleaned);
+      log.info(`Wrote ${spec.filename} (${cleaned.length} chars)`);
+      return { spec, status: "written", path };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error(`Failed ${spec.filename}: ${msg}`);
+      return { spec, status: "failed", path, error: msg };
+    }
+  });
 
   const outcomes = await runWithConcurrency(CONCEPT_CONCURRENCY, tasks);
 
@@ -194,10 +190,7 @@ export async function generateLogoConceptsStep(
  * independent and we don't need a shared `lib/concurrency.ts` for
  * fifteen lines of code. If a third step needs this, promote it.
  */
-async function runWithConcurrency<T>(
-  limit: number,
-  tasks: Array<() => Promise<T>>
-): Promise<T[]> {
+async function runWithConcurrency<T>(limit: number, tasks: Array<() => Promise<T>>): Promise<T[]> {
   if (tasks.length === 0) return [];
   const results: T[] = new Array(tasks.length);
   let cursor = 0;

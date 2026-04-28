@@ -1,12 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { createLogger } from "@founder-os/logger";
 import {
-  HandoffBundle,
-  HandoffResult,
-  HandoffProgressEvent,
+  type HandoffBundle,
+  type HandoffProgressEvent,
+  type HandoffResult,
   safeParseBundle,
 } from "@founder-os/handoff-contract";
+import { createLogger } from "@founder-os/logger";
 import { ventureHandoffPaths } from "@founder-os/workspace-core";
 
 const log = createLogger("handoff-desktop:inbox-outbox");

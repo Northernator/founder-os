@@ -37,7 +37,11 @@ export function listEntries(baseDir: string): MdEntry[] {
     if (!file.endsWith(".md")) continue;
     const filePath = path.join(baseDir, file);
     let st: fs.Stats;
-    try { st = fs.statSync(filePath); } catch { continue; }
+    try {
+      st = fs.statSync(filePath);
+    } catch {
+      continue;
+    }
     if (!st.isFile()) continue;
     const id = file.replace(/\.md$/, "");
     try {
@@ -80,7 +84,7 @@ export function writeEntry(
   baseDir: string,
   id: string,
   frontmatter: Record<string, string>,
-  body: string,
+  body: string
 ): MdEntry {
   fs.mkdirSync(baseDir, { recursive: true });
   const safeId = sanitizeId(id);
@@ -124,7 +128,7 @@ export function parseFrontmatter(text: string): {
     const key = trimmed.slice(0, colon).trim();
     let value = trimmed.slice(colon + 1).trim();
     if (
-      (value.startsWith("\"") && value.endsWith("\"")) ||
+      (value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))
     ) {
       value = value.slice(1, -1);

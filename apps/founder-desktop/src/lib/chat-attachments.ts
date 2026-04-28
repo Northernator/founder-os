@@ -60,9 +60,7 @@ const MAX_OCR_PAGES = 10;
  * tesseract to read body text reliably without ballooning memory. */
 const OCR_RASTER_SCALE = 2.0;
 
-export type ExtractResult =
-  | { kind: "ok"; text: string }
-  | { kind: "error"; error: string };
+export type ExtractResult = { kind: "ok"; text: string } | { kind: "error"; error: string };
 
 /** Public entry point. Picks the right extractor by extension + MIME. */
 export async function extractAttachment(file: File): Promise<ExtractResult> {
@@ -182,10 +180,7 @@ async function extractPdf(file: File): Promise<ExtractResult> {
  * Failure modes surface as `{ kind: "error" }` so the caller's toast path
  * fires — we don't silently swallow.
  */
-async function extractPdfOcr(
-  bytes: Uint8Array,
-  fileName: string
-): Promise<ExtractResult> {
+async function extractPdfOcr(bytes: Uint8Array, fileName: string): Promise<ExtractResult> {
   // 1. Load pdfjs-dist and wire its worker. The `?url` import is a Vite
   // primitive — it bundles the worker as a static asset and returns a URL
   // the main thread can hand to GlobalWorkerOptions.
@@ -307,9 +302,7 @@ async function extractPdfOcr(
   // transcription errors as plausible) and flags truncation.
   const headerLines: string[] = [`[OCR of "${fileName}"]`];
   if (truncated) {
-    headerLines.push(
-      `⚠ Only the first ${MAX_OCR_PAGES} of ${pageCount} pages were OCR'd.`
-    );
+    headerLines.push(`⚠ Only the first ${MAX_OCR_PAGES} of ${pageCount} pages were OCR'd.`);
   }
   if (pageFailures.length) {
     headerLines.push(`⚠ ${pageFailures.length} page(s) failed: ${pageFailures.join("; ")}`);
@@ -356,8 +349,7 @@ function extensionOf(name: string): string {
 
 function isDocxMime(mime: string): boolean {
   return (
-    mime ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    mime === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     mime === "application/msword"
   );
 }
@@ -395,9 +387,7 @@ function errMessage(err: unknown): string {
  * assistant can reference individual pastes. Kept in one place so the
  * prompt shape evolves consistently.
  */
-export function buildAttachmentBlock(
-  parts: Array<{ name: string; text: string }>
-): string {
+export function buildAttachmentBlock(parts: Array<{ name: string; text: string }>): string {
   if (parts.length === 0) return "";
   const lines: string[] = [];
   lines.push(`I've attached ${parts.length} file${parts.length === 1 ? "" : "s"}:`);

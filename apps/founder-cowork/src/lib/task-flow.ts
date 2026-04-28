@@ -18,9 +18,9 @@ import * as cp from "node:child_process";
 import * as path from "node:path";
 
 export interface TaskFlowFiles {
-  analysis: string;   // <ws>/ANALYSIS.md
-  task: string;       // <ws>/TASK.md
-  review: string;     // <ws>/REVIEW.md
+  analysis: string; // <ws>/ANALYSIS.md
+  task: string; // <ws>/TASK.md
+  review: string; // <ws>/REVIEW.md
 }
 
 export function flowFiles(workspaceRoot: string): TaskFlowFiles {
@@ -51,7 +51,9 @@ export function buildAnalyzePrompt(): string {
 export function buildPlanPrompt(goal: string): string {
   return (
     "You are the PM. Analyze the repo, then write a detailed `TASK.md` at " +
-    "the repo root describing the work required to: " + goal + ".\n\n" +
+    "the repo root describing the work required to: " +
+    goal +
+    ".\n\n" +
     "Include:\n" +
     "  - File-level guidance: which files to edit/create\n" +
     "  - Step-by-step plan (numbered)\n" +
@@ -72,9 +74,10 @@ export function buildExecutePrompt(): string {
 }
 
 export function buildReviewPrompt(diffSnippet: string): string {
-  const truncatedDiff = diffSnippet.length > 60_000
-    ? diffSnippet.slice(0, 60_000) + "\n[... truncated; see git history for full diff ...]"
-    : diffSnippet;
+  const truncatedDiff =
+    diffSnippet.length > 60_000
+      ? diffSnippet.slice(0, 60_000) + "\n[... truncated; see git history for full diff ...]"
+      : diffSnippet;
   return (
     "You are the Reviewer. The executor has produced changes against this " +
     "branch. Below is the cumulative diff. Write `REVIEW.md` at the repo " +
@@ -94,7 +97,8 @@ export function buildRevisionPrompt(notes: string): string {
     "You are the Executor revising the previous work. Read `REVIEW.md` at " +
     "the repo root for the reviewer's notes, plus the additional guidance " +
     "below from the human reviewer. Address each item. Commit incrementally.\n\n" +
-    "ADDITIONAL NOTES:\n" + notes
+    "ADDITIONAL NOTES:\n" +
+    notes
   );
 }
 
@@ -102,16 +106,12 @@ export function buildAskGeminiPrompt(question: string): string {
   return question;
 }
 
-export function buildAskGeminiDiffPrompt(
-  diffSnippet: string,
-  question: string,
-): string {
-  const truncatedDiff = diffSnippet.length > 60_000
-    ? diffSnippet.slice(0, 60_000) + "\n[... truncated ...]"
-    : diffSnippet;
-  return (
-    question + "\n\nContext - cumulative diff:\n" + truncatedDiff
-  );
+export function buildAskGeminiDiffPrompt(diffSnippet: string, question: string): string {
+  const truncatedDiff =
+    diffSnippet.length > 60_000
+      ? diffSnippet.slice(0, 60_000) + "\n[... truncated ...]"
+      : diffSnippet;
+  return question + "\n\nContext - cumulative diff:\n" + truncatedDiff;
 }
 
 // ──────────────────────────────────────────────
@@ -154,7 +154,7 @@ export function gatherDiff(workspaceRoot: string): string {
  */
 export function commitApproved(
   workspaceRoot: string,
-  reviewer = "Mission Control",
+  reviewer = "Mission Control"
 ): { commitSha: string } {
   const message = "Approved via " + reviewer;
   const add = cp.spawnSync("git", ["add", "-A"], {
@@ -165,15 +165,13 @@ export function commitApproved(
   if (add.status !== 0) {
     throw new Error("git add -A failed: " + (add.stderr || add.stdout || "unknown"));
   }
-  const commit = cp.spawnSync(
-    "git",
-    ["commit", "-m", message, "--allow-empty"],
-    { cwd: workspaceRoot, encoding: "utf8", windowsHide: true },
-  );
+  const commit = cp.spawnSync("git", ["commit", "-m", message, "--allow-empty"], {
+    cwd: workspaceRoot,
+    encoding: "utf8",
+    windowsHide: true,
+  });
   if (commit.status !== 0) {
-    throw new Error(
-      "git commit failed: " + (commit.stderr || commit.stdout || "unknown"),
-    );
+    throw new Error("git commit failed: " + (commit.stderr || commit.stdout || "unknown"));
   }
   const head = cp.spawnSync("git", ["rev-parse", "HEAD"], {
     cwd: workspaceRoot,
@@ -195,7 +193,7 @@ export interface SessionsStats {
 }
 
 export function summariseSessions(
-  sessions: { status: "running" | "exited" | "killed" }[],
+  sessions: { status: "running" | "exited" | "killed" }[]
 ): SessionsStats {
   const stats: SessionsStats = {
     total: sessions.length,

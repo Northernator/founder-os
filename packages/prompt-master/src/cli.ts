@@ -21,8 +21,8 @@
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { glob } from "node:fs/promises";
-import { optimize } from "./core.js";
 import { inspectCache } from "./cache.js";
+import { optimize } from "./core.js";
 import { installNodeBackends } from "./node.js";
 import { getLogFile } from "./telemetry-fs.js";
 
@@ -60,7 +60,7 @@ function parseSinceArg(args: string[]): number {
   const v = sinceArg.slice("--since=".length);
   const m = v.match(/^(\d+)([hdm])$/);
   if (!m) return 24 * 60 * 60 * 1000;
-  const n = parseInt(m[1]!, 10);
+  const n = Number.parseInt(m[1]!, 10);
   const unit = m[2]!;
   return n * (unit === "h" ? 3600_000 : unit === "d" ? 86_400_000 : 60_000);
 }
@@ -82,7 +82,13 @@ async function stats(windowMs: number): Promise<void> {
   const byContext = new Map<string, { saved: number; calls: number }>();
 
   for (const line of raw.split("\n").filter(Boolean)) {
-    let evt: { event: string; ts: string; context?: string; tokensSaved?: number; cacheHit?: boolean };
+    let evt: {
+      event: string;
+      ts: string;
+      context?: string;
+      tokensSaved?: number;
+      cacheHit?: boolean;
+    };
     try {
       evt = JSON.parse(line);
     } catch {
@@ -112,7 +118,9 @@ async function stats(windowMs: number): Promise<void> {
   console.log(`  cache hits: ${hits} (${hitRate}%)`);
   console.log(`  fallbacks: ${fallbacks}`);
   console.log(`  tokens saved: ${totalSaved}`);
-  console.log(`  cache:     ${cache.entries} entries / ${(cache.totalBytes / 1024 / 1024).toFixed(2)} MB / cap ${(cache.capBytes / 1024 / 1024).toFixed(0)} MB`);
+  console.log(
+    `  cache:     ${cache.entries} entries / ${(cache.totalBytes / 1024 / 1024).toFixed(2)} MB / cap ${(cache.capBytes / 1024 / 1024).toFixed(0)} MB`
+  );
   console.log("  by context:");
   for (const [ctx, s] of byContext) {
     console.log(`    ${ctx}: ${s.saved} saved over ${s.calls} calls`);
@@ -150,7 +158,9 @@ async function optimizeStatic(pattern: string): Promise<void> {
         context: "system",
       });
       anyOptimized ||= !fallbackUsed;
-      optLines.push(`// ${name}: tokens saved ~${tokensSaved}${fallbackUsed ? " (fallback - no transport)" : ""}`);
+      optLines.push(
+        `// ${name}: tokens saved ~${tokensSaved}${fallbackUsed ? " (fallback - no transport)" : ""}`
+      );
       optLines.push(`export const ${name}_OPTIMIZED = ${JSON.stringify(optimized)};`);
       optLines.push("");
     }

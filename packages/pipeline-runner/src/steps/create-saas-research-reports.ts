@@ -1,3 +1,4 @@
+import type { VentureManifest } from "@founder-os/domain";
 /**
  * SaaS research reports — generate the founder-facing research docs
  * from an intake transcript. This is the one pipeline step that actually
@@ -49,7 +50,6 @@
  */
 import { createLogger } from "@founder-os/logger";
 import { getStagePath } from "@founder-os/workspace-core";
-import type { VentureManifest } from "@founder-os/domain";
 import type { Filesystem } from "../fs.js";
 
 const log = createLogger("pipeline-runner:create-saas-research-reports");
@@ -160,7 +160,9 @@ ${intakeBlock(ctx.intake)}`,
     filename: "prd.md",
     title: "Product Requirements Document (PRD)",
     summary: "Problem, users, scope, non-goals, success metrics",
-    buildUserPrompt: (ctx) => `Write the **Product Requirements Document (PRD)** for ${ctx.manifest.name}.
+    buildUserPrompt: (
+      ctx
+    ) => `Write the **Product Requirements Document (PRD)** for ${ctx.manifest.name}.
 
 Required sections:
 1. **TL;DR** — one paragraph product summary
@@ -178,7 +180,9 @@ ${intakeBlock(ctx.intake)}`,
     filename: "business-model-and-pricing.md",
     title: "Business Model & Pricing",
     summary: "Revenue model, pricing tiers, unit economics, pricing rationale",
-    buildUserPrompt: (ctx) => `Write the **Business Model & Pricing** document for ${ctx.manifest.name}.
+    buildUserPrompt: (
+      ctx
+    ) => `Write the **Business Model & Pricing** document for ${ctx.manifest.name}.
 
 Required sections:
 1. **TL;DR**
@@ -194,7 +198,9 @@ ${intakeBlock(ctx.intake)}`,
     filename: "technical-architecture.md",
     title: "Technical Architecture",
     summary: "Stack, components, data model sketch, build-vs-buy calls",
-    buildUserPrompt: (ctx) => `Write the **Technical Architecture** document for ${ctx.manifest.name}.
+    buildUserPrompt: (
+      ctx
+    ) => `Write the **Technical Architecture** document for ${ctx.manifest.name}.
 
 Required sections:
 1. **TL;DR**
@@ -212,7 +218,9 @@ ${intakeBlock(ctx.intake)}`,
     filename: "user-flows-and-wireframes.md",
     title: "User Flows & Wireframes",
     summary: "Primary journeys + text-based wireframes for v1 screens",
-    buildUserPrompt: (ctx) => `Write the **User Flows & Wireframes** document for ${ctx.manifest.name}.
+    buildUserPrompt: (
+      ctx
+    ) => `Write the **User Flows & Wireframes** document for ${ctx.manifest.name}.
 
 Required sections:
 1. **TL;DR**
@@ -228,7 +236,9 @@ ${intakeBlock(ctx.intake)}`,
     filename: "db-schema.md",
     title: "Database Schema",
     summary: "Tables, columns, constraints, indexes, relationships",
-    buildUserPrompt: (ctx) => `Write the **Database Schema** document for ${ctx.manifest.name}. Assume PostgreSQL unless the intake clearly indicates otherwise.
+    buildUserPrompt: (
+      ctx
+    ) => `Write the **Database Schema** document for ${ctx.manifest.name}. Assume PostgreSQL unless the intake clearly indicates otherwise.
 
 Required sections:
 1. **TL;DR** — one-paragraph shape of the data
@@ -245,7 +255,9 @@ ${intakeBlock(ctx.intake)}`,
     filename: "api-contracts.md",
     title: "API Contracts",
     summary: "Endpoint inventory, auth, request/response shapes, errors",
-    buildUserPrompt: (ctx) => `Write the **API Contracts** document for ${ctx.manifest.name}. Prefer REST + JSON unless the intake indicates otherwise.
+    buildUserPrompt: (
+      ctx
+    ) => `Write the **API Contracts** document for ${ctx.manifest.name}. Prefer REST + JSON unless the intake indicates otherwise.
 
 Required sections:
 1. **TL;DR**
@@ -262,7 +274,9 @@ ${intakeBlock(ctx.intake)}`,
     filename: "security-and-permissions.md",
     title: "Security & Permissions",
     summary: "Auth, authz, data protection, threat model, GDPR for UK",
-    buildUserPrompt: (ctx) => `Write the **Security & Permissions** document for ${ctx.manifest.name}.
+    buildUserPrompt: (
+      ctx
+    ) => `Write the **Security & Permissions** document for ${ctx.manifest.name}.
 
 Required sections:
 1. **TL;DR**
@@ -378,40 +392,35 @@ export async function createSaasResearchReportsStep(
   // Pooled generation. Per-report try/catch so a single bad call doesn't
   // nuke the others. Concurrency cap avoids tripping provider limits —
   // 12 simultaneous web-search streams to Anthropic reliably throttle.
-  const tasks = REPORT_SPECS.map(
-    (spec) => async (): Promise<ReportOutcome> => {
-      const path = `${outDir}/${spec.filename}`;
+  const tasks = REPORT_SPECS.map((spec) => async (): Promise<ReportOutcome> => {
+    const path = `${outDir}/${spec.filename}`;
 
-      if (await ctx.fs.exists(path)) {
-        log.info(`Skipping ${spec.filename} — already exists`);
-        return {
-          spec,
-          status: "skipped",
-          path,
-          reason: "File already exists — delete it to regenerate",
-        };
-      }
-
-      try {
-        const user = spec.buildUserPrompt(ctx);
-        log.info(`Generating ${spec.filename}…`);
-        const text = await ctx.callLlm({ system, user });
-        const cleaned = ensureTitle(text, spec.title);
-        await ctx.fs.writeFile(path, cleaned);
-        log.info(`Wrote ${spec.filename} (${cleaned.length} chars)`);
-        return { spec, status: "written", path };
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        log.error(`Failed ${spec.filename}: ${msg}`);
-        return { spec, status: "failed", path, error: msg };
-      }
+    if (await ctx.fs.exists(path)) {
+      log.info(`Skipping ${spec.filename} — already exists`);
+      return {
+        spec,
+        status: "skipped",
+        path,
+        reason: "File already exists — delete it to regenerate",
+      };
     }
-  );
 
-  const outcomes: ReportOutcome[] = await runWithConcurrency(
-    REPORT_CONCURRENCY,
-    tasks
-  );
+    try {
+      const user = spec.buildUserPrompt(ctx);
+      log.info(`Generating ${spec.filename}…`);
+      const text = await ctx.callLlm({ system, user });
+      const cleaned = ensureTitle(text, spec.title);
+      await ctx.fs.writeFile(path, cleaned);
+      log.info(`Wrote ${spec.filename} (${cleaned.length} chars)`);
+      return { spec, status: "written", path };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error(`Failed ${spec.filename}: ${msg}`);
+      return { spec, status: "failed", path, error: msg };
+    }
+  });
+
+  const outcomes: ReportOutcome[] = await runWithConcurrency(REPORT_CONCURRENCY, tasks);
 
   const anyWritten = outcomes.some((o) => o.status === "written");
   const anyFailed = outcomes.some((o) => o.status === "failed");
@@ -432,10 +441,7 @@ export async function createSaasResearchReportsStep(
  * Each worker pulls from a shared cursor until the task list is drained,
  * so fast-finishing tasks don't leave slots idle while slow ones run.
  */
-async function runWithConcurrency<T>(
-  limit: number,
-  tasks: Array<() => Promise<T>>
-): Promise<T[]> {
+async function runWithConcurrency<T>(limit: number, tasks: Array<() => Promise<T>>): Promise<T[]> {
   if (tasks.length === 0) return [];
   const results: T[] = new Array(tasks.length);
   let cursor = 0;

@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
 import type { VentureStage } from "@founder-os/domain";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type ChatMessage = {
   id: string;
@@ -80,9 +81,7 @@ export function ProjectChat({
   // paperclip button). Gated on onAttach being supplied so existing call
   // sites that don't pass attachment props keep their old plain composer.
   const attachmentsEnabled = typeof onAttach === "function";
-  const hasPendingExtraction = (attachments ?? []).some(
-    (a) => a.status === "pending"
-  );
+  const hasPendingExtraction = (attachments ?? []).some((a) => a.status === "pending");
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -94,9 +93,7 @@ export function ProjectChat({
     // the attachments themselves become the message (handleSend on the
     // outside concatenates extracted text). But block while any extraction
     // is still in flight so the model doesn't see a half-read docx.
-    const hasReadyAttachment = (attachments ?? []).some(
-      (a) => a.status === "ready"
-    );
+    const hasReadyAttachment = (attachments ?? []).some((a) => a.status === "ready");
     if (isLoading || hasPendingExtraction) return;
     if (!trimmed && !hasReadyAttachment) return;
     setInput("");
@@ -145,9 +142,7 @@ export function ProjectChat({
           gap: 10,
         }}
       >
-        <span style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>
-          {ventureName}
-        </span>
+        <span style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{ventureName}</span>
         <span
           style={{
             fontSize: 11,
@@ -236,9 +231,7 @@ export function ProjectChat({
               <AttachmentChip
                 key={att.id}
                 attachment={att}
-                onRemove={
-                  onRemoveAttachment ? () => onRemoveAttachment(att.id) : undefined
-                }
+                onRemove={onRemoveAttachment ? () => onRemoveAttachment(att.id) : undefined}
               />
             ))}
           </div>
@@ -308,8 +301,7 @@ export function ProjectChat({
             disabled={
               isLoading ||
               hasPendingExtraction ||
-              (!input.trim() &&
-                !(attachments ?? []).some((a) => a.status === "ready"))
+              (!input.trim() && !(attachments ?? []).some((a) => a.status === "ready"))
             }
             style={{
               padding: "10px 18px",
@@ -322,15 +314,13 @@ export function ProjectChat({
               cursor:
                 isLoading ||
                 hasPendingExtraction ||
-                (!input.trim() &&
-                  !(attachments ?? []).some((a) => a.status === "ready"))
+                (!input.trim() && !(attachments ?? []).some((a) => a.status === "ready"))
                   ? "not-allowed"
                   : "pointer",
               opacity:
                 isLoading ||
                 hasPendingExtraction ||
-                (!input.trim() &&
-                  !(attachments ?? []).some((a) => a.status === "ready"))
+                (!input.trim() && !(attachments ?? []).some((a) => a.status === "ready"))
                   ? 0.5
                   : 1,
             }}
@@ -355,7 +345,8 @@ function AttachmentChip({
   const bg = isError ? "#FEF2F2" : isPending ? "#FEF3C7" : "#EEF2FF";
   const fg = isError ? "#991B1B" : isPending ? "#92400E" : "#4338CA";
   const border = isError ? "#FECACA" : isPending ? "#FDE68A" : "#C7D2FE";
-  const kb = attachment.size >= 1024 ? `${Math.round(attachment.size / 1024)} KB` : `${attachment.size} B`;
+  const kb =
+    attachment.size >= 1024 ? `${Math.round(attachment.size / 1024)} KB` : `${attachment.size} B`;
   return (
     <div
       title={attachment.error || attachment.name}
@@ -432,10 +423,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 };
 
 function providerLabel(id: string): string {
-  return (
-    PROVIDER_LABELS[id] ??
-    id.slice(0, 1).toUpperCase() + id.slice(1)
-  );
+  return PROVIDER_LABELS[id] ?? id.slice(0, 1).toUpperCase() + id.slice(1);
 }
 
 function MessageBubble({ message }: { message: ChatMessage }) {
@@ -443,8 +431,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   // Only assistant messages carry a provider caption — user turns don't
   // have one and legacy rows have provider:null. Suppress the caption
   // gracefully in both cases so the UI doesn't get chatty.
-  const showCaption =
-    !isUser && message.role === "assistant" && Boolean(message.provider);
+  const showCaption = !isUser && message.role === "assistant" && Boolean(message.provider);
   return (
     <div
       style={{

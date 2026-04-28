@@ -9,9 +9,9 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  scanVentureArtifacts,
-  readArtifactText,
   type ScannedArtifact,
+  readArtifactText,
+  scanVentureArtifacts,
 } from "../../lib/artifacts-scan.js";
 import * as db from "../../lib/db.js";
 import { pushToast } from "../../lib/toasts.js";
@@ -22,7 +22,11 @@ import { renderMarkdown } from "./markdown.js";
 function errDetail(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
-  try { return JSON.stringify(err); } catch { return String(err); }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
 }
 
 type Props = {
@@ -157,8 +161,7 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
         >
           {artifacts.length === 0 && !scanning && (
             <div style={{ padding: "16px 20px", color: "#9CA3AF", fontSize: 13 }}>
-              Nothing on disk yet. Run the pipeline from the Overview tab to
-              produce artifacts here.
+              Nothing on disk yet. Run the pipeline from the Overview tab to produce artifacts here.
             </div>
           )}
           {grouped.map(([type, items]) => (
@@ -189,9 +192,7 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
                       padding: "8px 20px",
                       background: active ? "#EEF2FF" : "transparent",
                       border: "none",
-                      borderLeft: active
-                        ? "3px solid #6366F1"
-                        : "3px solid transparent",
+                      borderLeft: active ? "3px solid #6366F1" : "3px solid transparent",
                       cursor: "pointer",
                       fontSize: 13,
                       color: active ? "#3730A3" : "#111827",
@@ -304,9 +305,7 @@ function PreviewPane({ artifact }: { artifact: ScannedArtifact }) {
   return (
     <div style={{ padding: 28 }}>
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>
-          {artifact.filename}
-        </div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>{artifact.filename}</div>
         <div
           style={{
             fontSize: 11,
@@ -325,14 +324,12 @@ function PreviewPane({ artifact }: { artifact: ScannedArtifact }) {
 
       {oversize && (
         <div style={{ color: "#92400E", fontSize: 13 }}>
-          File is larger than {Math.round(PREVIEW_MAX_BYTES / 1024)}KB — preview
-          skipped. Open in Finder to view.
+          File is larger than {Math.round(PREVIEW_MAX_BYTES / 1024)}KB — preview skipped. Open in
+          Finder to view.
         </div>
       )}
 
-      {error && (
-        <div style={{ color: "#991B1B", fontSize: 13 }}>{error}</div>
-      )}
+      {error && <div style={{ color: "#991B1B", fontSize: 13 }}>{error}</div>}
 
       {!oversize && content !== null && !error && (
         <PreviewBody artifact={artifact} content={content} />
@@ -455,10 +452,7 @@ function formatRelativeDate(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-async function persistArtifacts(
-  ventureId: string,
-  items: ScannedArtifact[]
-): Promise<void> {
+async function persistArtifacts(ventureId: string, items: ScannedArtifact[]): Promise<void> {
   // Wipe + re-insert. Cheap for MVP volumes (10s-100s of files); switch to
   // diffing if this ever shows up in profiling.
   try {

@@ -62,7 +62,7 @@ function renderInline(s: string): string {
 
   // Restore code spans.
   out = out.replace(/\u0000CODE(\d+)\u0000/g, (_, idx) => {
-    const i = parseInt(idx, 10);
+    const i = Number.parseInt(idx, 10);
     return `<code style="background:#F3F4F6;padding:1px 5px;border-radius:3px;font-size:0.9em;">${codeSpans[i]}</code>`;
   });
 
@@ -79,8 +79,14 @@ export function renderMarkdown(input: string): string {
   let inUl = false;
   let inOl = false;
   const closeLists = () => {
-    if (inUl) { out.push("</ul>"); inUl = false; }
-    if (inOl) { out.push("</ol>"); inOl = false; }
+    if (inUl) {
+      out.push("</ul>");
+      inUl = false;
+    }
+    if (inOl) {
+      out.push("</ol>");
+      inOl = false;
+    }
   };
 
   while (i < lines.length) {
@@ -120,8 +126,14 @@ export function renderMarkdown(input: string): string {
     // Bullet list item
     const ul = /^\s*[-*]\s+(.*)$/.exec(line);
     if (ul) {
-      if (inOl) { out.push("</ol>"); inOl = false; }
-      if (!inUl) { out.push('<ul style="margin:8px 0;padding-left:22px;">'); inUl = true; }
+      if (inOl) {
+        out.push("</ol>");
+        inOl = false;
+      }
+      if (!inUl) {
+        out.push('<ul style="margin:8px 0;padding-left:22px;">');
+        inUl = true;
+      }
       out.push(`<li style="margin:2px 0;">${renderInline(escapeHtml(ul[1]))}</li>`);
       i++;
       continue;
@@ -130,8 +142,14 @@ export function renderMarkdown(input: string): string {
     // Numbered list item
     const ol = /^\s*\d+\.\s+(.*)$/.exec(line);
     if (ol) {
-      if (inUl) { out.push("</ul>"); inUl = false; }
-      if (!inOl) { out.push('<ol style="margin:8px 0;padding-left:22px;">'); inOl = true; }
+      if (inUl) {
+        out.push("</ul>");
+        inUl = false;
+      }
+      if (!inOl) {
+        out.push('<ol style="margin:8px 0;padding-left:22px;">');
+        inOl = true;
+      }
       out.push(`<li style="margin:2px 0;">${renderInline(escapeHtml(ol[1]))}</li>`);
       i++;
       continue;
@@ -159,9 +177,7 @@ export function renderMarkdown(input: string): string {
       buf.push(lines[i]);
       i++;
     }
-    out.push(
-      `<p style="margin:8px 0;">${renderInline(escapeHtml(buf.join(" ")))}</p>`
-    );
+    out.push(`<p style="margin:8px 0;">${renderInline(escapeHtml(buf.join(" ")))}</p>`);
   }
 
   closeLists();

@@ -1,3 +1,14 @@
+import type { AuditFinding, AuditSeverity } from "@founder-os/audit-contract";
+import type { VentureManifest, VentureStage } from "@founder-os/domain";
+import {
+  ProductSpecCanvasSchema,
+  ScreensCanvasSchema,
+  UkSetupCanvasSchema,
+  VENTURE_STAGE_ORDER,
+  deriveProductSpecRules,
+  deriveScreensRules,
+  deriveUkSetupRules,
+} from "@founder-os/domain";
 /**
  * Audit step — runs a battery of sanity checks against the venture state
  * AFTER all earlier pipeline steps have completed. Produces an
@@ -34,26 +45,15 @@
  */
 import { createLogger } from "@founder-os/logger";
 import {
-  getHandoffsRoot,
-  getLogoExportsDir,
   getBrandKitDir,
   getBriefDir,
+  getHandoffsRoot,
+  getLogoExportsDir,
+  getScreensCanvasPath,
+  getSpecCanvasPath,
   getStitchDir,
   getUkSetupCanvasPath,
-  getSpecCanvasPath,
-  getScreensCanvasPath,
 } from "@founder-os/workspace-core";
-import type { AuditFinding, AuditSeverity } from "@founder-os/audit-contract";
-import type { VentureManifest, VentureStage } from "@founder-os/domain";
-import {
-  VENTURE_STAGE_ORDER,
-  UkSetupCanvasSchema,
-  deriveUkSetupRules,
-  ProductSpecCanvasSchema,
-  deriveProductSpecRules,
-  ScreensCanvasSchema,
-  deriveScreensRules,
-} from "@founder-os/domain";
 import type { Filesystem } from "../fs.js";
 
 /**
@@ -194,10 +194,7 @@ export type AuditVentureResult = {
  * as "current is at IDEA", which makes the filter strictly conservative:
  * rules fire unless we're confident current is behind.
  */
-function shouldFireAtStage(
-  minStage: VentureStage,
-  currentStage: VentureStage
-): boolean {
+function shouldFireAtStage(minStage: VentureStage, currentStage: VentureStage): boolean {
   const minIdx = VENTURE_STAGE_ORDER.indexOf(minStage);
   const curIdx = VENTURE_STAGE_ORDER.indexOf(currentStage);
   // A missing current (should be impossible) → fire everything so we
@@ -207,9 +204,7 @@ function shouldFireAtStage(
   return curIdx >= minIdx;
 }
 
-export async function auditVentureStep(
-  ctx: AuditVentureContext
-): Promise<AuditVentureResult> {
+export async function auditVentureStep(ctx: AuditVentureContext): Promise<AuditVentureResult> {
   const findings: AuditFinding[] = [];
   const { manifest, ventureRoot, fs } = ctx;
 
@@ -219,8 +214,7 @@ export async function auditVentureStep(
   // not venture.yaml). Node callers (seed script) that don't pass an
   // explicit stage get manifest.currentStage, which is fine because the
   // seed script writes the manifest before running the audit.
-  const currentStage: VentureStage =
-    ctx.ventureStage ?? manifest.currentStage;
+  const currentStage: VentureStage = ctx.ventureStage ?? manifest.currentStage;
 
   // Tracks how many rules were silently skipped because current stage is
   // behind the rule's minStage. Surfaced on the result + in the log so a
@@ -262,8 +256,7 @@ export async function auditVentureStep(
       ruleId: "artifact.brand-brief.missing",
       severity: "high",
       title: "Brand brief missing",
-      message:
-        "Expected brand-brief.json at 03_brand/brand-kit/. Earlier step may have failed.",
+      message: "Expected brand-brief.json at 03_brand/brand-kit/. Earlier step may have failed.",
       evidence: [{ filePath: brandBriefPath }],
     });
   }
@@ -273,8 +266,7 @@ export async function auditVentureStep(
       ruleId: "artifact.product-spec.missing",
       severity: "high",
       title: "Product spec missing",
-      message:
-        "Expected product-spec.md at 06_product/specs/. Earlier step may have failed.",
+      message: "Expected product-spec.md at 06_product/specs/. Earlier step may have failed.",
       evidence: [{ filePath: specPath }],
     });
   }
@@ -376,8 +368,7 @@ export async function auditVentureStep(
     try {
       const raw = await fs.readFile(stitchPath);
       const stitch = JSON.parse(raw) as { prompts?: unknown; prompt?: unknown };
-      const promptLen = JSON.stringify(stitch.prompts ?? stitch.prompt ?? "")
-        .length;
+      const promptLen = JSON.stringify(stitch.prompts ?? stitch.prompt ?? "").length;
       if (promptLen < 200) {
         pushFinding("STITCH_READY", {
           ruleId: "stitch.prompt.too-short",
@@ -488,8 +479,7 @@ export async function auditVentureStep(
   // afterwards.
   const ukSetupIdx = VENTURE_STAGE_ORDER.indexOf("UK_SETUP_READY");
   const currentIdx = VENTURE_STAGE_ORDER.indexOf(currentStage);
-  const beforeUkSetup =
-    currentIdx >= 0 && ukSetupIdx >= 0 && currentIdx < ukSetupIdx;
+  const beforeUkSetup = currentIdx >= 0 && ukSetupIdx >= 0 && currentIdx < ukSetupIdx;
 
   if (manifest.entityType === "undecided" && beforeUkSetup) {
     pushFinding("IDEA", {
@@ -713,8 +703,7 @@ export async function auditVentureStep(
       ruleId: "uk-setup.canvas.missing",
       severity: "high",
       title: "UK Setup canvas missing",
-      message:
-        "Expected uk-setup.json at 04_uk_business/. Re-run the pipeline to scaffold it.",
+      message: "Expected uk-setup.json at 04_uk_business/. Re-run the pipeline to scaffold it.",
       evidence: [{ filePath: ukCanvasPath }],
     });
   }
@@ -836,17 +825,12 @@ export async function auditVentureStep(
         // — they're WIP rows, not real coverage gaps.
         if (canvas.personas.length > 0) {
           const hasUniversalMust = canvas.features.some(
-            (f) =>
-              f.priority === "must" && f.personaId.trim().length === 0
+            (f) => f.priority === "must" && f.personaId.trim().length === 0
           );
           if (!hasUniversalMust) {
             const coveredIds = new Set(
               canvas.features
-                .filter(
-                  (f) =>
-                    f.priority === "must" &&
-                    f.personaId.trim().length > 0
-                )
+                .filter((f) => f.priority === "must" && f.personaId.trim().length > 0)
                 .map((f) => f.personaId)
             );
             const uncovered = canvas.personas
@@ -944,9 +928,7 @@ export async function auditVentureStep(
         if (await fs.exists(specCanvasPath)) {
           try {
             const rawSpec = await fs.readFile(specCanvasPath);
-            const parsedSpec = ProductSpecCanvasSchema.safeParse(
-              JSON.parse(rawSpec)
-            );
+            const parsedSpec = ProductSpecCanvasSchema.safeParse(JSON.parse(rawSpec));
             if (parsedSpec.success) {
               specFeatures = parsedSpec.data.features.map((f) => ({
                 id: f.id,

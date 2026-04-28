@@ -1,3 +1,11 @@
+import type { BrandBrief } from "@founder-os/branding-core";
+import {
+  ProductSpecCanvasSchema,
+  SHELL_TYPE_DESCRIPTIONS,
+  type Screen,
+  ScreensCanvasSchema,
+  type ShellType,
+} from "@founder-os/domain";
 /**
  * create-stitch-pack — emits the design-to-code prompt + config that
  * the founder feeds into Stitch / v0 / Figma Make to generate UI.
@@ -24,19 +32,7 @@
  *     render screen-by-screen rather than infer.
  */
 import { createLogger } from "@founder-os/logger";
-import {
-  getStitchDir,
-  getScreensCanvasPath,
-  getSpecCanvasPath,
-} from "@founder-os/workspace-core";
-import {
-  ScreensCanvasSchema,
-  ProductSpecCanvasSchema,
-  SHELL_TYPE_DESCRIPTIONS,
-  type Screen,
-  type ShellType,
-} from "@founder-os/domain";
-import type { BrandBrief } from "@founder-os/branding-core";
+import { getScreensCanvasPath, getSpecCanvasPath, getStitchDir } from "@founder-os/workspace-core";
 import type { Filesystem } from "../fs.js";
 
 const log = createLogger("pipeline-runner:create-stitch-pack");
@@ -132,14 +128,9 @@ export async function createStitchPackStep(
     generatedAt: new Date().toISOString(),
     schemaVersion: 2, // bumped at pt.44 — pre-pt.44 was implicit v1
   };
-  await ctx.fs.writeFile(
-    `${stitchDir}/stitch-config.json`,
-    JSON.stringify(stitchConfig, null, 2)
-  );
+  await ctx.fs.writeFile(`${stitchDir}/stitch-config.json`, JSON.stringify(stitchConfig, null, 2));
 
-  log.info(
-    `Stitch pack created at ${stitchDir} with ${screens.length} screen(s)`
-  );
+  log.info(`Stitch pack created at ${stitchDir} with ${screens.length} screen(s)`);
   return { status: "done", producedArtifactIds: [] };
 }
 
@@ -149,9 +140,7 @@ export async function createStitchPackStep(
  * missing or malformed. Resolves featureIds / entityIds against the
  * spec canvas when present; falls back to raw ids otherwise.
  */
-async function loadScreensForStitch(
-  ctx: CreateStitchPackContext
-): Promise<StitchScreen[]> {
+async function loadScreensForStitch(ctx: CreateStitchPackContext): Promise<StitchScreen[]> {
   const screensCanvasPath = getScreensCanvasPath(ctx.ventureRoot);
   if (!(await ctx.fs.exists(screensCanvasPath))) {
     log.info(
@@ -164,9 +153,7 @@ async function loadScreensForStitch(
   try {
     const raw = await ctx.fs.readFile(screensCanvasPath);
     const parsed = ScreensCanvasSchema.parse(JSON.parse(raw));
-    canvasScreens = parsed.screens.filter(
-      (s) => s.name.trim().length > 0
-    );
+    canvasScreens = parsed.screens.filter((s) => s.name.trim().length > 0);
   } catch (err) {
     log.warn(
       `Screens canvas malformed (${err instanceof Error ? err.message : String(err)}) — using legacy fallback`
@@ -225,10 +212,7 @@ async function loadSpecIdMaps(ctx: CreateStitchPackContext): Promise<{
   return { features, entities };
 }
 
-function generateStitchPrompt(
-  ctx: CreateStitchPackContext,
-  screens: StitchScreen[]
-): string {
+function generateStitchPrompt(ctx: CreateStitchPackContext, screens: StitchScreen[]): string {
   const { brief, appType } = ctx;
   const screenSection = screens
     .map((s, idx) => {

@@ -1,6 +1,6 @@
-import React from "react";
 import type { VentureStage } from "@founder-os/domain";
 import { VENTURE_STAGE_ORDER } from "@founder-os/domain";
+import React from "react";
 
 export type SidebarVenture = {
   id: string;
@@ -70,9 +70,7 @@ export function Sidebar({
               transition: "background 0.15s",
             }}
           >
-            <span style={{ fontWeight: 600, fontSize: 13, color: "#1F2937" }}>
-              {v.name}
-            </span>
+            <span style={{ fontWeight: 600, fontSize: 13, color: "#1F2937" }}>{v.name}</span>
             <span style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>
               {STAGE_EMOJI[v.stage] ?? "•"} {v.stage.replace(/_/g, " ")}
             </span>

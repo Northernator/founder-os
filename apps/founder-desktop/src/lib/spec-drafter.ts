@@ -1,3 +1,13 @@
+import {
+  type ProductSpecCanvas,
+  ProductSpecCanvasSchema,
+  type Venture,
+  type VentureManifest,
+} from "@founder-os/domain";
+import { type LlmProviderId, getProvider } from "@founder-os/llm-providers";
+import { optimize } from "@founder-os/prompt-master";
+import { specDraftPrompt } from "@founder-os/prompts";
+import { getBrandKitDir, getStagePath } from "@founder-os/workspace-core";
 /**
  * Spec drafter (pt.42a) — orchestrates the "Draft with AI" flow on the
  * SpecTab. Reads the venture's brand brief + research reports, asks the
@@ -23,15 +33,6 @@
  * promise resolves with `{ ok: false, error: "Drafting cancelled." }`.
  */
 import { invoke } from "@tauri-apps/api/core";
-import {
-  ProductSpecCanvasSchema,
-  type ProductSpecCanvas,
-  type Venture,
-  type VentureManifest,
-} from "@founder-os/domain";
-import { getBrandKitDir, getStagePath } from "@founder-os/workspace-core";
-import { specDraftPrompt } from "@founder-os/prompts";
-import { getProvider, type LlmProviderId } from "@founder-os/llm-providers";
 import * as db from "./db.js";
 import { pickActiveProvider, streamChat } from "./llm-client.js";
 
@@ -84,9 +85,7 @@ const TOTAL_RESEARCH_CHARS = 24000;
  * Draft a `ProductSpecCanvas` for the given venture using the active
  * LLM provider. See module docstring for the contract.
  */
-export async function draftSpecCanvas(
-  args: DraftSpecCanvasArgs
-): Promise<SpecDraftResult> {
+export async function draftSpecCanvas(args: DraftSpecCanvasArgs): Promise<SpecDraftResult> {
   // 1. Pick provider — respects per-venture override, then global, then
   // first-usable. If nothing's configured, surface a clear error pointing
   // at the Options tab.
@@ -94,8 +93,7 @@ export async function draftSpecCanvas(
   if (!provider) {
     return {
       ok: false,
-      error:
-        "No LLM provider configured. Open the Options tab to add an API key.",
+      error: "No LLM provider configured. Open the Options tab to add an API key.",
     };
   }
   const setting = await db.getLlmSetting(provider);
@@ -123,12 +121,19 @@ export async function draftSpecCanvas(
   // 4. Stream. Single user turn — drafting is one-shot, no conversation
   // history. Temperature kept low because we want consistent JSON shape;
   // the prompt has plenty of latitude for content variation.
+  const optimizedSystem = await optimize({ prompt: system, context: "system" });
+  console.info(
+    "[prompt-master] spec-drafter",
+    optimizedSystem.fallbackUsed
+      ? "(fallback — transport unavailable)"
+      : `tokensSaved=${optimizedSystem.tokensSaved} cacheHit=${optimizedSystem.cacheHit}`
+  );
   let raw: string;
   try {
     raw = await streamChat({
       provider,
       messages: [{ role: "user", content: user }],
-      system,
+      system: optimizedSystem.optimized,
       maxTokens: 8000,
       temperature: 0.3,
       signal: args.signal,
@@ -163,9 +168,7 @@ export async function draftSpecCanvas(
   } catch (err) {
     return {
       ok: false,
-      error: `Model returned invalid JSON: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      error: `Model returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 

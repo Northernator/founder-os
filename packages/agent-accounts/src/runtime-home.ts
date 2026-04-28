@@ -28,11 +28,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentDefinition } from "@founder-os/agent-registry";
+import { SYSTEM_DEFAULT_ID, makeAccount } from "./account.js";
 import type { AccountStore } from "./store.js";
-import {
-  SYSTEM_DEFAULT_ID,
-  makeAccount,
-} from "./account.js";
 
 export interface RuntimeHomeServiceOptions {
   store: AccountStore;
@@ -57,16 +54,13 @@ export class RuntimeHomeService {
    * handle whose `restore()` puts the previous state back. Callers must
    * call `restore()` (typically in a try/finally around the agent spawn).
    */
-  async materialise(
-    agent: AgentDefinition,
-    accountId: string,
-  ): Promise<MaterialiseHandle> {
+  async materialise(agent: AgentDefinition, accountId: string): Promise<MaterialiseHandle> {
     const target = this.targetAuthPath(agent);
     if (!target) {
       throw new Error(
         agent.id +
           " has no configHome/authFile in its AgentDefinition; " +
-          "managed-account materialisation isn't supported for it.",
+          "managed-account materialisation isn't supported for it."
       );
     }
 
@@ -76,10 +70,7 @@ export class RuntimeHomeService {
     // Grab the account's stored auth and write it atomically.
     const account = this.store.get(agent.id, accountId);
     if (!account) {
-      throw new Error(
-        "agent-accounts: account " + accountId +
-          " not found for " + agent.id,
-      );
+      throw new Error("agent-accounts: account " + accountId + " not found for " + agent.id);
     }
     fs.mkdirSync(path.dirname(target), { recursive: true });
     writeAtomic(target, account.authJson);
@@ -108,10 +99,7 @@ export class RuntimeHomeService {
    * user already has at configHome/authFile (e.g. their pre-existing
    * `codex login` state) into our store under the SYSTEM_DEFAULT_ID. Idempotent.
    */
-  async ensureSystemDefaultCaptured(
-    agent: AgentDefinition,
-    target: string,
-  ): Promise<void> {
+  async ensureSystemDefaultCaptured(agent: AgentDefinition, target: string): Promise<void> {
     if (this.store.get(agent.id, SYSTEM_DEFAULT_ID)) return;
     if (!fs.existsSync(target)) return; // user has never logged in via CLI
     let authJson: string;

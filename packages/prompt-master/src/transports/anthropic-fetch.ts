@@ -55,7 +55,7 @@ interface AnthropicMessageResponse {
 }
 
 export function createAnthropicFetchTransport(
-  opts: AnthropicFetchTransportOpts,
+  opts: AnthropicFetchTransportOpts
 ): PromptMasterTransport {
   const model = opts.model ?? "claude-haiku-4-5-20251001";
   const baseUrl = opts.baseUrl ?? "https://api.anthropic.com";

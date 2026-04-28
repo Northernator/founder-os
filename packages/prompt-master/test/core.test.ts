@@ -42,7 +42,7 @@ async function run(): Promise<void> {
   setTransport(
     asTransport("test-shorten", async (input) => ({
       optimized: input.prompt.slice(0, Math.floor(input.prompt.length / 2)),
-    })),
+    }))
   );
   const long = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor.";
   const r2 = await optimize({ prompt: long, context: "system" });
@@ -62,7 +62,7 @@ async function run(): Promise<void> {
   setTransport(
     asTransport("test-broken", async () => {
       throw new Error("upstream down");
-    }),
+    })
   );
   const r4 = await optimize({ prompt: "Different prompt entirely", context: "research" });
   assert.equal(r4.fallbackUsed, true);
@@ -71,9 +71,7 @@ async function run(): Promise<void> {
 
   // 5. Lossless: identity transport (returns input as-is) should not poison cache.
   resetTransport();
-  setTransport(
-    asTransport("identity", async (input) => ({ optimized: input.prompt })),
-  );
+  setTransport(asTransport("identity", async (input) => ({ optimized: input.prompt })));
   const r5 = await optimize({ prompt: "Identity prompt", context: "audit" });
   assert.equal(r5.fallbackUsed, true, "identity transport should be marked as pass-through");
   console.log("ok 5: identity transport flagged as fallback (no cache pollution)");

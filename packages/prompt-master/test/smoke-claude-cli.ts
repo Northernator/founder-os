@@ -23,7 +23,7 @@ setTransport(
   createClaudeCliTransport({
     binary: "claude",
     extraArgs: ["--model", "claude-haiku-4-5-20251001"],
-  }),
+  })
 );
 
 console.log("Calling optimize() through claude-cli transport...");

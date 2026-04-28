@@ -1,17 +1,17 @@
-import React, { useEffect, useState } from "react";
 import { FounderQueryProvider } from "@founder-os/query";
-import { AppShell, Sidebar } from "@founder-os/ui";
 import { useVentureStore } from "@founder-os/state";
-import { VentureDashboard } from "../features/ventures/VentureDashboard.js";
-import {
-  NewVentureWizard,
-  type CreateVentureInput,
-} from "../features/ventures/NewVentureWizard.js";
-import { WelcomeScreen } from "./WelcomeScreen.js";
+import { AppShell, Sidebar } from "@founder-os/ui";
+import React, { useEffect, useState } from "react";
 import { ToastContainer } from "../features/toasts/ToastContainer.js";
-import { pushToast } from "../lib/toasts.js";
+import {
+  type CreateVentureInput,
+  NewVentureWizard,
+} from "../features/ventures/NewVentureWizard.js";
+import { VentureDashboard } from "../features/ventures/VentureDashboard.js";
 import * as db from "../lib/db.js";
+import { pushToast } from "../lib/toasts.js";
 import { provisionVentureWorkspace } from "../lib/venture-io.js";
+import { WelcomeScreen } from "./WelcomeScreen.js";
 
 // Small helper — inline so App.tsx doesn't depend on db.ts internals.
 // Same shape as db.ts and venture-io.ts. If we grow a third instance
@@ -19,7 +19,11 @@ import { provisionVentureWorkspace } from "../lib/venture-io.js";
 function errDetail(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
-  try { return JSON.stringify(err); } catch { return String(err); }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
 }
 
 // Global CSS reset
@@ -74,8 +78,7 @@ export function App() {
           pushToast({
             kind: "warn",
             message: `Keychain migration incomplete — ${stats.failed} provider(s) still in plaintext`,
-            detail:
-              "We'll retry on next launch. Check your OS credential store permissions.",
+            detail: "We'll retry on next launch. Check your OS credential store permissions.",
           });
         } else if (stats.moved > 0) {
           pushToast({
@@ -207,10 +210,7 @@ export function App() {
         </AppShell>
 
         {showWizard && (
-          <NewVentureWizard
-            onClose={() => setShowWizard(false)}
-            onCreate={handleCreate}
-          />
+          <NewVentureWizard onClose={() => setShowWizard(false)} onCreate={handleCreate} />
         )}
 
         {/* App-wide toast surface. Mounted once so every db/keyring path can

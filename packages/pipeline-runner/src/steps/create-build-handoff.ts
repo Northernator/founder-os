@@ -1,9 +1,9 @@
+import type { BrandBrief } from "@founder-os/branding-core";
+import type { VentureManifest } from "@founder-os/domain";
+import type { HandoffBundle } from "@founder-os/handoff-contract";
+import { createBundle } from "@founder-os/handoff-desktop";
 import { createLogger } from "@founder-os/logger";
 import { getHandoffsRoot } from "@founder-os/workspace-core";
-import { createBundle } from "@founder-os/handoff-desktop";
-import type { VentureManifest } from "@founder-os/domain";
-import type { BrandBrief } from "@founder-os/branding-core";
-import type { HandoffBundle } from "@founder-os/handoff-contract";
 import type { Filesystem } from "../fs.js";
 
 const log = createLogger("pipeline-runner:create-build-handoff");

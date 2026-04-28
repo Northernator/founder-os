@@ -7,9 +7,9 @@
 
 import type {
   HandoffBundle,
-  HandoffResult,
   HandoffProgressEvent,
   HandoffRequestType,
+  HandoffResult,
 } from "@founder-os/handoff-contract";
 
 export type ProgressCallback = (evt: HandoffProgressEvent) => void;
@@ -23,7 +23,7 @@ export interface HandoffRunnerContext {
 
 export type HandoffRunnerFn = (
   bundle: HandoffBundle,
-  ctx: HandoffRunnerContext,
+  ctx: HandoffRunnerContext
 ) => Promise<HandoffResult>;
 
 export type HandoffRunnerMap = Record<HandoffRequestType, HandoffRunnerFn>;
@@ -37,13 +37,11 @@ export type HandoffRunnerMap = Record<HandoffRequestType, HandoffRunnerFn>;
 export async function dispatchBundle(
   bundle: HandoffBundle,
   ctx: HandoffRunnerContext,
-  runners: HandoffRunnerMap,
+  runners: HandoffRunnerMap
 ): Promise<HandoffResult> {
   const runner = runners[bundle.type];
   if (!runner) {
-    throw new Error(
-      "HandoffDispatcher: no runner registered for bundle.type=" + bundle.type,
-    );
+    throw new Error("HandoffDispatcher: no runner registered for bundle.type=" + bundle.type);
   }
   return runner(bundle, ctx);
 }

@@ -1,13 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import type {
-  Venture,
-  VentureManifest,
-  VentureStage,
-} from "@founder-os/domain";
+import type { Venture, VentureManifest, VentureStage } from "@founder-os/domain";
+import { optimize } from "@founder-os/prompt-master";
 import { invoke } from "@tauri-apps/api/core";
-import { joinPath, writeVentureManifest } from "../../lib/venture-io.js";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
 import { pushToast } from "../../lib/toasts.js";
-import { streamChat, pickActiveProvider } from "../../lib/llm-client.js";
+import { joinPath, writeVentureManifest } from "../../lib/venture-io.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -99,8 +97,7 @@ function computeChecks(canvas: ResearchCanvas): ChecksMap {
   return {
     marketSized: canvas.marketSummary.trim().length >= 30 && canvas.tamEstimate.trim().length >= 5,
     gapIdentified: canvas.keyMarketGap.trim().length >= 20,
-    competitorsAnalysed:
-      canvas.competitors.filter((c) => c.name.trim().length > 0).length >= 2,
+    competitorsAnalysed: canvas.competitors.filter((c) => c.name.trim().length > 0).length >= 2,
     differentiationClear: canvas.differentiator.trim().length >= 20,
     problemsDocumented: canvas.topProblems.trim().length >= 30,
     conclusionReached: canvas.goNoGo !== "undecided",
@@ -142,7 +139,11 @@ const EVIDENCE_OPTIONS: { value: EvidenceType; label: string }[] = [
 function errDetail(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
-  try { return JSON.stringify(err); } catch { return String(err); }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
 }
 
 function makeid(): string {
@@ -200,7 +201,9 @@ export function ResearchTab({
       .catch(() => {
         if (!cancelled) setCanvas(DEFAULT_CANVAS);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [venture.id, venture.rootPath]);
 
   // Load uploaded docs list from disk
@@ -220,7 +223,9 @@ export function ResearchTab({
         setUploadedDocs(docs);
       })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [venture.id, venture.rootPath]);
 
   // Debounced save
@@ -240,7 +245,11 @@ export function ResearchTab({
             content: JSON.stringify(toSave, null, 2) + "\n",
           });
         } catch (err) {
-          pushToast({ kind: "warn", message: "Couldn't save research canvas", detail: errDetail(err) });
+          pushToast({
+            kind: "warn",
+            message: "Couldn't save research canvas",
+            detail: errDetail(err),
+          });
         }
         setSaveStatus("saved");
       }, 800);
@@ -262,18 +271,13 @@ export function ResearchTab({
   // Competitor helpers
   const addCompetitor = () => {
     updateCanvas({
-      competitors: [
-        ...canvas.competitors,
-        { id: makeid(), name: "", weakness: "" },
-      ],
+      competitors: [...canvas.competitors, { id: makeid(), name: "", weakness: "" }],
     });
   };
 
   const updateCompetitor = (id: string, patch: Partial<Competitor>) => {
     updateCanvas({
-      competitors: canvas.competitors.map((c) =>
-        c.id === id ? { ...c, ...patch } : c
-      ),
+      competitors: canvas.competitors.map((c) => (c.id === id ? { ...c, ...patch } : c)),
     });
   };
 
@@ -284,9 +288,7 @@ export function ResearchTab({
   // Evidence type toggle
   const toggleEvidence = (type: EvidenceType) => {
     const current = canvas.evidenceTypes;
-    const next = current.includes(type)
-      ? current.filter((t) => t !== type)
-      : [...current, type];
+    const next = current.includes(type) ? current.filter((t) => t !== type) : [...current, type];
     updateCanvas({ evidenceTypes: next });
   };
 
@@ -299,7 +301,11 @@ export function ResearchTab({
     if (!files || files.length === 0) return;
     setUploading(true);
     const dir = uploadsDir(venture.rootPath);
-    try { await invoke("mkdir_p", { path: dir }); } catch { /* ignore */ }
+    try {
+      await invoke("mkdir_p", { path: dir });
+    } catch {
+      /* ignore */
+    }
 
     for (const file of Array.from(files)) {
       try {
@@ -314,7 +320,11 @@ export function ResearchTab({
           try {
             const extracted = await invoke<string>("pdf_extract_text", { base64Bytes: b64 });
             if (!extracted.trim()) {
-              pushToast({ kind: "warn", message: `"${file.name}" — scanned PDF, no text extracted`, ttlMs: 6000 });
+              pushToast({
+                kind: "warn",
+                message: `"${file.name}" — scanned PDF, no text extracted`,
+                ttlMs: 6000,
+              });
               continue;
             }
             const saveName = file.name.replace(/\.pdf$/i, ".extracted.txt");
@@ -322,7 +332,12 @@ export function ResearchTab({
             await invoke("write_file", { path: joinPath(dir, saveName), content: content + "\n" });
             setUploadedDocs((prev) => [
               ...prev.filter((d) => d.id !== saveName),
-              { id: saveName, name: saveName, savedPath: joinPath(dir, saveName), sizeKb: Math.round(content.length / 1024) },
+              {
+                id: saveName,
+                name: saveName,
+                savedPath: joinPath(dir, saveName),
+                sizeKb: Math.round(content.length / 1024),
+              },
             ]);
             pushToast({ kind: "success", message: `Saved "${saveName}"`, ttlMs: 3000 });
             continue;
@@ -331,18 +346,32 @@ export function ResearchTab({
             continue;
           }
         } else {
-          pushToast({ kind: "warn", message: `"${file.name}" — unsupported type`, detail: "Upload .txt .md .csv .json or .pdf", ttlMs: 5000 });
+          pushToast({
+            kind: "warn",
+            message: `"${file.name}" — unsupported type`,
+            detail: "Upload .txt .md .csv .json or .pdf",
+            ttlMs: 5000,
+          });
           continue;
         }
 
         await invoke("write_file", { path: joinPath(dir, file.name), content: content + "\n" });
         setUploadedDocs((prev) => [
           ...prev.filter((d) => d.id !== file.name),
-          { id: file.name, name: file.name, savedPath: joinPath(dir, file.name), sizeKb: Math.round(content.length / 1024) },
+          {
+            id: file.name,
+            name: file.name,
+            savedPath: joinPath(dir, file.name),
+            sizeKb: Math.round(content.length / 1024),
+          },
         ]);
         pushToast({ kind: "success", message: `Saved "${file.name}"`, ttlMs: 3000 });
       } catch (err) {
-        pushToast({ kind: "error", message: `Couldn't save "${file.name}"`, detail: errDetail(err) });
+        pushToast({
+          kind: "error",
+          message: `Couldn't save "${file.name}"`,
+          detail: errDetail(err),
+        });
       }
     }
     setUploading(false);
@@ -351,7 +380,10 @@ export function ResearchTab({
   const handleAdvance = async () => {
     if (!allDone || advancing) return;
     setAdvancing(true);
-    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
     try {
       const toSave: ResearchCanvas = { ...canvas, updatedAt: new Date().toISOString() };
       await invoke("write_file", {
@@ -359,7 +391,11 @@ export function ResearchTab({
         content: JSON.stringify(toSave, null, 2) + "\n",
       });
     } catch (err) {
-      pushToast({ kind: "warn", message: "Couldn't save before advancing", detail: errDetail(err) });
+      pushToast({
+        kind: "warn",
+        message: "Couldn't save before advancing",
+        detail: errDetail(err),
+      });
     }
     onAdvanceStage("VALIDATED");
     setAdvancing(false);
@@ -371,7 +407,11 @@ export function ResearchTab({
     try {
       const providerId = await pickActiveProvider(venture.id);
       if (!providerId) {
-        pushToast({ kind: "warn", message: "No AI provider configured", detail: "Open Options tab to add an API key." });
+        pushToast({
+          kind: "warn",
+          message: "No AI provider configured",
+          detail: "Open Options tab to add an API key.",
+        });
         return;
       }
       const docTexts: string[] = [];
@@ -379,9 +419,14 @@ export function ResearchTab({
         try {
           const text = await invoke<string>("read_file", { path: doc.savedPath });
           docTexts.push(`[${doc.name}]\n${text}`);
-        } catch { /* skip */ }
+        } catch {
+          /* skip */
+        }
       }
-      if (docTexts.length === 0) { pushToast({ kind: "warn", message: "Couldn't read any uploaded documents" }); return; }
+      if (docTexts.length === 0) {
+        pushToast({ kind: "warn", message: "Couldn't read any uploaded documents" });
+        return;
+      }
       const combined = docTexts.join("\n\n---\n\n").slice(0, 15000);
       const system = `You extract market research information from documents to pre-fill a research canvas.
 Only extract information clearly stated. Never invent facts. Return raw JSON only — no markdown, no explanation.
@@ -398,38 +443,92 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
         customerQuotes: "Direct customer quotes from interviews, forums, or reviews",
         evidenceNotes: "Summary of validation evidence — numbers, sources, key signals",
       };
+      const optimizedSystem = await optimize({ prompt: system, context: "research" });
+      console.info(
+        "[prompt-master] research-extract",
+        optimizedSystem.fallbackUsed
+          ? "(fallback — transport unavailable)"
+          : `tokensSaved=${optimizedSystem.tokensSaved} cacheHit=${optimizedSystem.cacheHit}`
+      );
       let responseText = "";
       await streamChat({
         provider: providerId,
-        messages: [{ role: "user", content: `Documents:\n\n${combined}\n\n---\nExtract these fields if present:\n${JSON.stringify(fields, null, 2)}\n\nReturn JSON only.` }],
-        system,
+        messages: [
+          {
+            role: "user",
+            content: `Documents:\n\n${combined}\n\n---\nExtract these fields if present:\n${JSON.stringify(fields, null, 2)}\n\nReturn JSON only.`,
+          },
+        ],
+        system: optimizedSystem.optimized,
         maxTokens: 1500,
         temperature: 0.1,
-        onDelta: (d) => { responseText += d; },
+        onDelta: (d) => {
+          responseText += d;
+        },
       });
-      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/) || responseText.match(/(\{[\s\S]*\})/);
-      const result = JSON.parse((jsonMatch ? jsonMatch[1] : responseText).trim()) as Record<string, unknown>;
+      const jsonMatch =
+        responseText.match(/```(?:json)?\s*([\s\S]*?)```/) || responseText.match(/(\{[\s\S]*\})/);
+      const result = JSON.parse((jsonMatch ? jsonMatch[1] : responseText).trim()) as Record<
+        string,
+        unknown
+      >;
       const patch: Partial<ResearchCanvas> = {};
       let filled = 0;
-      if (typeof result.marketSummary === "string")  { patch.marketSummary = result.marketSummary; filled++; }
-      if (typeof result.tamEstimate === "string")    { patch.tamEstimate = result.tamEstimate; filled++; }
-      if (typeof result.samEstimate === "string")    { patch.samEstimate = result.samEstimate; filled++; }
-      if (typeof result.keyMarketGap === "string")   { patch.keyMarketGap = result.keyMarketGap; filled++; }
-      if (typeof result.differentiator === "string") { patch.differentiator = result.differentiator; filled++; }
-      if (typeof result.topProblems === "string")    { patch.topProblems = result.topProblems; filled++; }
-      if (typeof result.customerQuotes === "string") { patch.customerQuotes = result.customerQuotes; filled++; }
-      if (typeof result.evidenceNotes === "string")  { patch.evidenceNotes = result.evidenceNotes; filled++; }
+      if (typeof result.marketSummary === "string") {
+        patch.marketSummary = result.marketSummary;
+        filled++;
+      }
+      if (typeof result.tamEstimate === "string") {
+        patch.tamEstimate = result.tamEstimate;
+        filled++;
+      }
+      if (typeof result.samEstimate === "string") {
+        patch.samEstimate = result.samEstimate;
+        filled++;
+      }
+      if (typeof result.keyMarketGap === "string") {
+        patch.keyMarketGap = result.keyMarketGap;
+        filled++;
+      }
+      if (typeof result.differentiator === "string") {
+        patch.differentiator = result.differentiator;
+        filled++;
+      }
+      if (typeof result.topProblems === "string") {
+        patch.topProblems = result.topProblems;
+        filled++;
+      }
+      if (typeof result.customerQuotes === "string") {
+        patch.customerQuotes = result.customerQuotes;
+        filled++;
+      }
+      if (typeof result.evidenceNotes === "string") {
+        patch.evidenceNotes = result.evidenceNotes;
+        filled++;
+      }
       if (Array.isArray(result.competitors) && result.competitors.length > 0) {
-        patch.competitors = (result.competitors as Array<{name?: string; weakness?: string}>).map((c) => ({
-          id: makeid(), name: c.name ?? "", weakness: c.weakness ?? "",
-        }));
+        patch.competitors = (result.competitors as Array<{ name?: string; weakness?: string }>).map(
+          (c) => ({
+            id: makeid(),
+            name: c.name ?? "",
+            weakness: c.weakness ?? "",
+          })
+        );
         filled++;
       }
       if (filled > 0) {
         updateCanvas(patch);
-        pushToast({ kind: "success", message: `✨ AI filled ${filled} field${filled > 1 ? "s" : ""} from your documents`, ttlMs: 5000 });
+        pushToast({
+          kind: "success",
+          message: `✨ AI filled ${filled} field${filled > 1 ? "s" : ""} from your documents`,
+          ttlMs: 5000,
+        });
       } else {
-        pushToast({ kind: "warn", message: "AI couldn't find matching fields in your documents", ttlMs: 5000 });
+        pushToast({
+          kind: "warn",
+          message: "AI couldn't find matching fields in your documents",
+          ttlMs: 5000,
+        });
       }
     } catch (err) {
       pushToast({ kind: "error", message: "AI fill failed", detail: errDetail(err) });
@@ -439,9 +538,19 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
   };
 
   return (
-    <div style={{ height: "100%", overflow: "auto", padding: "24px 28px", boxSizing: "border-box" }}>
+    <div
+      style={{ height: "100%", overflow: "auto", padding: "24px 28px", boxSizing: "border-box" }}
+    >
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, gap: 20 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          marginBottom: 24,
+          gap: 20,
+        }}
+      >
         <div>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>
             Research Canvas
@@ -456,7 +565,11 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
             type="button"
             onClick={handleAdvance}
             disabled={!allDone || advancing}
-            title={allDone ? "All must-haves complete — advance to Validated stage" : "Complete the checklist first"}
+            title={
+              allDone
+                ? "All must-haves complete — advance to Validated stage"
+                : "Complete the checklist first"
+            }
             style={{
               padding: "8px 16px",
               background: allDone ? "#6366F1" : "#E5E7EB",
@@ -477,33 +590,47 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
 
       {/* Two-column layout */}
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-
         {/* LEFT — questions */}
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
-
           {/* Section 1 — Research Documents */}
           <Section title="1. Research Documents" icon="📎">
             <p style={{ margin: "0 0 8px", fontSize: 12, color: "#6B7280" }}>
-              Upload market reports, interview transcripts, competitor screenshots, or any supporting research.
-              AI will read them and auto-fill matching fields below. Saved to{" "}
+              Upload market reports, interview transcripts, competitor screenshots, or any
+              supporting research. AI will read them and auto-fill matching fields below. Saved to{" "}
               <code>01_research/uploads/</code>. Supports .txt, .md, .csv, .json and .pdf.
             </p>
             <div
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); handleFileUpload(e.dataTransfer.files); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                handleFileUpload(e.dataTransfer.files);
+              }}
               onClick={() => fileInputRef.current?.click()}
               style={{
-                border: "2px dashed #D1D5DB", borderRadius: 8, padding: "20px 16px",
-                textAlign: "center", cursor: "pointer",
-                background: uploading ? "#F0FDF4" : "#F9FAFB", color: "#6B7280",
-                fontSize: 13, transition: "border-color 0.15s",
+                border: "2px dashed #D1D5DB",
+                borderRadius: 8,
+                padding: "20px 16px",
+                textAlign: "center",
+                cursor: "pointer",
+                background: uploading ? "#F0FDF4" : "#F9FAFB",
+                color: "#6B7280",
+                fontSize: 13,
+                transition: "border-color 0.15s",
               }}
             >
               <div style={{ fontSize: 22, marginBottom: 6 }}>📂</div>
               {uploading ? "Saving…" : "Click or drag files here to upload"}
-              <div style={{ fontSize: 11, marginTop: 4, color: "#9CA3AF" }}>.txt · .md · .csv · .json · .pdf</div>
-              <input ref={fileInputRef} type="file" multiple accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.pdf"
-                style={{ display: "none" }} onChange={(e) => handleFileUpload(e.target.files)} />
+              <div style={{ fontSize: 11, marginTop: 4, color: "#9CA3AF" }}>
+                .txt · .md · .csv · .json · .pdf
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.pdf"
+                style={{ display: "none" }}
+                onChange={(e) => handleFileUpload(e.target.files)}
+              />
             </div>
             {uploadedDocs.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -512,25 +639,68 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                   onClick={handleAiFill}
                   disabled={aiFillingDocs}
                   style={{
-                    alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6,
+                    alignSelf: "flex-start",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
                     padding: "8px 14px",
                     background: aiFillingDocs ? "#F9FAFB" : "#EEF2FF",
                     border: `1px solid ${aiFillingDocs ? "#E5E7EB" : "#C7D2FE"}`,
-                    borderRadius: 6, fontSize: 13,
+                    borderRadius: 6,
+                    fontSize: 13,
                     color: aiFillingDocs ? "#9CA3AF" : "#4F46E5",
-                    cursor: aiFillingDocs ? "not-allowed" : "pointer", fontWeight: 600,
+                    cursor: aiFillingDocs ? "not-allowed" : "pointer",
+                    fontWeight: 600,
                   }}
                 >
                   <span>{aiFillingDocs ? "⏳" : "🤖"}</span>
                   {aiFillingDocs ? "AI reading documents…" : "AI fill from documents"}
                 </button>
                 {uploadedDocs.map((doc) => (
-                  <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 6, fontSize: 13 }}>
+                  <div
+                    key={doc.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "8px 12px",
+                      background: "#FFFFFF",
+                      border: "1px solid #E5E7EB",
+                      borderRadius: 6,
+                      fontSize: 13,
+                    }}
+                  >
                     <span style={{ fontSize: 16 }}>📄</span>
-                    <span style={{ flex: 1, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</span>
-                    {doc.sizeKb > 0 && <span style={{ fontSize: 11, color: "#9CA3AF" }}>{doc.sizeKb} KB</span>}
-                    <button type="button" onClick={() => invoke("open_path", { path: doc.savedPath }).catch(() => {})}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, padding: "2px 4px", borderRadius: 4, color: "#6366F1" }} title="Open in file manager">↗</button>
+                    <span
+                      style={{
+                        flex: 1,
+                        color: "#111827",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {doc.name}
+                    </span>
+                    {doc.sizeKb > 0 && (
+                      <span style={{ fontSize: 11, color: "#9CA3AF" }}>{doc.sizeKb} KB</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => invoke("open_path", { path: doc.savedPath }).catch(() => {})}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        fontSize: 14,
+                        padding: "2px 4px",
+                        borderRadius: 4,
+                        color: "#6366F1",
+                      }}
+                      title="Open in file manager"
+                    >
+                      ↗
+                    </button>
                   </div>
                 ))}
               </div>
@@ -539,7 +709,11 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
 
           {/* Section 2 — Market Size */}
           <Section title="2. Market Size" icon="📊">
-            <Field label="Describe the market" required hint="Who are the buyers? What industry or segment? Be specific.">
+            <Field
+              label="Describe the market"
+              required
+              hint="Who are the buyers? What industry or segment? Be specific."
+            >
               <Textarea
                 value={canvas.marketSummary}
                 onChange={(v) => updateCanvas({ marketSummary: v })}
@@ -550,7 +724,12 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
             </Field>
 
             <div style={{ display: "flex", gap: 12 }}>
-              <Field label="TAM estimate" required hint="Total Addressable Market" style={{ flex: 1 }}>
+              <Field
+                label="TAM estimate"
+                required
+                hint="Total Addressable Market"
+                style={{ flex: 1 }}
+              >
                 <input
                   type="text"
                   value={canvas.tamEstimate}
@@ -559,7 +738,11 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                   style={inputStyle}
                 />
               </Field>
-              <Field label="SAM estimate" hint="Serviceable Addressable Market — realistic slice" style={{ flex: 1 }}>
+              <Field
+                label="SAM estimate"
+                hint="Serviceable Addressable Market — realistic slice"
+                style={{ flex: 1 }}
+              >
                 <input
                   type="text"
                   value={canvas.samEstimate}
@@ -570,7 +753,11 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               </Field>
             </div>
 
-            <Field label="What's the market gap or unmet need?" required hint="What problem are existing solutions leaving unsolved?">
+            <Field
+              label="What's the market gap or unmet need?"
+              required
+              hint="What problem are existing solutions leaving unsolved?"
+            >
               <Textarea
                 value={canvas.keyMarketGap}
                 onChange={(v) => updateCanvas({ keyMarketGap: v })}
@@ -584,7 +771,8 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
           {/* Section 3 — Competitor Analysis */}
           <Section title="3. Competitor Analysis" icon="🔍">
             <p style={{ margin: "0 0 4px", fontSize: 12, color: "#6B7280" }}>
-              Add at least 2 direct or indirect competitors. Include their main weakness or where they fall short.
+              Add at least 2 direct or indirect competitors. Include their main weakness or where
+              they fall short.
             </p>
 
             {canvas.competitors.map((comp, idx) => (
@@ -615,7 +803,11 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               + Add competitor
             </button>
 
-            <Field label="What makes you genuinely different?" required hint="Your key differentiator vs the competition — be honest, not fluffy.">
+            <Field
+              label="What makes you genuinely different?"
+              required
+              hint="Your key differentiator vs the competition — be honest, not fluffy."
+            >
               <Textarea
                 value={canvas.differentiator}
                 onChange={(v) => updateCanvas({ differentiator: v })}
@@ -628,7 +820,11 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
 
           {/* Section 4 — Customer Problems */}
           <Section title="4. Customer Problems" icon="🎯">
-            <Field label="Top customer problems you've validated" required hint="List the 2–3 biggest pains your research surfaced — ranked by frequency or severity.">
+            <Field
+              label="Top customer problems you've validated"
+              required
+              hint="List the 2–3 biggest pains your research surfaced — ranked by frequency or severity."
+            >
               <Textarea
                 value={canvas.topProblems}
                 onChange={(v) => updateCanvas({ topProblems: v })}
@@ -638,7 +834,10 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               <CharCount value={canvas.topProblems} min={30} />
             </Field>
 
-            <Field label="Direct customer quotes" hint="Paste any real quotes from interviews, forums, social media, or reviews that back up the problems above.">
+            <Field
+              label="Direct customer quotes"
+              hint="Paste any real quotes from interviews, forums, social media, or reviews that back up the problems above."
+            >
               <Textarea
                 value={canvas.customerQuotes}
                 onChange={(v) => updateCanvas({ customerQuotes: v })}
@@ -674,13 +873,17 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                       transition: "all 0.15s",
                     }}
                   >
-                    {selected ? "✓ " : ""}{opt.label}
+                    {selected ? "✓ " : ""}
+                    {opt.label}
                   </button>
                 );
               })}
             </div>
 
-            <Field label="Evidence notes" hint="Summarise what you found — numbers, sources, key signals.">
+            <Field
+              label="Evidence notes"
+              hint="Summarise what you found — numbers, sources, key signals."
+            >
               <Textarea
                 value={canvas.evidenceNotes}
                 onChange={(v) => updateCanvas({ evidenceNotes: v })}
@@ -692,7 +895,11 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
 
           {/* Section 6 — Research Summary & Go/No-Go */}
           <Section title="6. Research Summary" icon="📝">
-            <Field label="Overall research conclusion" required hint="Summarise what you learned. What did research confirm, challenge, or reveal?">
+            <Field
+              label="Overall research conclusion"
+              required
+              hint="Summarise what you learned. What did research confirm, challenge, or reveal?"
+            >
               <Textarea
                 value={canvas.researchSummary}
                 onChange={(v) => updateCanvas({ researchSummary: v })}
@@ -742,8 +949,6 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               )}
             </div>
           </Section>
-
-
         </div>
 
         {/* RIGHT — sticky checklist */}
@@ -757,12 +962,29 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 12, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#374151",
+                marginBottom: 12,
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+              }}
+            >
               Must-haves
             </div>
 
             {/* Progress bar */}
-            <div style={{ height: 6, background: "#E5E7EB", borderRadius: 3, marginBottom: 14, overflow: "hidden" }}>
+            <div
+              style={{
+                height: 6,
+                background: "#E5E7EB",
+                borderRadius: 3,
+                marginBottom: 14,
+                overflow: "hidden",
+              }}
+            >
               <div
                 style={{
                   height: "100%",
@@ -778,7 +1000,12 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
             </div>
 
             {(Object.keys(checks) as CheckKey[]).map((key) => (
-              <ChecklistItem key={key} done={checks[key]} label={CHECK_LABELS[key]} hint={CHECK_HINTS[key]} />
+              <ChecklistItem
+                key={key}
+                done={checks[key]}
+                label={CHECK_LABELS[key]}
+                hint={CHECK_HINTS[key]}
+              />
             ))}
 
             <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid #E5E7EB" }}>
@@ -799,17 +1026,22 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                   transition: "background 0.2s",
                 }}
               >
-                {advancing ? "Advancing…" : allDone ? "Advance to Validated →" : "Complete checklist first"}
+                {advancing
+                  ? "Advancing…"
+                  : allDone
+                    ? "Advance to Validated →"
+                    : "Complete checklist first"}
               </button>
               {allDone && (
-                <p style={{ margin: "8px 0 0", fontSize: 11, color: "#059669", textAlign: "center" }}>
+                <p
+                  style={{ margin: "8px 0 0", fontSize: 11, color: "#059669", textAlign: "center" }}
+                >
                   Research complete! Moves you to VALIDATED.
                 </p>
               )}
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );
@@ -925,10 +1157,30 @@ function GoNoGoButton({
 // Sub-components (shared pattern from IdeaTab)
 // ---------------------------------------------------------------------------
 
-function Section({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
+function Section({
+  title,
+  icon,
+  children,
+}: { title: string; icon: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 10, overflow: "hidden" }}>
-      <div style={{ padding: "14px 18px", borderBottom: "1px solid #F3F4F6", background: "#F9FAFB", display: "flex", alignItems: "center", gap: 8 }}>
+    <div
+      style={{
+        background: "#FFFFFF",
+        border: "1px solid #E5E7EB",
+        borderRadius: 10,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          padding: "14px 18px",
+          borderBottom: "1px solid #F3F4F6",
+          background: "#F9FAFB",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
         <span style={{ fontSize: 16 }}>{icon}</span>
         <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>{title}</h4>
       </div>
@@ -1010,7 +1262,10 @@ function CharCount({ value, min }: { value: string; min: number }) {
 
 function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hint: string }) {
   return (
-    <div title={done ? "Complete" : hint} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
+    <div
+      title={done ? "Complete" : hint}
+      style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}
+    >
       <div
         style={{
           width: 18,
@@ -1028,12 +1283,20 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
       >
         {done && (
           <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-            <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M1 4L3.5 6.5L9 1"
+              stroke="white"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         )}
       </div>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "#111827" : "#6B7280" }}>{label}</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "#111827" : "#6B7280" }}>
+          {label}
+        </div>
         {!done && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>{hint}</div>}
       </div>
     </div>

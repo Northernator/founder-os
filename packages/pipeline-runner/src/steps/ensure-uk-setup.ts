@@ -1,3 +1,9 @@
+import {
+  type UkSetupCanvas,
+  UkSetupCanvasSchema,
+  type VentureManifest,
+  createEmptyUkSetupCanvas,
+} from "@founder-os/domain";
 /**
  * ensure-uk-setup (pt.33) — deterministic step that scaffolds
  * `04_uk_business/uk-setup.json` from manifest defaults if missing.
@@ -12,13 +18,7 @@
  * have something to read".
  */
 import { createLogger } from "@founder-os/logger";
-import { getUkSetupDir, getUkSetupCanvasPath } from "@founder-os/workspace-core";
-import {
-  UkSetupCanvasSchema,
-  createEmptyUkSetupCanvas,
-  type UkSetupCanvas,
-  type VentureManifest,
-} from "@founder-os/domain";
+import { getUkSetupCanvasPath, getUkSetupDir } from "@founder-os/workspace-core";
 import type { Filesystem } from "../fs.js";
 
 const log = createLogger("pipeline-runner:ensure-uk-setup");
@@ -36,9 +36,7 @@ export type EnsureUkSetupResult = {
   canvas: UkSetupCanvas;
 };
 
-export async function ensureUkSetupStep(
-  ctx: EnsureUkSetupContext
-): Promise<EnsureUkSetupResult> {
+export async function ensureUkSetupStep(ctx: EnsureUkSetupContext): Promise<EnsureUkSetupResult> {
   const dir = getUkSetupDir(ctx.ventureRoot);
   await ctx.fs.mkdir(dir);
 
@@ -71,15 +69,10 @@ export async function ensureUkSetupStep(
 
   // Fresh canvas — manifest's entityType seeds the canvas, everything
   // else starts blank for the founder to fill via the UkSetupTab.
-  const canvas = createEmptyUkSetupCanvas(
-    ctx.manifest.id,
-    ctx.manifest.entityType
-  );
+  const canvas = createEmptyUkSetupCanvas(ctx.manifest.id, ctx.manifest.entityType);
 
   await ctx.fs.writeFile(canvasPath, JSON.stringify(canvas, null, 2) + "\n");
-  log.info(
-    `Created UK Setup canvas at ${canvasPath} (entityType: ${ctx.manifest.entityType})`
-  );
+  log.info(`Created UK Setup canvas at ${canvasPath} (entityType: ${ctx.manifest.entityType})`);
 
   return { status: "done", producedArtifactIds: [], canvas };
 }

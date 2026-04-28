@@ -1,7 +1,4 @@
-import type {
-  LlmProviderCatalogEntry,
-  LlmProviderId,
-} from "./types.js";
+import type { LlmProviderCatalogEntry, LlmProviderId } from "./types.js";
 
 /**
  * Single source of truth for every LLM backend we support.
@@ -26,11 +23,7 @@ export const PROVIDER_CATALOG: readonly LlmProviderCatalogEntry[] = [
     blurb: "Founder OS's default — great at long documents, code review, business reasoning.",
     kind: "anthropic",
     defaultBaseUrl: "https://api.anthropic.com",
-    modelSuggestions: [
-      "claude-opus-4-6",
-      "claude-sonnet-4-6",
-      "claude-haiku-4-5-20251001",
-    ],
+    modelSuggestions: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
     defaultModel: "claude-opus-4-6",
     requiresApiKey: true,
     apiKeyUrl: "https://console.anthropic.com/settings/keys",
@@ -55,12 +48,7 @@ export const PROVIDER_CATALOG: readonly LlmProviderCatalogEntry[] = [
     blurb: "Multimodal, long context (1M+ tokens on 1.5/2.x). Good for doc-heavy research.",
     kind: "gemini",
     defaultBaseUrl: "https://generativelanguage.googleapis.com/v1beta",
-    modelSuggestions: [
-      "gemini-2.5-pro",
-      "gemini-2.0-flash",
-      "gemini-1.5-pro",
-      "gemini-1.5-flash",
-    ],
+    modelSuggestions: ["gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
     defaultModel: "gemini-2.0-flash",
     requiresApiKey: true,
     apiKeyUrl: "https://aistudio.google.com/apikey",
@@ -111,12 +99,7 @@ export const PROVIDER_CATALOG: readonly LlmProviderCatalogEntry[] = [
     blurb: "Search-grounded answers with citations. OpenAI-compatible (Sonar models).",
     kind: "openai_compatible",
     defaultBaseUrl: "https://api.perplexity.ai",
-    modelSuggestions: [
-      "sonar-pro",
-      "sonar",
-      "sonar-reasoning-pro",
-      "sonar-reasoning",
-    ],
+    modelSuggestions: ["sonar-pro", "sonar", "sonar-reasoning-pro", "sonar-reasoning"],
     defaultModel: "sonar-pro",
     requiresApiKey: true,
     apiKeyUrl: "https://www.perplexity.ai/settings/api",
@@ -133,17 +116,13 @@ export const PROVIDER_CATALOG: readonly LlmProviderCatalogEntry[] = [
   },
 ] as const;
 
-const CATALOG_BY_ID: Record<LlmProviderId, LlmProviderCatalogEntry> =
-  Object.fromEntries(PROVIDER_CATALOG.map((p) => [p.id, p])) as Record<
-    LlmProviderId,
-    LlmProviderCatalogEntry
-  >;
+const CATALOG_BY_ID: Record<LlmProviderId, LlmProviderCatalogEntry> = Object.fromEntries(
+  PROVIDER_CATALOG.map((p) => [p.id, p])
+) as Record<LlmProviderId, LlmProviderCatalogEntry>;
 
 /** Lookup helper — guaranteed non-null for any `LlmProviderId`. */
 export function getProvider(id: LlmProviderId): LlmProviderCatalogEntry {
   return CATALOG_BY_ID[id];
 }
 
-export const PROVIDER_IDS: readonly LlmProviderId[] = PROVIDER_CATALOG.map(
-  (p) => p.id
-);
+export const PROVIDER_IDS: readonly LlmProviderId[] = PROVIDER_CATALOG.map((p) => p.id);

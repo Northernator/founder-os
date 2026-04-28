@@ -1,12 +1,12 @@
 import { z } from "zod";
 
 export const NamingStyleSchema = z.enum([
-  "compound",     // two words fused: "Dropbox", "Shopify"
-  "invented",     // pure invention: "Figma", "Canva"
-  "descriptive",  // what it does: "Basecamp"
-  "acronym",      // "JIRA", "SaaS"
-  "personal",     // founder name: "Tesla"
-  "metaphor",     // "Slack", "Stripe"
+  "compound", // two words fused: "Dropbox", "Shopify"
+  "invented", // pure invention: "Figma", "Canva"
+  "descriptive", // what it does: "Basecamp"
+  "acronym", // "JIRA", "SaaS"
+  "personal", // founder name: "Tesla"
+  "metaphor", // "Slack", "Stripe"
 ]);
 export type NamingStyle = z.infer<typeof NamingStyleSchema>;
 
@@ -29,9 +29,7 @@ export const NamingReportSchema = z.object({
 });
 export type NamingReport = z.infer<typeof NamingReportSchema>;
 
-export function createNamingReport(
-  opts: Omit<NamingReport, "createdAt">
-): NamingReport {
+export function createNamingReport(opts: Omit<NamingReport, "createdAt">): NamingReport {
   return NamingReportSchema.parse({
     ...opts,
     createdAt: new Date().toISOString(),
@@ -39,10 +37,7 @@ export function createNamingReport(
 }
 
 /** Generate default naming candidates from a set of seed words */
-export function generateSeedCandidates(
-  seeds: string[],
-  industry: string
-): NameCandidate[] {
+export function generateSeedCandidates(seeds: string[], industry: string): NameCandidate[] {
   // Simple deterministic generation for seeding — AI fills in the real names
   return [
     {

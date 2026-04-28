@@ -15,11 +15,8 @@
  * use createClaudeCliTransport instead because they don't have access to the
  * Tauri-side llm_stream command.
  */
-import type {
-  OptimizeInput,
-  PromptMasterTransport,
-} from "@founder-os/prompt-master";
-import { streamChat, pickActiveProvider } from "./llm-client.js";
+import type { OptimizeInput, PromptMasterTransport } from "@founder-os/prompt-master";
+import { pickActiveProvider, streamChat } from "./llm-client.js";
 
 const PROMPT_MASTER_SYSTEM = `You are Prompt Master, a lossless prompt optimizer.
 
@@ -50,7 +47,7 @@ export interface StreamChatTransportOpts {
 }
 
 export function createStreamChatTransport(
-  opts: StreamChatTransportOpts = {},
+  opts: StreamChatTransportOpts = {}
 ): PromptMasterTransport {
   const system = opts.systemOverride ?? PROMPT_MASTER_SYSTEM;
 
@@ -63,8 +60,7 @@ export function createStreamChatTransport(
         return { optimized: input.prompt };
       }
 
-      const maxTokens =
-        opts.maxTokens ?? Math.max(256, Math.ceil(input.prompt.length / 3));
+      const maxTokens = opts.maxTokens ?? Math.max(256, Math.ceil(input.prompt.length / 3));
 
       const text = await streamChat({
         provider,

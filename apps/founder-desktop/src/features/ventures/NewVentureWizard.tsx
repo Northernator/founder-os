@@ -1,12 +1,13 @@
-import React, { useState } from "react";
 import type {
-  Venture,
-  VentureStage,
-  VentureManifest,
-  EntityType,
   AppType,
+  EntityType,
+  Venture,
+  VentureManifest,
+  VentureStage,
 } from "@founder-os/domain";
-import { pickVentureFolder, joinPath } from "../../lib/venture-io.js";
+import type React from "react";
+import { useState } from "react";
+import { joinPath, pickVentureFolder } from "../../lib/venture-io.js";
 
 const ENTITY_OPTIONS: { value: EntityType; label: string }[] = [
   { value: "undecided", label: "Undecided" },
@@ -60,11 +61,9 @@ export function NewVentureWizard({
   const [error, setError] = useState<string | null>(null);
 
   const slug = slugify(name);
-  const resolvedRoot =
-    parentFolder && slug ? joinPath(parentFolder, slug) : null;
+  const resolvedRoot = parentFolder && slug ? joinPath(parentFolder, slug) : null;
 
-  const canSubmit =
-    name.trim().length >= 2 && slug.length > 0 && !!parentFolder && !submitting;
+  const canSubmit = name.trim().length >= 2 && slug.length > 0 && !!parentFolder && !submitting;
 
   const handlePickFolder = async () => {
     setError(null);
@@ -154,8 +153,8 @@ export function NewVentureWizard({
             New Venture
           </h2>
           <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6B7280" }}>
-            We'll create a folder with the full stage skeleton and save a{" "}
-            <code>venture.yaml</code> manifest at its root.
+            We'll create a folder with the full stage skeleton and save a <code>venture.yaml</code>{" "}
+            manifest at its root.
           </p>
         </div>
 
@@ -181,7 +180,9 @@ export function NewVentureWizard({
             style={inputStyle}
           >
             {APP_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
         </Field>
@@ -193,7 +194,9 @@ export function NewVentureWizard({
             style={inputStyle}
           >
             {ENTITY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
             ))}
           </select>
         </Field>
@@ -218,11 +221,7 @@ export function NewVentureWizard({
             >
               {parentFolder ?? "No folder chosen"}
             </div>
-            <button
-              type="button"
-              onClick={handlePickFolder}
-              style={secondaryBtnStyle}
-            >
+            <button type="button" onClick={handlePickFolder} style={secondaryBtnStyle}>
               Choose…
             </button>
           </div>
@@ -259,11 +258,7 @@ export function NewVentureWizard({
           <button type="button" onClick={onClose} style={cancelBtnStyle}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            style={submitBtnStyle(!canSubmit)}
-          >
+          <button type="submit" disabled={!canSubmit} style={submitBtnStyle(!canSubmit)}>
             {submitting ? "Creating…" : "Create venture"}
           </button>
         </div>

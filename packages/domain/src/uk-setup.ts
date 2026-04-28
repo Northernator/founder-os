@@ -45,12 +45,7 @@ import { z } from "zod";
  * dedicated `manifest-enums.ts` (or similar) and import from there
  * in both index.ts and uk-setup.ts. Don't reintroduce the cycle.
  */
-const EntityTypeSchema = z.enum([
-  "sole_trader",
-  "ltd",
-  "partnership",
-  "undecided",
-]);
+const EntityTypeSchema = z.enum(["sole_trader", "ltd", "partnership", "undecided"]);
 
 // ---------------------------------------------------------------------------
 // Sub-shapes

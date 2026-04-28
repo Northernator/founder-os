@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { HandoffProgressEvent, HandoffResult } from "@founder-os/handoff-contract";
 import { createLogger } from "@founder-os/logger";
-import type { HandoffResult, HandoffProgressEvent } from "@founder-os/handoff-contract";
 import { ventureHandoffPaths } from "@founder-os/workspace-core";
 
 const log = createLogger("handoff-vscode:write-result");

@@ -1,10 +1,10 @@
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as crypto from "node:crypto";
+import { type ArtifactType, computeArtifactId } from "@founder-os/artifacts-core";
+import type { ArtifactRef } from "@founder-os/domain";
 import { createLogger } from "@founder-os/logger";
 import { ventureArtifactDirs } from "@founder-os/workspace-core";
-import type { ArtifactRef } from "@founder-os/domain";
-import { computeArtifactId, type ArtifactType } from "@founder-os/artifacts-core";
 
 const log = createLogger("artifacts-index:scanner");
 
@@ -57,7 +57,8 @@ export function scanDir(dirPath: string, ventureRoot: string): ScannedFile[] {
 /** Infer artifact type from file extension + directory path */
 export function inferArtifactType(file: ScannedFile): ArtifactType {
   const p = file.relativePath.toLowerCase();
-  if (p.includes("brand-kit") || (p.includes("brand") && file.ext === ".json")) return "brand-brief";
+  if (p.includes("brand-kit") || (p.includes("brand") && file.ext === ".json"))
+    return "brand-brief";
   if (p.includes("logo") && file.ext === ".svg") return "logo-pack";
   if (p.includes("brand-kit")) return "brand-kit";
   if (p.includes("spec") && file.ext === ".md") return "product-spec";
@@ -67,7 +68,8 @@ export function inferArtifactType(file: ScannedFile): ArtifactType {
   if (p.includes("audit")) return "audit-report";
   if (p.includes("market") || p.includes("research")) return "research-summary";
   if (p.includes("validation") || p.includes("validated")) return "research-summary";
-  if (p.includes("uk") || p.includes("setup") || p.includes("incorporation")) return "uk-setup-checklist";
+  if (p.includes("uk") || p.includes("setup") || p.includes("incorporation"))
+    return "uk-setup-checklist";
   if (p.includes("budget") || p.includes("finance")) return "budget-model";
   if (p.includes("names") || p.includes("naming")) return "naming-scan";
   if (p.includes("trademark")) return "trademark-scan";
@@ -78,10 +80,7 @@ export function inferArtifactType(file: ScannedFile): ArtifactType {
 }
 
 /** Scan all artifact dirs for a venture and return ArtifactRefs */
-export function scanVentureArtifacts(
-  ventureId: string,
-  ventureRoot: string
-): ArtifactRef[] {
+export function scanVentureArtifacts(ventureId: string, ventureRoot: string): ArtifactRef[] {
   const dirs = ventureArtifactDirs(ventureRoot);
   const allFiles: ScannedFile[] = [];
 

@@ -18,16 +18,14 @@
  * optimization path.
  */
 import { appendFile, mkdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import {
-  setTelemetrySink,
-  type TelemetryEvent,
-  type TelemetrySink,
-} from "./telemetry.js";
+import { dirname, join } from "node:path";
+import { type TelemetryEvent, type TelemetrySink, setTelemetrySink } from "./telemetry.js";
 
 function logDir(): string {
-  return process.env.PROMPT_MASTER_LOG_DIR ?? join(homedir(), ".founder-os", "cache", "prompt-master");
+  return (
+    process.env.PROMPT_MASTER_LOG_DIR ?? join(homedir(), ".founder-os", "cache", "prompt-master")
+  );
 }
 
 function logFileInternal(): string {

@@ -1,3 +1,5 @@
+import { type LlmProviderId, PROVIDER_CATALOG, getProvider } from "@founder-os/llm-providers";
+import { Button } from "@founder-os/ui";
 /**
  * ProviderPickerDialog — modal that asks which LLM to use for a
  * generation action. Used by the brand-pack and logo-candidate flows,
@@ -21,12 +23,6 @@
  * it into the generation call.
  */
 import React, { useEffect, useState } from "react";
-import { Button } from "@founder-os/ui";
-import {
-  PROVIDER_CATALOG,
-  getProvider,
-  type LlmProviderId,
-} from "@founder-os/llm-providers";
 import * as db from "../../lib/db.js";
 
 export type ProviderPickerResult = {
@@ -110,8 +106,8 @@ export function ProviderPickerDialog({
           venturePref && usable.some((r) => r.id === venturePref)
             ? (venturePref as LlmProviderId)
             : usable.some((r) => r.id === "anthropic")
-            ? "anthropic"
-            : usable[0]?.id ?? null;
+              ? "anthropic"
+              : (usable[0]?.id ?? null);
         setPicked(preferredId);
       } finally {
         if (!cancelled) setLoading(false);
@@ -173,10 +169,7 @@ export function ProviderPickerDialog({
         }}
       >
         <div style={{ padding: "18px 20px 10px" }}>
-          <h3
-            id="provider-picker-title"
-            style={{ margin: 0, fontSize: 16, fontWeight: 700 }}
-          >
+          <h3 id="provider-picker-title" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
             {title}
           </h3>
           {description && (
@@ -203,9 +196,7 @@ export function ProviderPickerDialog({
           }}
         >
           {loading ? (
-            <div style={{ padding: 24, color: "#9CA3AF", fontSize: 13 }}>
-              Checking providers…
-            </div>
+            <div style={{ padding: 24, color: "#9CA3AF", fontSize: 13 }}>Checking providers…</div>
           ) : rows.length === 0 ? (
             <div
               role="alert"
@@ -219,8 +210,8 @@ export function ProviderPickerDialog({
                 lineHeight: 1.5,
               }}
             >
-              No providers are set up yet. Open the Options tab to sign in
-              to a subscription or paste an API key, then try again.
+              No providers are set up yet. Open the Options tab to sign in to a subscription or
+              paste an API key, then try again.
             </div>
           ) : (
             rows.map((row) => (
@@ -273,12 +264,7 @@ export function ProviderPickerDialog({
           <Button variant="secondary" size="sm" onClick={onCancel}>
             Cancel
           </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleConfirm}
-            disabled={!picked || loading}
-          >
+          <Button variant="primary" size="sm" onClick={handleConfirm} disabled={!picked || loading}>
             Generate with {picked ? providerShortName(picked) : "…"}
           </Button>
         </div>
@@ -336,8 +322,7 @@ function ProviderRow({
               fontWeight: 700,
               padding: "1px 5px",
               borderRadius: 3,
-              background:
-                row.mode === "subscription" ? "#ECFDF5" : "#EEF2FF",
+              background: row.mode === "subscription" ? "#ECFDF5" : "#EEF2FF",
               color: row.mode === "subscription" ? "#047857" : "#4338CA",
               letterSpacing: 0.3,
             }}

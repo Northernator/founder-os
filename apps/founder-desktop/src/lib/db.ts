@@ -1,3 +1,7 @@
+import type { ChatMessage } from "@founder-os/chat-ui";
+import type { Venture, VentureStage } from "@founder-os/domain";
+import { type LlmProviderId, getProvider } from "@founder-os/llm-providers";
+import { invoke } from "@tauri-apps/api/core";
 /**
  * Thin SQLite wrapper over `@tauri-apps/plugin-sql`.
  * The DB file lives in the app's data dir as `founder.db` (auto-resolved
@@ -8,13 +12,6 @@
  * code here runs the schema is guaranteed to exist.
  */
 import Database from "@tauri-apps/plugin-sql";
-import { invoke } from "@tauri-apps/api/core";
-import type { Venture, VentureStage } from "@founder-os/domain";
-import type { ChatMessage } from "@founder-os/chat-ui";
-import {
-  getProvider,
-  type LlmProviderId,
-} from "@founder-os/llm-providers";
 import { pushToast } from "./toasts.js";
 
 /** Resolve a provider's default model from the catalog, or a safe empty
@@ -166,9 +163,7 @@ function rowToVenture(r: VentureRow): Venture {
  * Returns null if the venture has no row or no override set — caller should
  * fall back to the global `app_settings.active_provider`.
  */
-export async function getVentureProvider(
-  ventureId: string
-): Promise<string | null> {
+export async function getVentureProvider(ventureId: string): Promise<string | null> {
   const db = await getDb();
   const rows = await db.select<{ default_provider: string | null }[]>(
     "SELECT default_provider FROM ventures WHERE id = $1",
@@ -187,10 +182,11 @@ export async function setVentureProvider(
   provider: string | null
 ): Promise<void> {
   const db = await getDb();
-  await db.execute(
-    "UPDATE ventures SET default_provider = $1, updated_at = $2 WHERE id = $3",
-    [provider, new Date().toISOString(), ventureId]
-  );
+  await db.execute("UPDATE ventures SET default_provider = $1, updated_at = $2 WHERE id = $3", [
+    provider,
+    new Date().toISOString(),
+    ventureId,
+  ]);
 }
 
 // ──────────────────────────────────────────────
@@ -214,15 +210,13 @@ export async function insertVenture(v: Venture): Promise<void> {
   );
 }
 
-export async function updateVentureStage(
-  id: string,
-  stage: VentureStage
-): Promise<void> {
+export async function updateVentureStage(id: string, stage: VentureStage): Promise<void> {
   const db = await getDb();
-  await db.execute(
-    "UPDATE ventures SET stage = $1, updated_at = $2 WHERE id = $3",
-    [stage, new Date().toISOString(), id]
-  );
+  await db.execute("UPDATE ventures SET stage = $1, updated_at = $2 WHERE id = $3", [
+    stage,
+    new Date().toISOString(),
+    id,
+  ]);
 }
 
 /**
@@ -320,16 +314,13 @@ export async function insertChatMessage(
       msg.createdAt,
       // Only assistant messages carry a provider; user/system turns
       // persist as NULL so the chat UI cleanly skips their caption.
-      msg.role === "assistant" ? msg.provider ?? null : null,
-      msg.role === "assistant" ? msg.providerMode ?? null : null,
+      msg.role === "assistant" ? (msg.provider ?? null) : null,
+      msg.role === "assistant" ? (msg.providerMode ?? null) : null,
     ]
   );
 }
 
-export async function clearChatThread(
-  ventureId: string,
-  stage: VentureStage
-): Promise<void> {
+export async function clearChatThread(ventureId: string, stage: VentureStage): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM chat_messages WHERE thread_id = $1", [
     chatThreadId(ventureId, stage),
@@ -409,13 +400,7 @@ export async function updateRunStatus(
     `UPDATE runs
      SET status = $1, summary = $2, error = $3, completed_at = $4
      WHERE run_id = $5`,
-    [
-      status,
-      opts.summary ?? null,
-      opts.error ?? null,
-      new Date().toISOString(),
-      runId,
-    ]
+    [status, opts.summary ?? null, opts.error ?? null, new Date().toISOString(), runId]
   );
 }
 
@@ -541,9 +526,7 @@ export async function listFindingsForRun(runId: string): Promise<FindingRow[]> {
   return rows.map(rowToFinding);
 }
 
-export async function listFindingsForVenture(
-  ventureId: string
-): Promise<FindingRow[]> {
+export async function listFindingsForVenture(ventureId: string): Promise<FindingRow[]> {
   const db = await getDb();
   const rows = await db.select<FindingRowDb[]>(
     `SELECT id, run_id, venture_id, rule_id, severity, title, message, file_path, created_at
@@ -630,10 +613,7 @@ export async function listFixSuggestionsForRun(
 
 export async function deleteFixSuggestion(findingId: string): Promise<void> {
   const db = await getDb();
-  await db.execute(
-    "DELETE FROM audit_fix_suggestions WHERE finding_id = $1",
-    [findingId]
-  );
+  await db.execute("DELETE FROM audit_fix_suggestions WHERE finding_id = $1", [findingId]);
 }
 
 // ──────────────────────────────────────────────
@@ -714,9 +694,7 @@ export async function upsertArtifact(input: {
   );
 }
 
-export async function listArtifactsForVenture(
-  ventureId: string
-): Promise<ArtifactRow[]> {
+export async function listArtifactsForVenture(ventureId: string): Promise<ArtifactRow[]> {
   const db = await getDb();
   const rows = await db.select<ArtifactRowDb[]>(
     `SELECT artifact_id, venture_id, type, path, hash, status, created_at, updated_at
@@ -895,10 +873,9 @@ export async function drainPlaintextKeysToKeychain(): Promise<{
       // (e.g. "Moved 3 API key(s) into OS keychain"); per-provider save
       // toasts would misrepresent this as user-initiated.
       await keyringSet(row.provider, row.api_key, { silent: true });
-      await db.execute(
-        "UPDATE llm_settings SET api_key = NULL WHERE provider = $1",
-        [row.provider]
-      );
+      await db.execute("UPDATE llm_settings SET api_key = NULL WHERE provider = $1", [
+        row.provider,
+      ]);
       moved += 1;
     } catch (err) {
       console.warn("[keyring] drain deferred for", row.provider, err);
@@ -941,10 +918,9 @@ async function resolveApiKey(row: LlmSettingRow): Promise<string | null> {
     // the keychain.
     if (row.api_key) {
       const db = await getDb();
-      await db.execute(
-        "UPDATE llm_settings SET api_key = NULL WHERE provider = $1",
-        [row.provider]
-      );
+      await db.execute("UPDATE llm_settings SET api_key = NULL WHERE provider = $1", [
+        row.provider,
+      ]);
     }
     return fromKeyring;
   }
@@ -962,10 +938,9 @@ async function resolveApiKey(row: LlmSettingRow): Promise<string | null> {
     try {
       await keyringSet(row.provider, row.api_key, { silent: true });
       const db = await getDb();
-      await db.execute(
-        "UPDATE llm_settings SET api_key = NULL WHERE provider = $1",
-        [row.provider]
-      );
+      await db.execute("UPDATE llm_settings SET api_key = NULL WHERE provider = $1", [
+        row.provider,
+      ]);
     } catch (err) {
       // Keychain unavailable — keep serving the plaintext value so the
       // user's chat doesn't suddenly break. Migration will retry next
@@ -973,8 +948,7 @@ async function resolveApiKey(row: LlmSettingRow): Promise<string | null> {
       console.warn("[keyring] migration deferred", err);
       pushToast({
         kind: "warn",
-        message:
-          "OS keychain unavailable — still using saved keys from SQLite",
+        message: "OS keychain unavailable — still using saved keys from SQLite",
         detail:
           "Your API keys will keep working, but they remain in plaintext on disk. Check your OS credential store.",
       });
@@ -999,9 +973,7 @@ export async function listLlmSettings(): Promise<LlmSetting[]> {
   return settings;
 }
 
-export async function getLlmSetting(
-  provider: string
-): Promise<LlmSetting | null> {
+export async function getLlmSetting(provider: string): Promise<LlmSetting | null> {
   const db = await getDb();
   const rows = await db.select<LlmSettingRow[]>(
     "SELECT provider, api_key, base_url, model, enabled, mode, updated_at FROM llm_settings WHERE provider = $1",

@@ -1,6 +1,9 @@
-import { VentureStage, VENTURE_STAGE_ORDER } from "@founder-os/domain";
+import { VENTURE_STAGE_ORDER, type VentureStage } from "@founder-os/domain";
 
-export type StageTransitionGuard = (fromStage: VentureStage, toStage: VentureStage) => boolean | string;
+export type StageTransitionGuard = (
+  fromStage: VentureStage,
+  toStage: VentureStage
+) => boolean | string;
 
 export interface StageTransition {
   from: VentureStage;
@@ -30,7 +33,8 @@ export function canAdvance(
   for (const guard of guards) {
     const result = guard(currentStage, nextStage);
     if (typeof result === "string") errors.push(result);
-    else if (result === false) errors.push(`Guard blocked transition ${currentStage} → ${nextStage}`);
+    else if (result === false)
+      errors.push(`Guard blocked transition ${currentStage} → ${nextStage}`);
   }
   return errors.length === 0 ? true : errors;
 }

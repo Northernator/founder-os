@@ -1,38 +1,40 @@
-import * as vscode from "vscode";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import {
-  AGENT_REGISTRY,
-  listAgents,
-  type AgentId,
-} from "@founder-os/agent-registry";
+import { AGENT_REGISTRY, type AgentId, listAgents } from "@founder-os/agent-registry";
+import { generateRunId } from "@founder-os/handoff-contract";
+import { dispatchBundle } from "@founder-os/handoff-vscode";
 import type {
-  HostToWebviewMessage,
-  WebviewToHostMessage,
-  InitState,
-  AgentSummary,
-  SessionSummary,
-  AgentHealthMap,
-  TruthRunResponse,
-  AccountSummary,
   AccountSaveInput,
+  AccountSummary,
   AccountsListResponse,
+  AgentHealthMap,
+  AgentSummary,
+  HostToWebviewMessage,
+  InitState,
+  SessionSummary,
+  TruthRunResponse,
+  WebviewToHostMessage,
 } from "@founder-os/mission-control-protocol";
 import { MC_PROTOCOL_VERSION } from "@founder-os/mission-control-protocol";
-import { dispatchBundle } from "@founder-os/handoff-vscode";
-import { generateRunId } from "@founder-os/handoff-contract";
+import * as vscode from "vscode";
 import * as git from "../lib/git.js";
+import * as memoryLib from "../lib/memory.js";
 import * as ollama from "../lib/ollama.js";
 import * as skillsLib from "../lib/skills.js";
-import * as memoryLib from "../lib/memory.js";
-import * as vaultLib from "../lib/vault.js";
 import * as taskFlow from "../lib/task-flow.js";
+import * as vaultLib from "../lib/vault.js";
 import { RUNNERS } from "../runners/all-runners.js";
 
 export type { AgentHealthMap } from "@founder-os/mission-control-protocol";
 
 const MC_UI_INDEX_REL = path.join(
-  "..", "..", "..", "packages", "mission-control-ui", "dist", "index.html",
+  "..",
+  "..",
+  "..",
+  "packages",
+  "mission-control-ui",
+  "dist",
+  "index.html"
 );
 
 let panel: vscode.WebviewPanel | null = null;
@@ -62,7 +64,7 @@ export function setMissionControlBindings(b: MissionControlBindings): void {
 
 export function openMissionControl(
   context: vscode.ExtensionContext,
-  health: AgentHealthMap = {},
+  health: AgentHealthMap = {}
 ): void {
   if (panel) {
     panel.reveal(vscode.ViewColumn.One);
@@ -81,16 +83,18 @@ export function openMissionControl(
         vscode.Uri.file(uiBundleDir(context)),
         vscode.Uri.file(context.extensionPath),
       ],
-    },
+    }
   );
 
   panel.webview.html = renderHtml(context, panel.webview, health);
 
   panel.webview.onDidReceiveMessage((m: WebviewToHostMessage) =>
-    handleWebviewMessage(m, panel!, health, context),
+    handleWebviewMessage(m, panel!, health, context)
   );
 
-  panel.onDidDispose(() => { panel = null; });
+  panel.onDidDispose(() => {
+    panel = null;
+  });
 }
 
 export function postInit(p: vscode.WebviewPanel, health: AgentHealthMap): void {
@@ -153,11 +157,17 @@ function skillScanInput(context: vscode.ExtensionContext): skillsLib.SkillScanIn
 }
 
 function buildExplainPrompt(selection: string, question?: string): string {
-  const ask = question?.trim() || "Explain what this code/text does, line by line where useful, then give a short summary at the end.";
+  const ask =
+    question?.trim() ||
+    "Explain what this code/text does, line by line where useful, then give a short summary at the end.";
   return (
-    "You are the Founder Cowork Explain agent. " + ask + "\n\n" +
+    "You are the Founder Cowork Explain agent. " +
+    ask +
+    "\n\n" +
     "TARGET:\n" +
-    "```\n" + selection + "\n```"
+    "```\n" +
+    selection +
+    "\n```"
   );
 }
 
@@ -165,7 +175,7 @@ async function handleWebviewMessage(
   m: WebviewToHostMessage,
   p: vscode.WebviewPanel,
   health: AgentHealthMap,
-  context: vscode.ExtensionContext,
+  context: vscode.ExtensionContext
 ): Promise<void> {
   try {
     switch (m.type) {
@@ -200,7 +210,7 @@ async function handleWebviewMessage(
       case "settings:open":
         await vscode.commands.executeCommand(
           "workbench.action.openSettings",
-          m.query ?? "founderCowork",
+          m.query ?? "founderCowork"
         );
         if (m.requestId) reply(p, m.requestId, true, null);
         return;
@@ -361,9 +371,10 @@ async function handleWebviewMessage(
       // return inline.
       case "truth:run": {
         const root = requireRepoRoot();
-        const claudeBinary = vscode.workspace
-          .getConfiguration("founderCowork")
-          .get<string>("providers.claude.binaryName") ?? "claude";
+        const claudeBinary =
+          vscode.workspace
+            .getConfiguration("founderCowork")
+            .get<string>("providers.claude.binaryName") ?? "claude";
         const ventureId = vscode.workspace
           .getConfiguration("founderCowork")
           .get<string>("ventureId", path.basename(root));
@@ -383,14 +394,24 @@ async function handleWebviewMessage(
         };
         const result = await dispatchBundle(
           bundle,
-          { ventureRoot: root, claudeBinary, onProgress: () => { /* swallow per-step */ } },
-          RUNNERS,
+          {
+            ventureRoot: root,
+            claudeBinary,
+            onProgress: () => {
+              /* swallow per-step */
+            },
+          },
+          RUNNERS
         );
         // Attempt to read TRUTH.md to return inline.
         const truthPath = path.join(root, "TRUTH.md");
         let body: string | undefined;
         if (fs.existsSync(truthPath)) {
-          try { body = fs.readFileSync(truthPath, "utf8"); } catch { /* no-op */ }
+          try {
+            body = fs.readFileSync(truthPath, "utf8");
+          } catch {
+            /* no-op */
+          }
         }
         const response: TruthRunResponse = {
           runId: result.runId,
@@ -416,7 +437,7 @@ async function handleWebviewMessage(
         await bindings?.spawnSession(
           agentId,
           buildExplainPrompt(m.selection, m.question),
-          "explain",
+          "explain"
         );
         if (m.requestId) reply(p, m.requestId, true, null);
         return;
@@ -424,30 +445,18 @@ async function handleWebviewMessage(
 
       case "task:analyzeRepo": {
         const agentId = m.agentId ?? "claude";
-        await bindings?.spawnSession(
-          agentId,
-          taskFlow.buildAnalyzePrompt(),
-          "analyze",
-        );
+        await bindings?.spawnSession(agentId, taskFlow.buildAnalyzePrompt(), "analyze");
         if (m.requestId) reply(p, m.requestId, true, null);
         return;
       }
       case "task:planTask": {
         const agentId = m.agentId ?? "claude";
-        await bindings?.spawnSession(
-          agentId,
-          taskFlow.buildPlanPrompt(m.goal),
-          "plan",
-        );
+        await bindings?.spawnSession(agentId, taskFlow.buildPlanPrompt(m.goal), "plan");
         if (m.requestId) reply(p, m.requestId, true, null);
         return;
       }
       case "task:executeTask": {
-        await bindings?.spawnSession(
-          m.executorAgentId,
-          taskFlow.buildExecutePrompt(),
-          "exec",
-        );
+        await bindings?.spawnSession(m.executorAgentId, taskFlow.buildExecutePrompt(), "exec");
         if (m.requestId) reply(p, m.requestId, true, null);
         return;
       }
@@ -456,15 +465,11 @@ async function handleWebviewMessage(
         const diff = taskFlow.gatherDiff(root);
         if (!diff) {
           throw new Error(
-            "No diff to review. Make sure the executor produced changes vs the upstream branch.",
+            "No diff to review. Make sure the executor produced changes vs the upstream branch."
           );
         }
         const agentId = m.agentId ?? "claude";
-        await bindings?.spawnSession(
-          agentId,
-          taskFlow.buildReviewPrompt(diff),
-          "review",
-        );
+        await bindings?.spawnSession(agentId, taskFlow.buildReviewPrompt(diff), "review");
         if (m.requestId) reply(p, m.requestId, true, null);
         return;
       }
@@ -483,17 +488,13 @@ async function handleWebviewMessage(
         await bindings?.spawnSession(
           m.executorAgentId,
           taskFlow.buildRevisionPrompt(m.notes),
-          "revise",
+          "revise"
         );
         if (m.requestId) reply(p, m.requestId, true, null);
         return;
       }
       case "task:askGemini": {
-        await bindings?.spawnSession(
-          "gemini",
-          taskFlow.buildAskGeminiPrompt(m.question),
-          "gem",
-        );
+        await bindings?.spawnSession("gemini", taskFlow.buildAskGeminiPrompt(m.question), "gem");
         if (m.requestId) reply(p, m.requestId, true, null);
         return;
       }
@@ -506,7 +507,7 @@ async function handleWebviewMessage(
         await bindings?.spawnSession(
           "gemini",
           taskFlow.buildAskGeminiDiffPrompt(diff, m.question),
-          "gem-diff",
+          "gem-diff"
         );
         if (m.requestId) reply(p, m.requestId, true, null);
         return;
@@ -548,16 +549,17 @@ function uiBundleDir(context: vscode.ExtensionContext): string {
 function renderHtml(
   context: vscode.ExtensionContext,
   webview: vscode.Webview,
-  _health: AgentHealthMap,
+  _health: AgentHealthMap
 ): string {
   const dir = uiBundleDir(context);
   const indexPath = path.join(dir, "index.html");
 
   if (!fs.existsSync(indexPath)) {
     return fallbackHtml(
-      "Mission Control UI bundle missing. Expected: " + indexPath +
+      "Mission Control UI bundle missing. Expected: " +
+        indexPath +
         ". Run `pnpm --filter @founder-os/mission-control-ui build` first, " +
-        "or run `pnpm --filter founder-cowork build` which chains both.",
+        "or run `pnpm --filter founder-cowork build` which chains both."
     );
   }
 
@@ -566,17 +568,27 @@ function renderHtml(
   const nonce = makeNonce();
   const csp =
     "default-src 'none'; " +
-    "img-src " + webview.cspSource + " data:; " +
-    "style-src " + webview.cspSource + " 'unsafe-inline'; " +
-    "script-src " + webview.cspSource + " 'nonce-" + nonce + "' 'unsafe-inline'; " +
-    "font-src " + webview.cspSource + ";";
+    "img-src " +
+    webview.cspSource +
+    " data:; " +
+    "style-src " +
+    webview.cspSource +
+    " 'unsafe-inline'; " +
+    "script-src " +
+    webview.cspSource +
+    " 'nonce-" +
+    nonce +
+    "' 'unsafe-inline'; " +
+    "font-src " +
+    webview.cspSource +
+    ";";
 
   const cspMeta = '<meta http-equiv="Content-Security-Policy" content="' + csp + '" />';
   html = html.replace(/<head>/, "<head>" + cspMeta);
 
   html = html.replace(
     /<script(\s[^>]*)?>/g,
-    (_match, attrs) => "<script" + (attrs || "") + " nonce=\"" + nonce + "\">",
+    (_match, attrs) => "<script" + (attrs || "") + ' nonce="' + nonce + '">'
   );
 
   return html;

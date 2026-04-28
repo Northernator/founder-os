@@ -1,5 +1,5 @@
-import { scanVentureArtifacts } from "./scanner.js";
 import { createLogger } from "@founder-os/logger";
+import { scanVentureArtifacts } from "./scanner.js";
 
 const log = createLogger("artifacts-index:sync");
 

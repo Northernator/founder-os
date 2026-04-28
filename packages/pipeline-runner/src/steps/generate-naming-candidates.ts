@@ -1,3 +1,11 @@
+import {
+  type NamingCandidate,
+  type NamingScan,
+  NamingScanSchema,
+  createEmptyCandidate,
+  createEmptyNamingScan,
+} from "@founder-os/branding-core";
+import type { VentureManifest } from "@founder-os/domain";
 /**
  * Naming candidate generator — invoked from the Brand tab's "AI generate
  * names" button. Takes a `callLlm` caller (injected so pipeline-runner
@@ -22,15 +30,7 @@
  * tab uses when the user clicks the button directly.
  */
 import { createLogger } from "@founder-os/logger";
-import {
-  NamingScanSchema,
-  createEmptyCandidate,
-  createEmptyNamingScan,
-  type NamingCandidate,
-  type NamingScan,
-} from "@founder-os/branding-core";
 import { getBrandNamesDir } from "@founder-os/workspace-core";
-import type { VentureManifest } from "@founder-os/domain";
 import type { Filesystem } from "../fs.js";
 
 const log = createLogger("pipeline-runner:generate-naming-candidates");
@@ -127,9 +127,7 @@ function buildUserPrompt(ctx: GenerateNamingCandidatesContext): string {
  */
 function extractCandidatesJson(raw: string): unknown {
   const text = raw.trim();
-  const fenced =
-    /```json\s*\n([\s\S]*?)\n```/i.exec(text) ||
-    /```\s*\n([\s\S]*?)\n```/i.exec(text);
+  const fenced = /```json\s*\n([\s\S]*?)\n```/i.exec(text) || /```\s*\n([\s\S]*?)\n```/i.exec(text);
   if (fenced && fenced[1]) {
     return JSON.parse(fenced[1]);
   }
@@ -201,7 +199,7 @@ export async function generateNamingCandidatesStep(
     parsed !== null &&
     "candidates" in parsed &&
     Array.isArray((parsed as { candidates: unknown }).candidates)
-      ? ((parsed as { candidates: Array<Record<string, unknown>> }).candidates)
+      ? (parsed as { candidates: Array<Record<string, unknown>> }).candidates
       : [];
 
   if (rawCandidates.length === 0) {
@@ -216,9 +214,7 @@ export async function generateNamingCandidatesStep(
 
   // Existing names for dedup (case-insensitive). Rerunning intentionally
   // adds *new* candidates without duplicating existing ones.
-  const existingNames = new Set(
-    scan.candidates.map((c) => c.name.trim().toLowerCase())
-  );
+  const existingNames = new Set(scan.candidates.map((c) => c.name.trim().toLowerCase()));
 
   const added: NamingCandidate[] = [];
   let dropped = 0;
@@ -232,8 +228,7 @@ export async function generateNamingCandidatesStep(
       // Silent dedup — founder regenerated, same name came back.
       continue;
     }
-    const rationale =
-      typeof rc.rationale === "string" ? rc.rationale.trim() : "";
+    const rationale = typeof rc.rationale === "string" ? rc.rationale.trim() : "";
     const style = typeof rc.style === "string" ? rc.style.trim() : undefined;
     const candidate = createEmptyCandidate({ name, rationale, style });
     added.push(candidate);

@@ -1,3 +1,5 @@
+import { type VentureManifest, VentureManifestSchema } from "@founder-os/domain";
+import { VENTURE_DIR_SKELETON } from "@founder-os/workspace-core";
 /**
  * Disk-side venture operations: folder picking, scaffolding the stage
  * directory tree, and writing the venture.yaml manifest.
@@ -7,8 +9,6 @@
  * folder outside any preconfigured fs scope.
  */
 import { invoke } from "@tauri-apps/api/core";
-import { VENTURE_DIR_SKELETON } from "@founder-os/workspace-core";
-import { VentureManifestSchema, type VentureManifest } from "@founder-os/domain";
 import { pushToast } from "./toasts.js";
 
 /** Short human string for toast details — stringify unknown errors cleanly. */
@@ -111,9 +111,7 @@ export async function deleteVentureDir(rootPath: string): Promise<void> {
  *    (e.g. an old appType value, missing required field, bad enum). Also
  *    warn toast, with the zod issue path so it's actionable.
  */
-export async function loadVentureManifest(
-  rootPath: string
-): Promise<VentureManifest | null> {
+export async function loadVentureManifest(rootPath: string): Promise<VentureManifest | null> {
   let raw: string;
   try {
     raw = await invoke<string>("read_file", {
@@ -143,10 +141,7 @@ export async function loadVentureManifest(
     const issue = result.error.issues[0];
     const where = issue?.path.length ? issue.path.join(".") : "?";
     const what = issue?.message ?? "unknown validation error";
-    console.warn(
-      "[fs] loadVentureManifest: schema validation failed",
-      result.error
-    );
+    console.warn("[fs] loadVentureManifest: schema validation failed", result.error);
     pushToast({
       kind: "warn",
       message: "venture.yaml doesn't match expected shape — using fallback",

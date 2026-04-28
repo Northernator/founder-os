@@ -1,3 +1,12 @@
+import {
+  type LlmProviderCatalogEntry,
+  type LlmProviderId,
+  PROVIDER_CATALOG,
+  getProvider,
+} from "@founder-os/llm-providers";
+import { type CacheStats, inspectCache } from "@founder-os/prompt-master";
+import { Button, Card } from "@founder-os/ui";
+import { invoke } from "@tauri-apps/api/core";
 /**
  * Options tab — paste API keys for any of the supported LLM providers and pick
  * one as the active provider for chat. Settings live in the `llm_settings` +
@@ -16,22 +25,24 @@
  *    providers so a user can't pick one that will fail on first send.
  */
 import React, { useEffect, useState } from "react";
-import { Card, Button } from "@founder-os/ui";
-import {
-  PROVIDER_CATALOG,
-  getProvider,
-  type LlmProviderCatalogEntry,
-  type LlmProviderId,
-} from "@founder-os/llm-providers";
 import * as db from "../../lib/db.js";
 import { streamChat } from "../../lib/llm-client.js";
-import { pushToast } from "../../lib/toasts.js";
-import { SubscriptionsSection } from "./SubscriptionsSection.js";
 import {
+  type SharedConfig,
   readSharedConfig,
   writeSharedConfig,
-  type SharedConfig,
 } from "../../lib/prompt-master-config.js";
+import { pushToast } from "../../lib/toasts.js";
+import { SubscriptionsSection } from "./SubscriptionsSection.js";
+
+/** Wire payload for `pm_event_stats` in src-tauri/src/cache.rs.
+ *  Field names line up with the Rust side's serde rename_all=camelCase. */
+type EventStats = {
+  lifetimeTokensSaved: number;
+  totalEvents: number;
+  cacheHitRate: number;
+  topContexts: Array<{ context: string; tokensSaved: number; count: number }>;
+};
 
 type ProviderFormState = {
   apiKey: string;
@@ -61,10 +72,7 @@ function emptyForm(catalog: LlmProviderCatalogEntry): ProviderFormState {
   };
 }
 
-function hydrateForm(
-  catalog: LlmProviderCatalogEntry,
-  saved: db.LlmSetting
-): ProviderFormState {
+function hydrateForm(catalog: LlmProviderCatalogEntry, saved: db.LlmSetting): ProviderFormState {
   return {
     apiKey: saved.apiKey ?? "",
     baseUrl: saved.baseUrl ?? catalog.defaultBaseUrl,
@@ -81,9 +89,10 @@ function hydrateForm(
 export function OptionsTab() {
   const [forms, setForms] = useState<Record<LlmProviderId, ProviderFormState>>(
     () =>
-      Object.fromEntries(
-        PROVIDER_CATALOG.map((p) => [p.id, emptyForm(p)])
-      ) as Record<LlmProviderId, ProviderFormState>
+      Object.fromEntries(PROVIDER_CATALOG.map((p) => [p.id, emptyForm(p)])) as Record<
+        LlmProviderId,
+        ProviderFormState
+      >
   );
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [hydrating, setHydrating] = useState(true);
@@ -109,9 +118,7 @@ export function OptionsTab() {
         setActiveProvider(active);
       } catch (err) {
         setGlobalError(
-          err instanceof Error
-            ? err.message
-            : `Failed to load settings: ${String(err)}`
+          err instanceof Error ? err.message : `Failed to load settings: ${String(err)}`
         );
       } finally {
         setHydrating(false);
@@ -119,11 +126,7 @@ export function OptionsTab() {
     })();
   }, []);
 
-  const patchForm = (
-    id: LlmProviderId,
-    patch: Partial<ProviderFormState>,
-    markDirty = true
-  ) => {
+  const patchForm = (id: LlmProviderId, patch: Partial<ProviderFormState>, markDirty = true) => {
     setForms((prev) => ({
       ...prev,
       [id]: {
@@ -161,9 +164,7 @@ export function OptionsTab() {
         },
       }));
     } catch (err) {
-      setGlobalError(
-        err instanceof Error ? err.message : `Failed to save ${id}: ${String(err)}`
-      );
+      setGlobalError(err instanceof Error ? err.message : `Failed to save ${id}: ${String(err)}`);
     }
   };
 
@@ -171,9 +172,7 @@ export function OptionsTab() {
     const catalog = getProvider(id);
     setForms((prev) => ({
       ...prev,
-      [id]: prev[id].saved
-        ? hydrateForm(catalog, prev[id].saved!)
-        : emptyForm(catalog),
+      [id]: prev[id].saved ? hydrateForm(catalog, prev[id].saved!) : emptyForm(catalog),
     }));
   };
 
@@ -187,9 +186,7 @@ export function OptionsTab() {
         setActiveProvider(null);
       }
     } catch (err) {
-      setGlobalError(
-        err instanceof Error ? err.message : `Failed to clear ${id}: ${String(err)}`
-      );
+      setGlobalError(err instanceof Error ? err.message : `Failed to clear ${id}: ${String(err)}`);
     }
   };
 
@@ -221,8 +218,7 @@ export function OptionsTab() {
           testing: false,
           testResult: {
             ok: false,
-            message:
-              err instanceof Error ? err.message : String(err),
+            message: err instanceof Error ? err.message : String(err),
           },
         },
         false
@@ -235,9 +231,7 @@ export function OptionsTab() {
       await db.setAppSetting(db.ACTIVE_PROVIDER_KEY, id);
       setActiveProvider(id);
     } catch (err) {
-      setGlobalError(
-        err instanceof Error ? err.message : `Failed to set active: ${String(err)}`
-      );
+      setGlobalError(err instanceof Error ? err.message : `Failed to set active: ${String(err)}`);
     }
   };
 
@@ -255,13 +249,11 @@ export function OptionsTab() {
   return (
     <div style={{ padding: 28, overflow: "auto", height: "100%" }}>
       <div style={{ marginBottom: 20 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px" }}>
-          AI providers
-        </h3>
+        <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px" }}>AI providers</h3>
         <p style={{ margin: 0, fontSize: 13, color: "#6B7280", lineHeight: 1.5 }}>
-          Paste an API key for any provider you want to use. Keys stay on this
-          machine — they live in the app's local SQLite database and are sent
-          only to the provider's API. Ollama runs locally and needs no key.
+          Paste an API key for any provider you want to use. Keys stay on this machine — they live
+          in the app's local SQLite database and are sent only to the provider's API. Ollama runs
+          locally and needs no key.
         </p>
       </div>
 
@@ -362,20 +354,15 @@ export function OptionsTab() {
       <div style={{ height: 20 }} />
 
       <div style={{ marginBottom: 12 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 4px" }}>
-          API keys
-        </h3>
+        <h3 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 4px" }}>API keys</h3>
         <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-          Use an API key from the provider's console. Usage is billed against
-          your API account, not a consumer subscription. Keys are stored in
-          your OS keychain.
+          Use an API key from the provider's console. Usage is billed against your API account, not
+          a consumer subscription. Keys are stored in your OS keychain.
         </p>
       </div>
 
       {hydrating ? (
-        <div style={{ padding: 24, color: "#9CA3AF", fontSize: 14 }}>
-          Loading settings…
-        </div>
+        <div style={{ padding: 24, color: "#9CA3AF", fontSize: 14 }}>Loading settings…</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {PROVIDER_CATALOG.map((catalog) => (
@@ -429,9 +416,7 @@ function ProviderRow({
       >
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
-              {catalog.displayName}
-            </h4>
+            <h4 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{catalog.displayName}</h4>
             {isActive && (
               <span
                 style={{
@@ -523,9 +508,7 @@ function ProviderRow({
         )}
 
         <LabeledField
-          label={`Base URL${
-            form.baseUrl !== catalog.defaultBaseUrl ? " (overridden)" : ""
-          }`}
+          label={`Base URL${form.baseUrl !== catalog.defaultBaseUrl ? " (overridden)" : ""}`}
         >
           <input
             value={form.baseUrl}
@@ -562,20 +545,10 @@ function ProviderRow({
           flexWrap: "wrap",
         }}
       >
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={onSave}
-          disabled={!form.dirty}
-        >
+        <Button variant="primary" size="sm" onClick={onSave} disabled={!form.dirty}>
           Save
         </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onRevert}
-          disabled={!form.dirty}
-        >
+        <Button variant="secondary" size="sm" onClick={onRevert} disabled={!form.dirty}>
           Revert
         </Button>
         <Button
@@ -635,9 +608,7 @@ function LabeledField({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: "#6B7280" }}>
-        {label}
-      </span>
+      <span style={{ fontSize: 11, fontWeight: 600, color: "#6B7280" }}>{label}</span>
       {children}
     </label>
   );
@@ -683,7 +654,11 @@ const secondaryButtonStyle: React.CSSProperties = {
 
 type EditorMode = "auto" | "code" | "cursor" | "windsurf" | "codium" | "custom";
 
-const EDITOR_PRESETS: { mode: Exclude<EditorMode, "auto" | "custom">; label: string; command: string }[] = [
+const EDITOR_PRESETS: {
+  mode: Exclude<EditorMode, "auto" | "custom">;
+  label: string;
+  command: string;
+}[] = [
   { mode: "code", label: "VS Code", command: "code" },
   { mode: "cursor", label: "Cursor", command: "cursor" },
   { mode: "windsurf", label: "Windsurf", command: "windsurf" },
@@ -775,10 +750,9 @@ function EditorPreferenceCard() {
   return (
     <Card title="Editor">
       <p style={{ margin: "0 0 12px", fontSize: 12, color: "#6B7280", lineHeight: 1.5 }}>
-        Used by the “Open in editor” button on Audit findings. Auto-detect tries
-        VS Code, Cursor, Windsurf, then VSCodium in turn — pick a specific one
-        if you want to skip that chain, or supply a custom command to launch
-        any editor that takes a file path on the command line.
+        Used by the “Open in editor” button on Audit findings. Auto-detect tries VS Code, Cursor,
+        Windsurf, then VSCodium in turn — pick a specific one if you want to skip that chain, or
+        supply a custom command to launch any editor that takes a file path on the command line.
       </p>
 
       {hydrating ? (
@@ -801,8 +775,7 @@ function EditorPreferenceCard() {
               <option value="auto">Auto-detect (default)</option>
               {EDITOR_PRESETS.map((p) => (
                 <option key={p.mode} value={p.mode}>
-                  {p.label}{" "}
-                  ({p.command})
+                  {p.label} ({p.command})
                 </option>
               ))}
               <option value="custom">Custom command…</option>
@@ -832,10 +805,9 @@ function EditorPreferenceCard() {
                   lineHeight: 1.5,
                 }}
               >
-                Use <code>{"{path}"}</code> as the placeholder for the file
-                path. If omitted, the path is appended as the last argument.
-                The line is shell-evaluated, so quoting works the way it does
-                in your terminal.
+                Use <code>{"{path}"}</code> as the placeholder for the file path. If omitted, the
+                path is appended as the last argument. The line is shell-evaluated, so quoting works
+                the way it does in your terminal.
               </p>
             </div>
           )}
@@ -844,14 +816,16 @@ function EditorPreferenceCard() {
             <Button variant="primary" size="sm" onClick={handleSave} disabled={!dirty || saving}>
               {saving ? "Saving…" : "Save"}
             </Button>
-            <Button variant="secondary" size="sm" onClick={handleRevert} disabled={!dirty || saving}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRevert}
+              disabled={!dirty || saving}
+            >
               Revert
             </Button>
             <span style={{ fontSize: 12, color: "#6B7280", marginLeft: 4 }}>
-              Saved:{" "}
-              <code style={{ fontSize: 12 }}>
-                {savedValue ?? "auto-detect"}
-              </code>
+              Saved: <code style={{ fontSize: 12 }}>{savedValue ?? "auto-detect"}</code>
             </span>
           </div>
         </>
@@ -863,8 +837,31 @@ function EditorPreferenceCard() {
 function PromptMasterSection() {
   const [config, setConfig] = React.useState<SharedConfig | null>(null);
   const [saving, setSaving] = React.useState(false);
-  const [copied, setCopied] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Live stats. `null` = not yet loaded; defensively-zeroed values
+  // arrive on cache or invoke failure (the wrappers swallow). The
+  // refresh handler also re-runs both fetches in parallel — they're
+  // independent and the inspect path is one SQL query.
+  const [cacheStats, setCacheStats] = React.useState<CacheStats | null>(null);
+  const [eventStats, setEventStats] = React.useState<EventStats | null>(null);
+  const [loadingStats, setLoadingStats] = React.useState(true);
+
+  const refreshStats = React.useCallback(async () => {
+    // Don't blank the existing values while refreshing — that would
+    // make the auto-refresh tick look like a flicker. Errors are
+    // logged but never surface as a card-level error because both
+    // backends are best-effort by contract.
+    try {
+      const [cs, es] = await Promise.all([inspectCache(), invoke<EventStats>("pm_event_stats")]);
+      setCacheStats(cs);
+      setEventStats(es);
+    } catch (err) {
+      console.warn("[options] prompt-master stats refresh failed", err);
+    } finally {
+      setLoadingStats(false);
+    }
+  }, []);
 
   React.useEffect(() => {
     void (async () => {
@@ -876,6 +873,38 @@ function PromptMasterSection() {
       }
     })();
   }, []);
+
+  // Initial fetch + auto-refresh while the tab is visible. The
+  // OptionsTab is unmounted when the user switches tabs, so the
+  // interval is tied to mount lifetime — but we additionally pause on
+  // document.hidden to avoid burning a query when the whole window is
+  // backgrounded. Polling at 30s keeps the numbers fresh-enough without
+  // hammering SQLite while the user is mid-chat.
+  React.useEffect(() => {
+    void refreshStats();
+    let timer: number | null = null;
+    const start = () => {
+      if (timer === null) {
+        timer = window.setInterval(() => void refreshStats(), 30_000);
+      }
+    };
+    const stop = () => {
+      if (timer !== null) {
+        window.clearInterval(timer);
+        timer = null;
+      }
+    };
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else start();
+    };
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [refreshStats]);
 
   const handleToggleStreaming = async (next: boolean) => {
     if (!config) return;
@@ -896,104 +925,21 @@ function PromptMasterSection() {
     }
   };
 
-  const STATS_CMD = "pnpm -F @founder-os/prompt-master cli stats";
-  const handleCopyCmd = async () => {
-    try {
-      await navigator.clipboard.writeText(STATS_CMD);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // clipboard unavailable - silently no-op
-    }
-  };
-
   return (
     <Card title="Prompt Master">
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <p style={{ margin: 0, fontSize: 13, color: "#374151", lineHeight: 1.5 }}>
-          Lossless prompt optimizer wired into every system prompt the app
-          sends - handoff agents, wireframe compiler, research extractor,
-          venture chat. Uses your Claude CLI auth (no API key). Falls back
-          to identity if the CLI isn't reachable, so nothing breaks.
+          Lossless prompt optimizer wired into every system prompt the app sends - handoff agents,
+          wireframe compiler, research extractor, venture chat. Uses your Claude CLI auth (no API
+          key). Falls back to identity if the CLI isn't reachable, so nothing breaks.
         </p>
 
-        <div>
-          <label
-            style={{
-              display: "block",
-              fontSize: 12,
-              fontWeight: 600,
-              color: "#374151",
-              marginBottom: 6,
-            }}
-          >
-            View detailed stats
-          </label>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-            }}
-          >
-            <code
-              style={{
-                fontSize: 12,
-                background: "#F3F4F6",
-                padding: "6px 10px",
-                borderRadius: 6,
-                border: "1px solid #E5E7EB",
-                fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                color: "#1F2937",
-              }}
-            >
-              {STATS_CMD}
-            </code>
-            <Button variant="secondary" size="sm" onClick={handleCopyCmd}>
-              {copied ? "Copied!" : "Copy"}
-            </Button>
-          </div>
-          <p
-            style={{
-              margin: "6px 0 0",
-              fontSize: 11,
-              color: "#6B7280",
-              lineHeight: 1.5,
-            }}
-          >
-            Shows cumulative tokens saved, cache hit rate, and per-context
-            breakdown. Reads <code>~/.founder-os/cache/prompt-master/events.ndjson</code>.
-          </p>
-        </div>
-
-        <div>
-          <label
-            style={{
-              display: "block",
-              fontSize: 12,
-              fontWeight: 600,
-              color: "#374151",
-              marginBottom: 6,
-            }}
-          >
-            Cache
-          </label>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 12,
-              color: "#374151",
-              lineHeight: 1.5,
-            }}
-          >
-            Optimized prompts are cached to disk under{" "}
-            <code>~/.founder-os/cache/prompt-master/</code>. Cap: 200 MB,
-            LRU-evicted when full. Hit rate climbs as common prompt patterns
-            settle in - first call costs a Haiku round-trip (~2-15s), every
-            identical repeat hits the cache in under 10ms.
-          </p>
-        </div>
+        <PromptMasterStats
+          cacheStats={cacheStats}
+          eventStats={eventStats}
+          loading={loadingStats}
+          onRefresh={() => void refreshStats()}
+        />
 
         <div>
           <label
@@ -1025,25 +971,301 @@ function PromptMasterSection() {
                   lineHeight: 1.5,
                 }}
               >
-                <strong>OFF (default):</strong> Fixed-percentage progress
-                (20%, 50%, 95%). Lower overhead, works with any{" "}
-                <code>claude</code> CLI version. Best for short handoffs and
-                slower machines.
+                <strong>OFF (default):</strong> Fixed-percentage progress (20%, 50%, 95%). Lower
+                overhead, works with any <code>claude</code> CLI version. Best for short handoffs
+                and slower machines.
                 <br />
                 <strong>ON:</strong> Token-by-token progress parsed from{" "}
-                <code>claude -p --output-format stream-json</code>. Smoother
-                UX for long generations (build steps, audits). Requires a
-                CLI version that supports stream-json output (Claude Code
-                2024+).
+                <code>claude -p --output-format stream-json</code>. Smoother UX for long generations
+                (build steps, audits). Requires a CLI version that supports stream-json output
+                (Claude Code 2024+).
               </p>
             </span>
           </label>
         </div>
 
-        {error && (
-          <p style={{ margin: 0, fontSize: 12, color: "#DC2626" }}>{error}</p>
-        )}
+        {error && <p style={{ margin: 0, fontSize: 12, color: "#DC2626" }}>{error}</p>}
       </div>
     </Card>
+  );
+}
+
+// ──────────────────────────────────────────────
+// Prompt Master stats panel
+//
+// Two halves: cache (left) and optimisation (right). Wraps onto a
+// single column under ~620px wide. Uses inline styles to match the
+// rest of OptionsTab — the project doesn't load Tailwind for the
+// desktop bundle, so "use existing Tailwind classes" maps to
+// "match the existing inline-style vocabulary".
+// ──────────────────────────────────────────────
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function formatNumber(n: number): string {
+  return new Intl.NumberFormat("en-US").format(n);
+}
+
+function formatPercent(ratio: number): string {
+  return `${(ratio * 100).toFixed(1)}%`;
+}
+
+function PromptMasterStats({
+  cacheStats,
+  eventStats,
+  loading,
+  onRefresh,
+}: {
+  cacheStats: CacheStats | null;
+  eventStats: EventStats | null;
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  // Empty-state gate: no events yet means the user hasn't sent a
+  // chat message since the migration ran, so the optimisation half
+  // would all read zero. Showing a short hint instead of zeros makes
+  // the empty case feel intentional.
+  const isEmpty =
+    !loading &&
+    eventStats !== null &&
+    eventStats.totalEvents === 0 &&
+    (cacheStats?.entries ?? 0) === 0;
+
+  return (
+    <div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 10,
+        }}
+      >
+        <label
+          style={{
+            display: "block",
+            fontSize: 12,
+            fontWeight: 600,
+            color: "#374151",
+          }}
+        >
+          Lifetime stats
+        </label>
+        <Button variant="secondary" size="sm" onClick={onRefresh} disabled={loading}>
+          {loading ? "Refreshing…" : "Refresh"}
+        </Button>
+      </div>
+
+      {isEmpty ? (
+        <p
+          style={{
+            margin: 0,
+            padding: "12px 14px",
+            background: "#F9FAFB",
+            border: "1px solid #E5E7EB",
+            borderRadius: 6,
+            fontSize: 12,
+            color: "#6B7280",
+            lineHeight: 1.5,
+          }}
+        >
+          No optimisations yet — send a chat message to start collecting data.
+        </p>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: 16,
+          }}
+        >
+          <CacheStatsPanel stats={cacheStats} />
+          <OptimisationStatsPanel stats={eventStats} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CacheStatsPanel({ stats }: { stats: CacheStats | null }) {
+  // The cap can legitimately be 0 (defensive zero return from the
+  // backend on inspect failure). Guard division explicitly.
+  const cap = stats?.capBytes ?? 0;
+  const total = stats?.totalBytes ?? 0;
+  const pct = cap > 0 ? Math.min(1, total / cap) : 0;
+
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: "#F9FAFB",
+        border: "1px solid #E5E7EB",
+        borderRadius: 6,
+      }}
+    >
+      <h5
+        style={{
+          margin: "0 0 10px",
+          fontSize: 11,
+          fontWeight: 700,
+          color: "#6B7280",
+          textTransform: "uppercase",
+          letterSpacing: 0.5,
+        }}
+      >
+        Cache
+      </h5>
+      <StatRow label="Entries" value={stats ? formatNumber(stats.entries) : "—"} />
+      <StatRow label="Size" value={stats ? formatBytes(total) : "—"} />
+      <StatRow label="Cap" value={cap > 0 ? formatBytes(cap) : "—"} />
+      <div style={{ marginTop: 10 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: 11,
+            color: "#6B7280",
+            marginBottom: 4,
+          }}
+        >
+          <span>{formatPercent(pct)} full</span>
+          <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+            {stats ? `${formatBytes(total)} / ${cap > 0 ? formatBytes(cap) : "?"}` : ""}
+          </span>
+        </div>
+        <div
+          style={{
+            height: 6,
+            background: "#E5E7EB",
+            borderRadius: 3,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: `${(pct * 100).toFixed(2)}%`,
+              height: "100%",
+              background: "#4338CA",
+              transition: "width 200ms ease-out",
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OptimisationStatsPanel({ stats }: { stats: EventStats | null }) {
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: "#F9FAFB",
+        border: "1px solid #E5E7EB",
+        borderRadius: 6,
+      }}
+    >
+      <h5
+        style={{
+          margin: "0 0 10px",
+          fontSize: 11,
+          fontWeight: 700,
+          color: "#6B7280",
+          textTransform: "uppercase",
+          letterSpacing: 0.5,
+        }}
+      >
+        Optimisation
+      </h5>
+      <div style={{ marginBottom: 10 }}>
+        <div
+          style={{
+            fontSize: 24,
+            fontWeight: 700,
+            color: "#1F2937",
+            // tabular-nums keeps the digits aligned across refreshes;
+            // without it the number jitters horizontally as it grows.
+            fontVariantNumeric: "tabular-nums",
+            lineHeight: 1.1,
+          }}
+        >
+          {stats ? formatNumber(stats.lifetimeTokensSaved) : "—"}
+        </div>
+        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>tokens saved (lifetime)</div>
+      </div>
+      <StatRow label="Cache hit rate" value={stats ? formatPercent(stats.cacheHitRate) : "—"} />
+      <StatRow label="Total events" value={stats ? formatNumber(stats.totalEvents) : "—"} />
+      <div style={{ marginTop: 10 }}>
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: "#6B7280",
+            marginBottom: 4,
+          }}
+        >
+          Top contexts
+        </div>
+        {stats && stats.topContexts.length > 0 ? (
+          <ul
+            style={{
+              listStyle: "none",
+              margin: 0,
+              padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
+            {stats.topContexts.map((c) => (
+              <li
+                key={c.context}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 12,
+                  color: "#374151",
+                }}
+              >
+                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                  {c.context}
+                </span>
+                <span
+                  style={{
+                    color: "#6B7280",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {formatNumber(c.tokensSaved)} ({c.count})
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>—</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        fontSize: 12,
+        color: "#374151",
+        padding: "3px 0",
+      }}
+    >
+      <span style={{ color: "#6B7280" }}>{label}</span>
+      <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{value}</span>
+    </div>
   );
 }

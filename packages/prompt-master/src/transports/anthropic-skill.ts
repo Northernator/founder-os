@@ -72,7 +72,7 @@ export interface AnthropicSkillTransportOpts {
 }
 
 export function createAnthropicSkillTransport(
-  opts: AnthropicSkillTransportOpts,
+  opts: AnthropicSkillTransportOpts
 ): PromptMasterTransport {
   const model = opts.model ?? "claude-haiku-4-5-20251001";
   const system = opts.systemOverride ?? PROMPT_MASTER_SYSTEM;

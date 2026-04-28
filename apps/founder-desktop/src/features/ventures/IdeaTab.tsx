@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
 import type {
+  AppType,
+  EntityType,
   Venture,
   VentureManifest,
-  EntityType,
-  AppType,
   VentureStage,
 } from "@founder-os/domain";
+import { optimize } from "@founder-os/prompt-master";
 import { invoke } from "@tauri-apps/api/core";
-import { joinPath, writeVentureManifest } from "../../lib/venture-io.js";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
 import { pushToast } from "../../lib/toasts.js";
-import { streamChat, pickActiveProvider } from "../../lib/llm-client.js";
+import { joinPath, writeVentureManifest } from "../../lib/venture-io.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -86,19 +88,14 @@ type CheckKey =
 
 type ChecksMap = Record<CheckKey, boolean>;
 
-function computeChecks(
-  canvas: IdeaCanvas,
-  entityType: EntityType
-): ChecksMap {
+function computeChecks(canvas: IdeaCanvas, entityType: EntityType): ChecksMap {
   return {
     problemDefined: canvas.problem.trim().length >= 30,
     targetUserDefined: canvas.targetUser.trim().length >= 15,
     entityTypeDecided: entityType !== "undecided",
     monetizationNoted: canvas.monetizationModel.trim().length >= 10,
-    validationStarted:
-      canvas.talkedToCustomers || canvas.hasLandingPage || canvas.hasEarlySignups,
-    blockersAssessed:
-      canvas.hasBlockers === false || canvas.blockerDetails.trim().length > 0,
+    validationStarted: canvas.talkedToCustomers || canvas.hasLandingPage || canvas.hasEarlySignups,
+    blockersAssessed: canvas.hasBlockers === false || canvas.blockerDetails.trim().length > 0,
   };
 }
 
@@ -143,7 +140,11 @@ const APP_OPTIONS: { value: AppType; label: string }[] = [
 function errDetail(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
-  try { return JSON.stringify(err); } catch { return String(err); }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
 }
 
 function makeid(): string {
@@ -176,22 +177,16 @@ export function IdeaTab({
   onManifestUpdate: (m: VentureManifest) => void;
 }) {
   const [canvas, setCanvas] = useState<IdeaCanvas>(DEFAULT_CANVAS);
-  const [entityType, setEntityType] = useState<EntityType>(
-    manifest?.entityType ?? "undecided"
-  );
+  const [entityType, setEntityType] = useState<EntityType>(manifest?.entityType ?? "undecided");
   const [appType, setAppType] = useState<AppType>(manifest?.appType ?? "saas");
   const [regulated, setRegulated] = useState(manifest?.regulated ?? false);
-  const [takesPayments, setTakesPayments] = useState(
-    manifest?.takesPayments ?? false
-  );
+  const [takesPayments, setTakesPayments] = useState(manifest?.takesPayments ?? false);
   const [handlesPersonalData, setHandlesPersonalData] = useState(
     manifest?.handlesPersonalData ?? false
   );
   const [hiresStaff, setHiresStaff] = useState(manifest?.hiresStaff ?? false);
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">(
-    "saved"
-  );
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
   const [advancing, setAdvancing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [aiFillingDocs, setAiFillingDocs] = useState(false);
@@ -226,7 +221,9 @@ export function IdeaTab({
       .catch(() => {
         if (!cancelled) setCanvas(DEFAULT_CANVAS);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [venture.id, venture.rootPath]);
 
   // Load uploaded docs list from disk.
@@ -250,7 +247,9 @@ export function IdeaTab({
       .catch(() => {
         // dir doesn't exist yet — fine, no docs shown
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [venture.id, venture.rootPath]);
 
   // Debounced save
@@ -319,7 +318,15 @@ export function IdeaTab({
     (patch: Partial<IdeaCanvas>) => {
       setCanvas((prev) => {
         const next = { ...prev, ...patch };
-        scheduleSave(next, entityType, appType, regulated, takesPayments, handlesPersonalData, hiresStaff);
+        scheduleSave(
+          next,
+          entityType,
+          appType,
+          regulated,
+          takesPayments,
+          handlesPersonalData,
+          hiresStaff
+        );
         return next;
       });
     },
@@ -351,7 +358,11 @@ export function IdeaTab({
     const dir = uploadsDir(venture.rootPath);
     // Ensure the uploads directory exists (may not exist on older ventures
     // created before this dir was added to VENTURE_DIR_SKELETON)
-    try { await invoke("mkdir_p", { path: dir }); } catch { /* ignore */ }
+    try {
+      await invoke("mkdir_p", { path: dir });
+    } catch {
+      /* ignore */
+    }
 
     for (const file of Array.from(files)) {
       try {
@@ -383,7 +394,12 @@ export function IdeaTab({
             });
             setUploadedDocs((prev) => [
               ...prev.filter((d) => d.id !== saveName),
-              { id: saveName, name: saveName, savedPath: joinPath(dir, saveName), sizeKb: Math.round(content.length / 1024) },
+              {
+                id: saveName,
+                name: saveName,
+                savedPath: joinPath(dir, saveName),
+                sizeKb: Math.round(content.length / 1024),
+              },
             ]);
             pushToast({ kind: "success", message: `Saved "${saveName}"`, ttlMs: 3000 });
             continue;
@@ -407,7 +423,12 @@ export function IdeaTab({
         });
         setUploadedDocs((prev) => [
           ...prev.filter((d) => d.id !== file.name),
-          { id: file.name, name: file.name, savedPath: joinPath(dir, file.name), sizeKb: Math.round(content.length / 1024) },
+          {
+            id: file.name,
+            name: file.name,
+            savedPath: joinPath(dir, file.name),
+            sizeKb: Math.round(content.length / 1024),
+          },
         ]);
         pushToast({ kind: "success", message: `Saved "${file.name}"`, ttlMs: 3000 });
       } catch (err) {
@@ -449,7 +470,11 @@ export function IdeaTab({
         onManifestUpdate(updated);
       }
     } catch (err) {
-      pushToast({ kind: "warn", message: "Couldn't save before advancing", detail: errDetail(err) });
+      pushToast({
+        kind: "warn",
+        message: "Couldn't save before advancing",
+        detail: errDetail(err),
+      });
     }
     onAdvanceStage("RESEARCHED");
     setAdvancing(false);
@@ -461,7 +486,11 @@ export function IdeaTab({
     try {
       const providerId = await pickActiveProvider(venture.id);
       if (!providerId) {
-        pushToast({ kind: "warn", message: "No AI provider configured", detail: "Open Options tab to add an API key." });
+        pushToast({
+          kind: "warn",
+          message: "No AI provider configured",
+          detail: "Open Options tab to add an API key.",
+        });
         return;
       }
       const docTexts: string[] = [];
@@ -469,9 +498,14 @@ export function IdeaTab({
         try {
           const text = await invoke<string>("read_file", { path: doc.savedPath });
           docTexts.push(`[${doc.name}]\n${text}`);
-        } catch { /* skip unreadable */ }
+        } catch {
+          /* skip unreadable */
+        }
       }
-      if (docTexts.length === 0) { pushToast({ kind: "warn", message: "Couldn't read any uploaded documents" }); return; }
+      if (docTexts.length === 0) {
+        pushToast({ kind: "warn", message: "Couldn't read any uploaded documents" });
+        return;
+      }
       const combined = docTexts.join("\n\n---\n\n").slice(0, 15000);
       const system = `You extract startup idea information from documents to pre-fill a canvas form.
 Only extract information clearly stated. Never invent facts. Return raw JSON only — no markdown, no explanation.
@@ -485,31 +519,81 @@ Omit any field where the document has no relevant info.`;
         competitorNotes: "Competitor weaknesses or differentiation notes",
         customerNotes: "Any customer insights, feedback, or interview notes",
       };
+      const optimizedSystem = await optimize({ prompt: system, context: "research" });
+      console.info(
+        "[prompt-master] idea-extract",
+        optimizedSystem.fallbackUsed
+          ? "(fallback — transport unavailable)"
+          : `tokensSaved=${optimizedSystem.tokensSaved} cacheHit=${optimizedSystem.cacheHit}`
+      );
       let responseText = "";
       await streamChat({
         provider: providerId,
-        messages: [{ role: "user", content: `Documents:\n\n${combined}\n\n---\nExtract these fields if present:\n${JSON.stringify(fields, null, 2)}\n\nReturn JSON only.` }],
-        system,
+        messages: [
+          {
+            role: "user",
+            content: `Documents:\n\n${combined}\n\n---\nExtract these fields if present:\n${JSON.stringify(fields, null, 2)}\n\nReturn JSON only.`,
+          },
+        ],
+        system: optimizedSystem.optimized,
         maxTokens: 1200,
         temperature: 0.1,
-        onDelta: (d) => { responseText += d; },
+        onDelta: (d) => {
+          responseText += d;
+        },
       });
-      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/) || responseText.match(/(\{[\s\S]*\})/);
-      const result = JSON.parse((jsonMatch ? jsonMatch[1] : responseText).trim()) as Record<string, string>;
+      const jsonMatch =
+        responseText.match(/```(?:json)?\s*([\s\S]*?)```/) || responseText.match(/(\{[\s\S]*\})/);
+      const result = JSON.parse((jsonMatch ? jsonMatch[1] : responseText).trim()) as Record<
+        string,
+        string
+      >;
       const patch: Partial<IdeaCanvas> = {};
       let filled = 0;
-      if (result.problem)           { patch.problem = result.problem; filled++; }
-      if (result.targetUser)        { patch.targetUser = result.targetUser; filled++; }
-      if (result.unfairAdvantage)   { patch.unfairAdvantage = result.unfairAdvantage; filled++; }
-      if (result.monetizationModel) { patch.monetizationModel = result.monetizationModel; filled++; }
-      if (result.seenBeforeNotes)   { patch.seenBeforeNotes = result.seenBeforeNotes; patch.seenBefore = true; filled++; }
-      if (result.competitorNotes)   { patch.competitorNotes = result.competitorNotes; patch.hasCompetitors = true; filled++; }
-      if (result.customerNotes)     { patch.customerNotes = result.customerNotes; patch.talkedToCustomers = true; filled++; }
+      if (result.problem) {
+        patch.problem = result.problem;
+        filled++;
+      }
+      if (result.targetUser) {
+        patch.targetUser = result.targetUser;
+        filled++;
+      }
+      if (result.unfairAdvantage) {
+        patch.unfairAdvantage = result.unfairAdvantage;
+        filled++;
+      }
+      if (result.monetizationModel) {
+        patch.monetizationModel = result.monetizationModel;
+        filled++;
+      }
+      if (result.seenBeforeNotes) {
+        patch.seenBeforeNotes = result.seenBeforeNotes;
+        patch.seenBefore = true;
+        filled++;
+      }
+      if (result.competitorNotes) {
+        patch.competitorNotes = result.competitorNotes;
+        patch.hasCompetitors = true;
+        filled++;
+      }
+      if (result.customerNotes) {
+        patch.customerNotes = result.customerNotes;
+        patch.talkedToCustomers = true;
+        filled++;
+      }
       if (filled > 0) {
         updateCanvas(patch);
-        pushToast({ kind: "success", message: `✨ AI filled ${filled} field${filled > 1 ? "s" : ""} from your documents`, ttlMs: 5000 });
+        pushToast({
+          kind: "success",
+          message: `✨ AI filled ${filled} field${filled > 1 ? "s" : ""} from your documents`,
+          ttlMs: 5000,
+        });
       } else {
-        pushToast({ kind: "warn", message: "AI couldn't find matching fields in your documents", ttlMs: 5000 });
+        pushToast({
+          kind: "warn",
+          message: "AI couldn't find matching fields in your documents",
+          ttlMs: 5000,
+        });
       }
     } catch (err) {
       pushToast({ kind: "error", message: "AI fill failed", detail: errDetail(err) });
@@ -519,9 +603,19 @@ Omit any field where the document has no relevant info.`;
   };
 
   return (
-    <div style={{ height: "100%", overflow: "auto", padding: "24px 28px", boxSizing: "border-box" }}>
+    <div
+      style={{ height: "100%", overflow: "auto", padding: "24px 28px", boxSizing: "border-box" }}
+    >
       {/* Top header bar */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, gap: 20 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          marginBottom: 24,
+          gap: 20,
+        }}
+      >
         <div>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>
             Idea Canvas
@@ -536,7 +630,11 @@ Omit any field where the document has no relevant info.`;
             type="button"
             onClick={handleAdvance}
             disabled={!allDone || advancing}
-            title={allDone ? "All must-haves complete — advance to Research stage" : "Complete the checklist first"}
+            title={
+              allDone
+                ? "All must-haves complete — advance to Research stage"
+                : "Complete the checklist first"
+            }
             style={{
               padding: "8px 16px",
               background: allDone ? "#6366F1" : "#E5E7EB",
@@ -557,10 +655,8 @@ Omit any field where the document has no relevant info.`;
 
       {/* Layout: checklist card + content */}
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-
         {/* LEFT — scrollable questions */}
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
-
           {/* Section 1 — Supporting Documents */}
           <Section title="1. Supporting Documents" icon="📎">
             <p style={{ margin: "0 0 8px", fontSize: 12, color: "#6B7280" }}>
@@ -570,20 +666,36 @@ Omit any field where the document has no relevant info.`;
             </p>
             <div
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); handleFileUpload(e.dataTransfer.files); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                handleFileUpload(e.dataTransfer.files);
+              }}
               onClick={() => fileInputRef.current?.click()}
               style={{
-                border: "2px dashed #D1D5DB", borderRadius: 8, padding: "20px 16px",
-                textAlign: "center", cursor: "pointer",
-                background: uploading ? "#F0FDF4" : "#F9FAFB", color: "#6B7280",
-                fontSize: 13, transition: "border-color 0.15s",
+                border: "2px dashed #D1D5DB",
+                borderRadius: 8,
+                padding: "20px 16px",
+                textAlign: "center",
+                cursor: "pointer",
+                background: uploading ? "#F0FDF4" : "#F9FAFB",
+                color: "#6B7280",
+                fontSize: 13,
+                transition: "border-color 0.15s",
               }}
             >
               <div style={{ fontSize: 22, marginBottom: 6 }}>📂</div>
               {uploading ? "Saving…" : "Click or drag files here to upload"}
-              <div style={{ fontSize: 11, marginTop: 4, color: "#9CA3AF" }}>.txt · .md · .csv · .json · .pdf</div>
-              <input ref={fileInputRef} type="file" multiple accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.pdf"
-                style={{ display: "none" }} onChange={(e) => handleFileUpload(e.target.files)} />
+              <div style={{ fontSize: 11, marginTop: 4, color: "#9CA3AF" }}>
+                .txt · .md · .csv · .json · .pdf
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.pdf"
+                style={{ display: "none" }}
+                onChange={(e) => handleFileUpload(e.target.files)}
+              />
             </div>
             {uploadedDocs.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -592,25 +704,60 @@ Omit any field where the document has no relevant info.`;
                   onClick={handleAiFill}
                   disabled={aiFillingDocs}
                   style={{
-                    alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6,
+                    alignSelf: "flex-start",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
                     padding: "8px 14px",
                     background: aiFillingDocs ? "#F9FAFB" : "#EEF2FF",
                     border: `1px solid ${aiFillingDocs ? "#E5E7EB" : "#C7D2FE"}`,
-                    borderRadius: 6, fontSize: 13,
+                    borderRadius: 6,
+                    fontSize: 13,
                     color: aiFillingDocs ? "#9CA3AF" : "#4F46E5",
-                    cursor: aiFillingDocs ? "not-allowed" : "pointer", fontWeight: 600,
+                    cursor: aiFillingDocs ? "not-allowed" : "pointer",
+                    fontWeight: 600,
                   }}
                 >
                   <span>{aiFillingDocs ? "⏳" : "🤖"}</span>
                   {aiFillingDocs ? "AI reading documents…" : "AI fill from documents"}
                 </button>
                 {uploadedDocs.map((doc) => (
-                  <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: 6, fontSize: 13 }}>
+                  <div
+                    key={doc.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "8px 12px",
+                      background: "#FFFFFF",
+                      border: "1px solid #E5E7EB",
+                      borderRadius: 6,
+                      fontSize: 13,
+                    }}
+                  >
                     <span style={{ fontSize: 16 }}>📄</span>
-                    <span style={{ flex: 1, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</span>
-                    {doc.sizeKb > 0 && <span style={{ fontSize: 11, color: "#9CA3AF" }}>{doc.sizeKb} KB</span>}
-                    <button type="button" onClick={() => invoke("open_path", { path: doc.savedPath }).catch(() => {})}
-                      style={{ ...iconBtnStyle, color: "#6366F1" }} title="Open in file manager">↗</button>
+                    <span
+                      style={{
+                        flex: 1,
+                        color: "#111827",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {doc.name}
+                    </span>
+                    {doc.sizeKb > 0 && (
+                      <span style={{ fontSize: 11, color: "#9CA3AF" }}>{doc.sizeKb} KB</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => invoke("open_path", { path: doc.savedPath }).catch(() => {})}
+                      style={{ ...iconBtnStyle, color: "#6366F1" }}
+                      title="Open in file manager"
+                    >
+                      ↗
+                    </button>
                   </div>
                 ))}
               </div>
@@ -619,7 +766,11 @@ Omit any field where the document has no relevant info.`;
 
           {/* Section 2 — The Problem */}
           <Section title="2. The Problem" icon="💡">
-            <Field label="What problem are you solving?" required hint="Be specific — good answers are 1–3 sentences about the pain, not the solution.">
+            <Field
+              label="What problem are you solving?"
+              required
+              hint="Be specific — good answers are 1–3 sentences about the pain, not the solution."
+            >
               <Textarea
                 value={canvas.problem}
                 onChange={(v) => updateCanvas({ problem: v })}
@@ -628,7 +779,11 @@ Omit any field where the document has no relevant info.`;
               />
               <CharCount value={canvas.problem} min={30} />
             </Field>
-            <Field label="Who is it for?" required hint="Describe the specific person with this problem — job title, company size, situation.">
+            <Field
+              label="Who is it for?"
+              required
+              hint="Describe the specific person with this problem — job title, company size, situation."
+            >
               <Textarea
                 value={canvas.targetUser}
                 onChange={(v) => updateCanvas({ targetUser: v })}
@@ -637,7 +792,10 @@ Omit any field where the document has no relevant info.`;
               />
               <CharCount value={canvas.targetUser} min={15} />
             </Field>
-            <Field label="What's your unfair advantage or why now?" hint="Why are you the right person, or why is this the right moment?">
+            <Field
+              label="What's your unfair advantage or why now?"
+              hint="Why are you the right person, or why is this the right moment?"
+            >
               <Textarea
                 value={canvas.unfairAdvantage}
                 onChange={(v) => updateCanvas({ unfairAdvantage: v })}
@@ -656,18 +814,31 @@ Omit any field where the document has no relevant info.`;
                   onChange={(e) => {
                     const v = e.target.value as AppType;
                     setAppType(v);
-                    updateManifestField(entityType, v, regulated, takesPayments, handlesPersonalData, hiresStaff);
+                    updateManifestField(
+                      entityType,
+                      v,
+                      regulated,
+                      takesPayments,
+                      handlesPersonalData,
+                      hiresStaff
+                    );
                   }}
                   style={selectStyle}
                 >
                   {APP_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
                   ))}
                 </select>
               </Field>
             </div>
 
-            <Field label="How will it make money?" required hint="Subscription, one-off purchase, usage-based, marketplace cut, freemium…">
+            <Field
+              label="How will it make money?"
+              required
+              hint="Subscription, one-off purchase, usage-based, marketplace cut, freemium…"
+            >
               <Textarea
                 value={canvas.monetizationModel}
                 onChange={(v) => updateCanvas({ monetizationModel: v })}
@@ -696,7 +867,8 @@ Omit any field where the document has no relevant info.`;
           {/* Section 4 — Business Setup */}
           <Section title="4. Business Setup" icon="🏢">
             <p style={{ margin: "0 0 12px", fontSize: 12, color: "#6B7280" }}>
-              These shape compliance requirements later (UK setup, ICO, insurance). You can change them any time.
+              These shape compliance requirements later (UK setup, ICO, insurance). You can change
+              them any time.
             </p>
             <Field label="UK entity type" required>
               <select
@@ -704,12 +876,24 @@ Omit any field where the document has no relevant info.`;
                 onChange={(e) => {
                   const v = e.target.value as EntityType;
                   setEntityType(v);
-                  updateManifestField(v, appType, regulated, takesPayments, handlesPersonalData, hiresStaff);
+                  updateManifestField(
+                    v,
+                    appType,
+                    regulated,
+                    takesPayments,
+                    handlesPersonalData,
+                    hiresStaff
+                  );
                 }}
-                style={{ ...selectStyle, borderColor: entityType === "undecided" ? "#FCD34D" : "#D1D5DB" }}
+                style={{
+                  ...selectStyle,
+                  borderColor: entityType === "undecided" ? "#FCD34D" : "#D1D5DB",
+                }}
               >
                 {ENTITY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
                 ))}
               </select>
               {entityType === "undecided" && (
@@ -722,25 +906,58 @@ Omit any field where the document has no relevant info.`;
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
               <ToggleRow
                 checked={regulated}
-                onChange={(v) => { setRegulated(v); updateManifestField(entityType, appType, v, takesPayments, handlesPersonalData, hiresStaff); }}
+                onChange={(v) => {
+                  setRegulated(v);
+                  updateManifestField(
+                    entityType,
+                    appType,
+                    v,
+                    takesPayments,
+                    handlesPersonalData,
+                    hiresStaff
+                  );
+                }}
                 label="Regulated industry?"
                 hint="Finance, healthcare, legal, insurance, gambling, childcare, alcohol, pharmacy…"
               />
               <ToggleRow
                 checked={takesPayments}
-                onChange={(v) => { setTakesPayments(v); updateManifestField(entityType, appType, regulated, v, handlesPersonalData, hiresStaff); }}
+                onChange={(v) => {
+                  setTakesPayments(v);
+                  updateManifestField(
+                    entityType,
+                    appType,
+                    regulated,
+                    v,
+                    handlesPersonalData,
+                    hiresStaff
+                  );
+                }}
                 label="Takes payments from customers?"
                 hint="Triggers PCI, payment processor setup, consumer protections"
               />
               <ToggleRow
                 checked={handlesPersonalData}
-                onChange={(v) => { setHandlesPersonalData(v); updateManifestField(entityType, appType, regulated, takesPayments, v, hiresStaff); }}
+                onChange={(v) => {
+                  setHandlesPersonalData(v);
+                  updateManifestField(entityType, appType, regulated, takesPayments, v, hiresStaff);
+                }}
                 label="Handles personal data (names, emails, addresses, behavioural data…)?"
                 hint="Triggers ICO data protection fee, GDPR obligations, Privacy Policy"
               />
               <ToggleRow
                 checked={hiresStaff}
-                onChange={(v) => { setHiresStaff(v); updateManifestField(entityType, appType, regulated, takesPayments, handlesPersonalData, v); }}
+                onChange={(v) => {
+                  setHiresStaff(v);
+                  updateManifestField(
+                    entityType,
+                    appType,
+                    regulated,
+                    takesPayments,
+                    handlesPersonalData,
+                    v
+                  );
+                }}
                 label="Plans to hire staff or contractors?"
                 hint="Triggers employers' liability insurance (£5m min), PAYE, employment contracts"
               />
@@ -761,7 +978,9 @@ Omit any field where the document has no relevant info.`;
               {canvas.talkedToCustomers && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <label style={{ fontSize: 12, color: "#374151", whiteSpace: "nowrap" }}>How many?</label>
+                    <label style={{ fontSize: 12, color: "#374151", whiteSpace: "nowrap" }}>
+                      How many?
+                    </label>
                     <input
                       type="number"
                       min={0}
@@ -804,7 +1023,9 @@ Omit any field where the document has no relevant info.`;
             >
               {canvas.hasEarlySignups && (
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <label style={{ fontSize: 12, color: "#374151", whiteSpace: "nowrap" }}>How many?</label>
+                  <label style={{ fontSize: 12, color: "#374151", whiteSpace: "nowrap" }}>
+                    How many?
+                  </label>
                   <input
                     type="number"
                     min={0}
@@ -863,8 +1084,6 @@ Omit any field where the document has no relevant info.`;
               />
             )}
           </Section>
-
-
         </div>
 
         {/* RIGHT — sticky must-haves checklist */}
@@ -878,12 +1097,29 @@ Omit any field where the document has no relevant info.`;
               boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
             }}
           >
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 12, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#374151",
+                marginBottom: 12,
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+              }}
+            >
               Must-haves
             </div>
 
             {/* Progress bar */}
-            <div style={{ height: 6, background: "#E5E7EB", borderRadius: 3, marginBottom: 14, overflow: "hidden" }}>
+            <div
+              style={{
+                height: 6,
+                background: "#E5E7EB",
+                borderRadius: 3,
+                marginBottom: 14,
+                overflow: "hidden",
+              }}
+            >
               <div
                 style={{
                   height: "100%",
@@ -899,7 +1135,12 @@ Omit any field where the document has no relevant info.`;
             </div>
 
             {(Object.keys(checks) as CheckKey[]).map((key) => (
-              <ChecklistItem key={key} done={checks[key]} label={CHECK_LABELS[key]} hint={CHECK_HINTS[key]} />
+              <ChecklistItem
+                key={key}
+                done={checks[key]}
+                label={CHECK_LABELS[key]}
+                hint={CHECK_HINTS[key]}
+              />
             ))}
 
             <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid #E5E7EB" }}>
@@ -920,17 +1161,22 @@ Omit any field where the document has no relevant info.`;
                   transition: "background 0.2s",
                 }}
               >
-                {advancing ? "Advancing…" : allDone ? "Advance to Research →" : "Complete checklist first"}
+                {advancing
+                  ? "Advancing…"
+                  : allDone
+                    ? "Advance to Research →"
+                    : "Complete checklist first"}
               </button>
               {allDone && (
-                <p style={{ margin: "8px 0 0", fontSize: 11, color: "#059669", textAlign: "center" }}>
+                <p
+                  style={{ margin: "8px 0 0", fontSize: 11, color: "#059669", textAlign: "center" }}
+                >
                   All set! This moves you to the RESEARCHED stage.
                 </p>
               )}
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );
@@ -940,7 +1186,11 @@ Omit any field where the document has no relevant info.`;
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function Section({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
+function Section({
+  title,
+  icon,
+  children,
+}: { title: string; icon: string; children: React.ReactNode }) {
   return (
     <div
       style={{
@@ -1186,7 +1436,13 @@ function ChecklistItem({
       >
         {done && (
           <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-            <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M1 4L3.5 6.5L9 1"
+              stroke="white"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         )}
       </div>
@@ -1194,11 +1450,7 @@ function ChecklistItem({
         <div style={{ fontSize: 12, fontWeight: 600, color: done ? "#111827" : "#6B7280" }}>
           {label}
         </div>
-        {!done && (
-          <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>
-            {hint}
-          </div>
-        )}
+        {!done && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>{hint}</div>}
       </div>
     </div>
   );
@@ -1210,11 +1462,7 @@ function SaveIndicator({ status }: { status: "saved" | "saving" | "unsaved" }) {
     saving: { color: "#6366F1", text: "Saving…" },
     unsaved: { color: "#D97706", text: "Unsaved" },
   }[status];
-  return (
-    <span style={{ fontSize: 11, color: config.color, fontWeight: 600 }}>
-      {config.text}
-    </span>
-  );
+  return <span style={{ fontSize: 11, color: config.color, fontWeight: 600 }}>{config.text}</span>;
 }
 
 // ---------------------------------------------------------------------------

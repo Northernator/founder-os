@@ -162,9 +162,7 @@ export const NonFunctionalRequirementSchema = z.object({
   /** Concrete target value if applicable, e.g. "200ms" or "WCAG 2.1 AA". */
   target: z.string().default(""),
 });
-export type NonFunctionalRequirement = z.infer<
-  typeof NonFunctionalRequirementSchema
->;
+export type NonFunctionalRequirement = z.infer<typeof NonFunctionalRequirementSchema>;
 
 /**
  * Success metric — the founder's definition of "this is working".
@@ -253,9 +251,7 @@ export type ProductSpecCanvas = z.infer<typeof ProductSpecCanvasSchema>;
  * canvas is present. Everything starts blank — the founder fills it
  * via the SpecTab.
  */
-export function createEmptyProductSpecCanvas(
-  ventureId: string
-): ProductSpecCanvas {
+export function createEmptyProductSpecCanvas(ventureId: string): ProductSpecCanvas {
   const now = new Date().toISOString();
   return ProductSpecCanvasSchema.parse({
     ventureId,
@@ -290,9 +286,7 @@ export type ProductSpecRule = {
  * billing endpoints, a game spec needs a feedback loop spec, etc.)
  * extend the signature with `flags`.
  */
-export function deriveProductSpecRules(
-  canvas: ProductSpecCanvas
-): ProductSpecRule[] {
+export function deriveProductSpecRules(canvas: ProductSpecCanvas): ProductSpecRule[] {
   const rules: ProductSpecRule[] = [];
 
   rules.push({
@@ -313,9 +307,7 @@ export function deriveProductSpecRules(
     id: "features.at-least-one-must",
     label: "At least one Must-have feature",
     description: "MVP scope is defined by Must-priority features",
-    pass: canvas.features.some(
-      (f) => f.priority === "must" && f.name.trim().length > 0
-    ),
+    pass: canvas.features.some((f) => f.priority === "must" && f.name.trim().length > 0),
   });
 
   rules.push({
@@ -326,9 +318,7 @@ export function deriveProductSpecRules(
       canvas.features
         .filter((f) => f.priority === "must" && f.name.trim().length > 0)
         .every((f) => f.acceptanceCriteria.length > 0) &&
-      canvas.features.some(
-        (f) => f.priority === "must" && f.name.trim().length > 0
-      ),
+      canvas.features.some((f) => f.priority === "must" && f.name.trim().length > 0),
   });
 
   rules.push({
@@ -351,27 +341,21 @@ export function deriveProductSpecRules(
     id: "api.at-least-one-endpoint",
     label: "API surface has at least one endpoint",
     description: "Even a static-rendered app has at least one auth/me",
-    pass: canvas.apiSurface.endpoints.some(
-      (e) => e.path.trim().length > 0
-    ),
+    pass: canvas.apiSurface.endpoints.some((e) => e.path.trim().length > 0),
   });
 
   rules.push({
     id: "nfr.at-least-one",
     label: "At least one non-functional requirement",
     description: "Performance, security, accessibility — one gate",
-    pass: canvas.nonFunctional.some(
-      (n) => n.description.trim().length > 0
-    ),
+    pass: canvas.nonFunctional.some((n) => n.description.trim().length > 0),
   });
 
   rules.push({
     id: "metrics.at-least-one",
     label: "At least one success metric",
     description: "How will you know v1 is working?",
-    pass: canvas.metrics.some(
-      (m) => m.name.trim().length > 0 && m.target.trim().length > 0
-    ),
+    pass: canvas.metrics.some((m) => m.name.trim().length > 0 && m.target.trim().length > 0),
   });
 
   return rules;
@@ -405,10 +389,7 @@ export function renderProductSpecMarkdown(
   const { ventureName = "" } = opts ?? {};
   const lines: string[] = [];
 
-  lines.push(
-    `# Product Spec${ventureName ? ` — ${ventureName}` : ""}`,
-    ""
-  );
+  lines.push(`# Product Spec${ventureName ? ` — ${ventureName}` : ""}`, "");
 
   if (canvas.purpose.trim()) {
     lines.push("## Purpose", "", canvas.purpose.trim(), "");
@@ -510,10 +491,7 @@ export function renderProductSpecMarkdown(
 
   if (canvas.apiSurface.endpoints.length > 0) {
     lines.push("## API Surface", "");
-    lines.push(
-      "| Method | Path | Description |",
-      "|--------|------|-------------|"
-    );
+    lines.push("| Method | Path | Description |", "|--------|------|-------------|");
     for (const ep of canvas.apiSurface.endpoints) {
       if (!ep.path.trim()) continue;
       lines.push(
@@ -525,9 +503,7 @@ export function renderProductSpecMarkdown(
     // table compact but doesn't lose the request/response notes.
     for (const ep of canvas.apiSurface.endpoints) {
       if (!ep.path.trim()) continue;
-      const hasNotes =
-        ep.requestNotes.trim().length > 0 ||
-        ep.responseNotes.trim().length > 0;
+      const hasNotes = ep.requestNotes.trim().length > 0 || ep.responseNotes.trim().length > 0;
       if (!hasNotes) continue;
       lines.push(`### ${ep.method} ${ep.path.trim()}`, "");
       if (ep.requestNotes.trim()) {
@@ -541,10 +517,7 @@ export function renderProductSpecMarkdown(
 
   if (canvas.nonFunctional.length > 0) {
     lines.push("## Non-functional Requirements", "");
-    lines.push(
-      "| Category | Requirement | Target |",
-      "|----------|-------------|--------|"
-    );
+    lines.push("| Category | Requirement | Target |", "|----------|-------------|--------|");
     for (const n of canvas.nonFunctional) {
       if (!n.description.trim()) continue;
       lines.push(
@@ -556,10 +529,7 @@ export function renderProductSpecMarkdown(
 
   if (canvas.metrics.length > 0) {
     lines.push("## Success Metrics", "");
-    lines.push(
-      "| Metric | Target | Baseline |",
-      "|--------|--------|----------|"
-    );
+    lines.push("| Metric | Target | Baseline |", "|--------|--------|----------|");
     for (const m of canvas.metrics) {
       if (!m.name.trim()) continue;
       lines.push(
@@ -573,11 +543,7 @@ export function renderProductSpecMarkdown(
     lines.push("## Notes", "", canvas.notes.trim(), "");
   }
 
-  lines.push(
-    "---",
-    `_Rendered from spec-canvas.json on ${new Date().toISOString()}_`,
-    ""
-  );
+  lines.push("---", `_Rendered from spec-canvas.json on ${new Date().toISOString()}_`, "");
 
   return lines.join("\n");
 }

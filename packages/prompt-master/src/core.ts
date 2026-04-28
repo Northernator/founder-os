@@ -1,3 +1,7 @@
+import { getCached, putCached } from "./cache.js";
+import { getTransport } from "./client.js";
+import { estimateTokens, hashKey } from "./hash.js";
+import { emit } from "./telemetry.js";
 /**
  * Core optimize() dispatcher.
  *
@@ -16,17 +20,17 @@
  * call site without defensive try/catch at every site.
  */
 import type { OptimizeInput, OptimizeResult, PromptContext } from "./types.js";
-import { getCached, putCached } from "./cache.js";
-import { hashKey, estimateTokens } from "./hash.js";
-import { getTransport } from "./client.js";
-import { emit } from "./telemetry.js";
 
 export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
   const start = Date.now();
   const context: PromptContext = input.context ?? "other";
   const hash =
     input.cacheKey ??
-    (await hashKey({ prompt: input.prompt, model: input.model, maxLossBudget: input.maxLossBudget }));
+    (await hashKey({
+      prompt: input.prompt,
+      model: input.model,
+      maxLossBudget: input.maxLossBudget,
+    }));
 
   // 1. Cache lookup
   const cached = await getCached(hash);
@@ -76,7 +80,10 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
       await emit({
         event: "prompt_master.fallback",
         context,
-        reason: transport.name === "null" ? "no transport configured" : "transport returned input unchanged",
+        reason:
+          transport.name === "null"
+            ? "no transport configured"
+            : "transport returned input unchanged",
       });
     } else {
       await emit({

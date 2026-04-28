@@ -1,11 +1,19 @@
+import { createLogger } from "@founder-os/logger";
+import { VENTURE_DIR_SKELETON } from "@founder-os/workspace-core";
 /**
  * Tauri file system adapter used by the desktop app.
  * All desktop-side file IO goes through this package so the Tauri capabilities
  * surface area stays small and auditable.
  */
-import { BaseDirectory, readTextFile, writeTextFile, mkdir, exists as tauriExists, rename, readDir } from "@tauri-apps/plugin-fs";
-import { VENTURE_DIR_SKELETON } from "@founder-os/workspace-core";
-import { createLogger } from "@founder-os/logger";
+import {
+  BaseDirectory,
+  mkdir,
+  readDir,
+  readTextFile,
+  rename,
+  exists as tauriExists,
+  writeTextFile,
+} from "@tauri-apps/plugin-fs";
 
 const logger = createLogger("workspace-tauri");
 
@@ -26,7 +34,11 @@ export async function exists(filePath: string, opts: FsOpts = {}): Promise<boole
   }
 }
 
-export async function writeJson(filePath: string, value: unknown, opts: FsOpts = {}): Promise<void> {
+export async function writeJson(
+  filePath: string,
+  value: unknown,
+  opts: FsOpts = {}
+): Promise<void> {
   const lastSlash = filePath.lastIndexOf("/");
   if (lastSlash > 0) {
     await ensureDir(filePath.slice(0, lastSlash), opts);
@@ -39,7 +51,11 @@ export async function readJson<T>(filePath: string, opts: FsOpts = {}): Promise<
   return JSON.parse(raw) as T;
 }
 
-export async function writeText(filePath: string, contents: string, opts: FsOpts = {}): Promise<void> {
+export async function writeText(
+  filePath: string,
+  contents: string,
+  opts: FsOpts = {}
+): Promise<void> {
   const lastSlash = filePath.lastIndexOf("/");
   if (lastSlash > 0) {
     await ensureDir(filePath.slice(0, lastSlash), opts);

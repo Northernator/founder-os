@@ -111,14 +111,11 @@ export function useAbortableTask(): UseAbortableTaskResult {
     setStopping(false);
   }, []);
 
-  const wasCancelled = useCallback(
-    (controller: AbortController, err: unknown): boolean => {
-      if (controller.signal.aborted) return true;
-      if (err instanceof Error && err.name === "AbortError") return true;
-      return false;
-    },
-    []
-  );
+  const wasCancelled = useCallback((controller: AbortController, err: unknown): boolean => {
+    if (controller.signal.aborted) return true;
+    if (err instanceof Error && err.name === "AbortError") return true;
+    return false;
+  }, []);
 
   return { ref, stopping, begin, cancel, clear, wasCancelled };
 }

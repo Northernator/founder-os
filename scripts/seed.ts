@@ -7,8 +7,8 @@
  */
 
 import * as fs from "node:fs";
-import * as path from "node:path";
 import * as os from "node:os";
+import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 
@@ -76,7 +76,13 @@ async function main() {
     path.join(ROOT, "packages", "pipeline-runner", "src", "index.ts")
   ).href;
 
-  let runPipeline: ((opts: unknown) => Promise<{ success: boolean; error?: string; plan: { steps: Array<{ name: string; status: string }> } }>) | null = null;
+  let runPipeline:
+    | ((opts: unknown) => Promise<{
+        success: boolean;
+        error?: string;
+        plan: { steps: Array<{ name: string; status: string }> };
+      }>)
+    | null = null;
 
   try {
     const mod = await import(runnerPath);
@@ -99,10 +105,7 @@ async function main() {
 
       console.log("\n");
       for (const s of result.plan.steps) {
-        const icon =
-          s.status === "done" ? "✅"
-          : s.status === "skipped" ? "⏭️"
-          : "❌";
+        const icon = s.status === "done" ? "✅" : s.status === "skipped" ? "⏭️" : "❌";
         console.log(`  ${icon} ${s.name}`);
       }
 
@@ -164,9 +167,7 @@ async function main() {
     const bundles = fs.readdirSync(inboxDir).filter((f) => f.endsWith(".json"));
     if (bundles.length > 0) {
       ok(`Handoff bundle ready: ${bundles[0]}`);
-      const bundle = JSON.parse(
-        fs.readFileSync(path.join(inboxDir, bundles[0]), "utf-8")
-      );
+      const bundle = JSON.parse(fs.readFileSync(path.join(inboxDir, bundles[0]), "utf-8"));
       console.log(`  runId: ${bundle.runId}`);
       console.log(`  type:  ${bundle.type}`);
     } else {
@@ -176,7 +177,11 @@ async function main() {
 
   // ── 6. Summary ────────────────────────────────────
   console.log("\n" + "═".repeat(50));
-  console.log(passed === expected.length ? "🎉 Full pipeline verified!" : "⚠️  Partial run — see missing files above");
+  console.log(
+    passed === expected.length
+      ? "🎉 Full pipeline verified!"
+      : "⚠️  Partial run — see missing files above"
+  );
   console.log(`\nDemo venture: ${DEMO_VENTURE_ROOT}`);
   if (passed < expected.length) {
     console.log("\n💡 Tip: Make sure you ran `pnpm rebuild` after `pnpm install`");
@@ -222,10 +227,18 @@ function scaffoldDirectories(root: string) {
   ok(`Scaffolded ${dirs.length} directories`);
 }
 
-function step(msg: string) { console.log(`\n📌 ${msg}`); }
-function ok(msg: string)   { console.log(`✅ ${msg}`); }
-function warn(msg: string) { console.log(`⚠️  ${msg}`); }
-function fail(msg: string) { console.log(`❌ ${msg}`); }
+function step(msg: string) {
+  console.log(`\n📌 ${msg}`);
+}
+function ok(msg: string) {
+  console.log(`✅ ${msg}`);
+}
+function warn(msg: string) {
+  console.log(`⚠️  ${msg}`);
+}
+function fail(msg: string) {
+  console.log(`❌ ${msg}`);
+}
 
 main().catch((err) => {
   console.error("\n❌ Seed failed:", err);

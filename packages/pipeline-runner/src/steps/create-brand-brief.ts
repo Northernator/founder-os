@@ -1,11 +1,11 @@
-import { createLogger } from "@founder-os/logger";
-import { getBrandKitDir } from "@founder-os/workspace-core";
 import {
-  createBrandBrief,
   type BrandBrief,
   type BrandPersonality,
+  createBrandBrief,
 } from "@founder-os/branding-core";
 import type { VentureManifest } from "@founder-os/domain";
+import { createLogger } from "@founder-os/logger";
+import { getBrandKitDir } from "@founder-os/workspace-core";
 import type { Filesystem } from "../fs.js";
 
 const log = createLogger("pipeline-runner:create-brand-brief");

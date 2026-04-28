@@ -40,14 +40,17 @@ export function loadNodePty(): typeof import("node-pty") {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(
-      "Founder Cowork: node-pty failed to load from " + ptyPath + ".\n\n" +
+      "Founder Cowork: node-pty failed to load from " +
+        ptyPath +
+        ".\n\n" +
         "Likely causes:\n" +
         "  • The build step didn't copy native deps. Run `pnpm --filter founder-cowork build`.\n" +
         "  • node-pty's prebuilt binary is missing. From the repo root run:\n" +
         "      pnpm install --force\n" +
         "    and check that `node-pty` is listed in pnpm.onlyBuiltDependencies.\n" +
         "  • The VSIX was packaged before out/native/ existed. Re-run `pnpm --filter founder-cowork package`.\n\n" +
-        "Underlying error: " + msg,
+        "Underlying error: " +
+        msg
     );
   }
 }

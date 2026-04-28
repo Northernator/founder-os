@@ -48,9 +48,7 @@ export async function readSharedConfig(): Promise<SharedConfig> {
   }
 }
 
-export async function writeSharedConfig(
-  update: Partial<SharedConfig>,
-): Promise<void> {
+export async function writeSharedConfig(update: Partial<SharedConfig>): Promise<void> {
   const existing = await readSharedConfig();
   const next: SharedConfig = {
     promptMaster: {

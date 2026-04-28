@@ -86,11 +86,7 @@ export function listSkills(input: SkillScanInput): SkillSummary[] {
   return out;
 }
 
-export function readSkill(
-  input: SkillScanInput,
-  id: string,
-  source: SkillSource,
-): SkillBody {
+export function readSkill(input: SkillScanInput, id: string, source: SkillSource): SkillBody {
   const dirMap = new Map(resolveSourceDirs(input));
   const dir = dirMap.get(source);
   if (!dir) throw new Error("unknown skill source: " + source);
@@ -128,7 +124,7 @@ export function parseFrontmatter(text: string): {
     let value = trimmed.slice(colon + 1).trim();
     // Strip surrounding quotes if present.
     if (
-      (value.startsWith("\"") && value.endsWith("\"")) ||
+      (value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))
     ) {
       value = value.slice(1, -1);
@@ -138,11 +134,7 @@ export function parseFrontmatter(text: string): {
   return { frontmatter: fm, body };
 }
 
-function readSummary(
-  id: string,
-  filePath: string,
-  source: SkillSource,
-): SkillSummary {
+function readSummary(id: string, filePath: string, source: SkillSource): SkillSummary {
   const text = fs.readFileSync(filePath, "utf8");
   const { frontmatter } = parseFrontmatter(text);
   const stat = fs.statSync(filePath);
@@ -170,8 +162,11 @@ function resolveSourceDirs(input: SkillScanInput): Array<[SkillSource, string | 
 
 function sourceRank(s: SkillSource): number {
   switch (s) {
-    case "workspace": return 0;
-    case "user":      return 1;
-    case "bundled":   return 2;
+    case "workspace":
+      return 0;
+    case "user":
+      return 1;
+    case "bundled":
+      return 2;
   }
 }

@@ -1,5 +1,5 @@
-import { z } from "zod";
 import type { BrandBrief } from "@founder-os/branding-core";
+import { z } from "zod";
 
 export const BrandPackManifestSchema = z.object({
   ventureId: z.string(),

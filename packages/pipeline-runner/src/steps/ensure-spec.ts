@@ -1,3 +1,10 @@
+import {
+  type ProductSpecCanvas,
+  ProductSpecCanvasSchema,
+  type VentureManifest,
+  createEmptyProductSpecCanvas,
+  renderProductSpecMarkdown,
+} from "@founder-os/domain";
 /**
  * ensure-spec (pt.41) — deterministic step that scaffolds
  * `06_product/specs/spec-canvas.json` if missing, then renders the
@@ -23,17 +30,10 @@
  */
 import { createLogger } from "@founder-os/logger";
 import {
-  getSpecsDir,
-  getSpecCanvasPath,
   getProductSpecMarkdownPath,
+  getSpecCanvasPath,
+  getSpecsDir,
 } from "@founder-os/workspace-core";
-import {
-  ProductSpecCanvasSchema,
-  createEmptyProductSpecCanvas,
-  renderProductSpecMarkdown,
-  type ProductSpecCanvas,
-  type VentureManifest,
-} from "@founder-os/domain";
 import type { Filesystem } from "../fs.js";
 
 const log = createLogger("pipeline-runner:ensure-spec");
@@ -51,9 +51,7 @@ export type EnsureSpecResult = {
   canvas: ProductSpecCanvas;
 };
 
-export async function ensureSpecStep(
-  ctx: EnsureSpecContext
-): Promise<EnsureSpecResult> {
+export async function ensureSpecStep(ctx: EnsureSpecContext): Promise<EnsureSpecResult> {
   const dir = getSpecsDir(ctx.ventureRoot);
   await ctx.fs.mkdir(dir);
 
@@ -88,10 +86,7 @@ export async function ensureSpecStep(
     }
   } else {
     canvas = createEmptyProductSpecCanvas(ctx.manifest.id);
-    await ctx.fs.writeFile(
-      canvasPath,
-      JSON.stringify(canvas, null, 2) + "\n"
-    );
+    await ctx.fs.writeFile(canvasPath, JSON.stringify(canvas, null, 2) + "\n");
     log.info(`Created spec canvas at ${canvasPath}`);
   }
 

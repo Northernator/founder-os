@@ -18,12 +18,9 @@
  * different account creds is unsafe (the CLI re-reads on every API call).
  */
 
-import type * as nodePty from "node-pty";
-import type {
-  AgentDefinition,
-  AgentId,
-} from "@founder-os/agent-registry";
 import type { AccountManager } from "@founder-os/agent-accounts";
+import type { AgentDefinition, AgentId } from "@founder-os/agent-registry";
+import type * as nodePty from "node-pty";
 
 // ──────────────────────────────────────────────
 // Public types
@@ -120,17 +117,21 @@ export class AgentRunner {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(
-        "AgentRunner.spawn(" + opts.agent.id + ") failed: " + msg +
-          "\n  cwd=" + opts.cwd +
-          "\n  file=" + file +
-          "\n  args=" + JSON.stringify(args),
+        "AgentRunner.spawn(" +
+          opts.agent.id +
+          ") failed: " +
+          msg +
+          "\n  cwd=" +
+          opts.cwd +
+          "\n  file=" +
+          file +
+          "\n  args=" +
+          JSON.stringify(args)
       );
     }
 
     const id =
-      this.idPrefix + "-" +
-      Date.now().toString(36) + "-" +
-      Math.random().toString(36).slice(2, 8);
+      this.idPrefix + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
 
     if (opts.agent.promptInjection === "stdin") {
       setTimeout(() => {
@@ -157,19 +158,23 @@ export class AgentRunner {
           proc.resize(newCols, newRows);
           session.cols = newCols;
           session.rows = newRows;
-        } catch { /* dead pty */ }
+        } catch {
+          /* dead pty */
+        }
       },
       kill: (signal) => {
-        try { proc.kill(signal); } catch { /* already dead */ }
+        try {
+          proc.kill(signal);
+        } catch {
+          /* already dead */
+        }
       },
       onData: (cb) => {
         const sub = proc.onData(cb);
         return { dispose: () => sub.dispose() };
       },
       onExit: (cb) => {
-        const sub = proc.onExit((e) =>
-          cb({ exitCode: e.exitCode, signal: e.signal ?? undefined }),
-        );
+        const sub = proc.onExit((e) => cb({ exitCode: e.exitCode, signal: e.signal ?? undefined }));
         return { dispose: () => sub.dispose() };
       },
     };
@@ -188,7 +193,7 @@ export class AgentRunner {
    */
   private spawnSerialised(
     opts: SpawnOptions,
-    accountManager: AccountManager,
+    accountManager: AccountManager
   ): Promise<AgentSession> {
     if (!opts.account) {
       return this.spawnImmediate(opts) as never;
@@ -208,7 +213,11 @@ export class AgentRunner {
           try {
             session = this.spawnImmediate(opts);
           } catch (err) {
-            try { await handle.restore(); } catch { /* log via parent */ }
+            try {
+              await handle.restore();
+            } catch {
+              /* log via parent */
+            }
             if (!resolved) reject(err);
             return;
           }
@@ -218,7 +227,11 @@ export class AgentRunner {
           await new Promise<void>((finishMutex) => {
             const sub = session.onExit(async () => {
               sub.dispose();
-              try { await handle.restore(); } catch { /* swallowed */ }
+              try {
+                await handle.restore();
+              } catch {
+                /* swallowed */
+              }
               finishMutex();
             });
           });
@@ -242,21 +255,25 @@ export interface LaunchPlan {
 export function buildLaunch(agent: AgentDefinition, prompt: string): LaunchPlan {
   const file = agent.launchCmd;
   switch (agent.promptInjection) {
-    case "argv":         return { file, args: [prompt] };
-    case "flag-prompt":  return { file, args: ["--prompt", prompt] };
-    case "stdin":        return { file, args: [] };
+    case "argv":
+      return { file, args: [prompt] };
+    case "flag-prompt":
+      return { file, args: ["--prompt", prompt] };
+    case "stdin":
+      return { file, args: [] };
     case "http":
       throw new Error(
-        "buildLaunch: agent " + agent.id +
+        "buildLaunch: agent " +
+          agent.id +
           " uses http injection and shouldn't be spawned as a PTY. " +
-          "Call its HTTP endpoint instead.",
+          "Call its HTTP endpoint instead."
       );
   }
 }
 
 export function mergeEnv(
   agent: AgentDefinition,
-  extra: Record<string, string> | undefined,
+  extra: Record<string, string> | undefined
 ): Record<string, string> {
   const base: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) {

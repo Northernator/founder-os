@@ -8,13 +8,7 @@
  */
 
 import * as path from "node:path";
-import {
-  listEntries,
-  readEntry,
-  writeEntry,
-  deleteEntry,
-  idFromTitle,
-} from "./markdown-store.js";
+import { deleteEntry, idFromTitle, listEntries, readEntry, writeEntry } from "./markdown-store.js";
 
 export type MemoryType = "user" | "feedback" | "project" | "reference";
 
@@ -70,10 +64,7 @@ export function readMemory(workspaceRoot: string, id: string): MemoryEntryBody {
   };
 }
 
-export function saveMemory(
-  workspaceRoot: string,
-  input: MemorySaveInput,
-): MemoryEntry {
+export function saveMemory(workspaceRoot: string, input: MemorySaveInput): MemoryEntry {
   const id = input.id?.trim() || idFromTitle(input.name);
   const written = writeEntry(
     memoryDir(workspaceRoot),
@@ -83,7 +74,7 @@ export function saveMemory(
       description: input.description,
       type: input.type,
     },
-    input.body,
+    input.body
   );
   return {
     id: written.id,

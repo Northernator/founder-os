@@ -16,18 +16,15 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { HandoffBundle, HandoffResult } from "@founder-os/handoff-contract";
+import {
+  type ProgressCallback,
+  makeFailureResult,
+  makeSuccessResult,
+} from "@founder-os/handoff-vscode";
 import { createLogger } from "@founder-os/logger";
 import { optimize } from "@founder-os/prompt-master";
 import { readSharedConfig } from "@founder-os/prompt-master/node";
-import type {
-  HandoffBundle,
-  HandoffResult,
-} from "@founder-os/handoff-contract";
-import {
-  makeSuccessResult,
-  makeFailureResult,
-  type ProgressCallback,
-} from "@founder-os/handoff-vscode";
 
 const log = createLogger("founder-cowork:handoff-sdk-runner");
 
@@ -48,9 +45,7 @@ export interface RunHandoffOptions {
   onProgress: ProgressCallback;
 }
 
-export async function runHandoffWithSdk(
-  opts: RunHandoffOptions,
-): Promise<HandoffResult> {
+export async function runHandoffWithSdk(opts: RunHandoffOptions): Promise<HandoffResult> {
   const {
     bundle,
     ventureRoot,
@@ -63,16 +58,12 @@ export async function runHandoffWithSdk(
     onProgress,
   } = opts;
 
-  log.info(
-    "runHandoffWithSdk(" + bundle.type + ") starting for run " + bundle.runId,
-  );
+  log.info("runHandoffWithSdk(" + bundle.type + ") starting for run " + bundle.runId);
 
   emit(onProgress, bundle.runId, 10, "Preparing context...");
 
   const contextParts: string[] = [
-    "## Handoff Bundle\n```json\n" +
-      JSON.stringify(bundle.payload, null, 2) +
-      "\n```",
+    "## Handoff Bundle\n```json\n" + JSON.stringify(bundle.payload, null, 2) + "\n```",
   ];
 
   for (const ref of bundle.artifactRefs) {
@@ -81,9 +72,7 @@ export async function runHandoffWithSdk(
       try {
         const content = fs.readFileSync(absPath, "utf-8");
         contextParts.push(
-          "## Artifact: " + ref.type + " (" + ref.path + ")\n```\n" +
-            content +
-            "\n```",
+          "## Artifact: " + ref.type + " (" + ref.path + ")\n```\n" + content + "\n```"
         );
       } catch (e) {
         log.warn("Couldn't read artifact " + ref.path + ": " + String(e));
@@ -136,8 +125,13 @@ export async function runHandoffWithSdk(
       path: p,
       type: "file",
     })),
-    "Run " + bundle.runId + " (" + bundle.type + ") complete. " +
-      producedPaths.length + " files produced.",
+    "Run " +
+      bundle.runId +
+      " (" +
+      bundle.type +
+      ") complete. " +
+      producedPaths.length +
+      " files produced."
   );
 }
 
@@ -173,7 +167,10 @@ function parseStreamJsonChunk(buffer: string, chunk: string): { text: string; re
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
-      const event = JSON.parse(line) as { type?: string; message?: { content?: Array<{ type?: string; text?: string }> } };
+      const event = JSON.parse(line) as {
+        type?: string;
+        message?: { content?: Array<{ type?: string; text?: string }> };
+      };
       if (event.type === "assistant") {
         for (const block of event.message?.content ?? []) {
           if (block.type === "text" && typeof block.text === "string") {
@@ -199,18 +196,17 @@ function spawnClaude(opts: SpawnClaudeOpts): Promise<string> {
     const args = streaming
       ? [
           "-p",
-          "--system-prompt", opts.systemPrompt,
-          "--model", opts.model,
-          "--max-turns", "1",
-          "--output-format", "stream-json",
+          "--system-prompt",
+          opts.systemPrompt,
+          "--model",
+          opts.model,
+          "--max-turns",
+          "1",
+          "--output-format",
+          "stream-json",
           "--verbose",
         ]
-      : [
-          "-p",
-          "--system-prompt", opts.systemPrompt,
-          "--model", opts.model,
-          "--max-turns", "1",
-        ];
+      : ["-p", "--system-prompt", opts.systemPrompt, "--model", opts.model, "--max-turns", "1"];
 
     const child = spawn(opts.binary, args, {
       stdio: ["pipe", "pipe", "pipe"],
@@ -264,12 +260,7 @@ function spawnClaude(opts: SpawnClaudeOpts): Promise<string> {
     child.on("close", (code: number | null) => {
       clearTimeout(timer);
       if (code !== 0) {
-        reject(
-          new Error(
-            "claude CLI exit " + (code ?? "?") + " - " +
-              stderr.slice(0, 240).trim(),
-          ),
-        );
+        reject(new Error("claude CLI exit " + (code ?? "?") + " - " + stderr.slice(0, 240).trim()));
         return;
       }
       // Streaming mode returns the parsed text; non-streaming returns raw stdout.
@@ -293,13 +284,30 @@ function spawnClaude(opts: SpawnClaudeOpts): Promise<string> {
 export function writeCodeBlocks(
   response: string,
   ventureRoot: string,
-  outputSubdir: string,
+  outputSubdir: string
 ): string[] {
   const written: string[] = [];
   const skipTags = new Set([
-    "json", "typescript", "javascript", "ts", "js", "tsx", "jsx",
-    "bash", "sh", "shell", "powershell", "ps1", "yaml", "yml",
-    "html", "css", "md", "markdown", "text", "txt",
+    "json",
+    "typescript",
+    "javascript",
+    "ts",
+    "js",
+    "tsx",
+    "jsx",
+    "bash",
+    "sh",
+    "shell",
+    "powershell",
+    "ps1",
+    "yaml",
+    "yml",
+    "html",
+    "css",
+    "md",
+    "markdown",
+    "text",
+    "txt",
   ]);
 
   const fenceRegex = /```([^\s`]+)\s*\n([\s\S]*?)```/g;
@@ -324,12 +332,7 @@ export function writeCodeBlocks(
   return written;
 }
 
-function emit(
-  cb: ProgressCallback,
-  runId: string,
-  percentComplete: number,
-  message: string,
-): void {
+function emit(cb: ProgressCallback, runId: string, percentComplete: number, message: string): void {
   cb({
     runId,
     status: percentComplete < 100 ? "running" : "success",

@@ -43,7 +43,14 @@ export const VENTURE_STAGE_ORDER: VentureStage[] = [
 export const EntityTypeSchema = z.enum(["sole_trader", "ltd", "partnership", "undecided"]);
 export type EntityType = z.infer<typeof EntityTypeSchema>;
 
-export const AppTypeSchema = z.enum(["web", "desktop", "mobile", "saas", "browser_extension", "game"]);
+export const AppTypeSchema = z.enum([
+  "web",
+  "desktop",
+  "mobile",
+  "saas",
+  "browser_extension",
+  "game",
+]);
 export type AppType = z.infer<typeof AppTypeSchema>;
 
 export const VentureManifestSchema = z.object({

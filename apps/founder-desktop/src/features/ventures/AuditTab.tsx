@@ -1,3 +1,12 @@
+import {
+  type BrandConfidence,
+  type NamingCandidate,
+  NamingScanSchema,
+  deriveBrandConfidence,
+} from "@founder-os/branding-core";
+import { optimize } from "@founder-os/prompt-master";
+import { invoke } from "@tauri-apps/api/core";
+import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 /**
  * Audit tab — renders audit findings per pipeline run.
  *
@@ -13,17 +22,9 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as db from "../../lib/db.js";
-import { streamChat, pickActiveProvider } from "../../lib/llm-client.js";
-import { invoke } from "@tauri-apps/api/core";
-import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
+import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
 import { pushToast } from "../../lib/toasts.js";
 import { renderMarkdown } from "./markdown.js";
-import {
-  NamingScanSchema,
-  deriveBrandConfidence,
-  type BrandConfidence,
-  type NamingCandidate,
-} from "@founder-os/branding-core";
 
 // Local error stringifier — matches db.ts / venture-io.ts. Kept inline
 // rather than sharing so this file doesn't grow a new lib dep for a
@@ -31,7 +32,11 @@ import {
 function errDetail(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
-  try { return JSON.stringify(err); } catch { return String(err); }
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
 }
 
 type Props = {
@@ -50,10 +55,7 @@ type Props = {
 
 type Severity = "low" | "medium" | "high" | "critical";
 
-const SEVERITY_META: Record<
-  Severity,
-  { label: string; bg: string; fg: string; border: string }
-> = {
+const SEVERITY_META: Record<Severity, { label: string; bg: string; fg: string; border: string }> = {
   critical: { label: "Critical", bg: "#FEE2E2", fg: "#7F1D1D", border: "#FCA5A5" },
   high: { label: "High", bg: "#FEF3C7", fg: "#92400E", border: "#FCD34D" },
   medium: { label: "Medium", bg: "#E0E7FF", fg: "#3730A3", border: "#A5B4FC" },
@@ -279,10 +281,7 @@ function buildExportJson(payload: ExportPayload): string {
     );
   }
   // scope === "all"
-  const findingCount = payload.blocks.reduce(
-    (acc, b) => acc + b.findings.length,
-    0
-  );
+  const findingCount = payload.blocks.reduce((acc, b) => acc + b.findings.length, 0);
   return JSON.stringify(
     {
       ventureId: payload.ventureId,
@@ -402,10 +401,7 @@ function buildExportCsv(payload: ExportPayload): string {
   return lines.join("\r\n") + "\r\n";
 }
 
-function defaultExportFilename(
-  payload: ExportPayload,
-  ext: "json" | "csv"
-): string {
+function defaultExportFilename(payload: ExportPayload, ext: "json" | "csv"): string {
   // Short run id + ISO date (no time, no colons — Windows-safe) keeps the
   // name readable and sortable in a folder. All-runs exports use a literal
   // "all-runs" tag instead of a short id so they don't collide with
@@ -434,9 +430,7 @@ const SYSTEM_PROMPT =
 
 export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
   const [runs, setRuns] = useState<db.RunRow[]>([]);
-  const [findingsByRun, setFindingsByRun] = useState<Record<string, db.FindingRow[]>>(
-    {}
-  );
+  const [findingsByRun, setFindingsByRun] = useState<Record<string, db.FindingRow[]>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -483,9 +477,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
       // Severity-order within each run (DB already orders but we re-sort
       // defensively in case of future query changes).
       for (const runId of Object.keys(grouped)) {
-        grouped[runId].sort(
-          (a, b) => severityRank(a.severity) - severityRank(b.severity)
-        );
+        grouped[runId].sort((a, b) => severityRank(a.severity) - severityRank(b.severity));
       }
       setRuns(runRows);
       setFindingsByRun(grouped);
@@ -521,7 +513,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
   }, [refresh, refreshToken]);
 
   const selectedFindings = useMemo(
-    () => (selectedRunId ? findingsByRun[selectedRunId] ?? [] : []),
+    () => (selectedRunId ? (findingsByRun[selectedRunId] ?? []) : []),
     [selectedRunId, findingsByRun]
   );
 
@@ -604,9 +596,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
       try {
         const provider = await pickActiveProvider(ventureId);
         if (!provider) {
-          throw new Error(
-            "No LLM provider configured. Open the Options tab to add an API key."
-          );
+          throw new Error("No LLM provider configured. Open the Options tab to add an API key.");
         }
 
         // Best-effort file read — if it fails we still ask the model for a
@@ -620,10 +610,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
               path: finding.filePath,
             });
             const MAX = 6000;
-            fileExcerpt =
-              content.length > MAX
-                ? content.slice(0, MAX) + "\n…[truncated]"
-                : content;
+            fileExcerpt = content.length > MAX ? content.slice(0, MAX) + "\n…[truncated]" : content;
           } catch (readErr) {
             console.warn("[audit] read_file failed", readErr);
             fileExcerpt = `(could not read file: ${String(readErr)})`;
@@ -657,9 +644,23 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
           [finding.id]: { status: "streaming", text: "" },
         }));
 
+        // Compress the audit-fix system prompt before dispatching. optimize()
+        // never throws — fallbackUsed=true means no transport, in which case
+        // we send the original text and the call still works.
+        const optimizedSystem = await optimize({
+          prompt: SYSTEM_PROMPT,
+          context: "audit",
+        });
+        console.info(
+          "[prompt-master] audit-fix",
+          optimizedSystem.fallbackUsed
+            ? "(fallback — transport unavailable)"
+            : `tokensSaved=${optimizedSystem.tokensSaved} cacheHit=${optimizedSystem.cacheHit}`
+        );
+
         await streamChat({
           provider,
-          system: SYSTEM_PROMPT,
+          system: optimizedSystem.optimized,
           messages: [{ role: "user", content: userMessage }],
           maxTokens: 1200,
           temperature: 0.2,
@@ -688,9 +689,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                 text,
                 provider,
               })
-              .catch((err) =>
-                console.warn("[audit] upsertFixSuggestion failed", err)
-              );
+              .catch((err) => console.warn("[audit] upsertFixSuggestion failed", err));
           },
           onCancel: (partial) => {
             // User hit Stop. Keep the partial visible with a "Cancelled"
@@ -807,19 +806,14 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
   // disabled upstream so these should never be reached with empty inputs —
   // but we guard anyway because UI invariants drift.
 
-  const flashExportStatus = useCallback(
-    (kind: "success" | "error", text: string) => {
-      setExportStatus({ kind, text });
-      // Short auto-clear; long enough to read, short enough to not linger
-      // into the next interaction.
-      window.setTimeout(() => {
-        setExportStatus((cur) =>
-          cur && cur.text === text && cur.kind === kind ? null : cur
-        );
-      }, 2500);
-    },
-    []
-  );
+  const flashExportStatus = useCallback((kind: "success" | "error", text: string) => {
+    setExportStatus({ kind, text });
+    // Short auto-clear; long enough to read, short enough to not linger
+    // into the next interaction.
+    window.setTimeout(() => {
+      setExportStatus((cur) => (cur && cur.text === text && cur.kind === kind ? null : cur));
+    }, 2500);
+  }, []);
 
   /**
    * pt.30d: read `03_brand/names/name-candidates.json` and derive the
@@ -831,9 +825,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
    * Errors are swallowed because a missing/broken brand file shouldn't
    * fail the whole export; we just omit the optional `brand` key.
    */
-  const resolveBrandForExport = useCallback(async (): Promise<
-    ExportBrand | undefined
-  > => {
+  const resolveBrandForExport = useCallback(async (): Promise<ExportBrand | undefined> => {
     if (!ventureRoot) return undefined;
     // Posix-style join — the Rust side normalises separators per OS.
     // No path utilities available in the WebView, so we hand-build.
@@ -928,9 +920,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
       // findings in the export would just be noise (rule-of-thumb: if it
       // doesn't appear on the Audit tab's list with a severity pill, it
       // shouldn't be in the export either).
-      const runsWithFindings = runs.filter(
-        (r) => (findingsByRun[r.runId]?.length ?? 0) > 0
-      );
+      const runsWithFindings = runs.filter((r) => (findingsByRun[r.runId]?.length ?? 0) > 0);
       if (runsWithFindings.length === 0) return null;
       // Parallel fetch — each listFixSuggestionsForRun is a single JOIN.
       // N small parallel queries vs N serial round-trips is a latency win
@@ -970,10 +960,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
       return `${n} finding${n === 1 ? "" : "s"}`;
     }
     const runs = payload.blocks.length;
-    const findings = payload.blocks.reduce(
-      (acc, b) => acc + b.findings.length,
-      0
-    );
+    const findings = payload.blocks.reduce((acc, b) => acc + b.findings.length, 0);
     return `${findings} finding${findings === 1 ? "" : "s"} across ${runs} run${runs === 1 ? "" : "s"}`;
   };
 
@@ -982,10 +969,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
       const payload = await buildExportPayload(exportScope);
       if (!payload) return;
       try {
-        const text =
-          format === "json"
-            ? buildExportJson(payload)
-            : buildExportCsv(payload);
+        const text = format === "json" ? buildExportJson(payload) : buildExportCsv(payload);
         // navigator.clipboard works in Tauri's WebView; writeText throws on
         // denial or non-secure contexts (shouldn't happen in tauri:// but we
         // still surface errors rather than failing silently).
@@ -1012,10 +996,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
       const payload = await buildExportPayload(exportScope);
       if (!payload) return;
       try {
-        const text =
-          format === "json"
-            ? buildExportJson(payload)
-            : buildExportCsv(payload);
+        const text = format === "json" ? buildExportJson(payload) : buildExportCsv(payload);
         const defaultPath = defaultExportFilename(payload, format);
         // Native Save dialog — OS-level, respects the last-used directory.
         // Returns null if the user cancels; that's not an error, just a
@@ -1038,10 +1019,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
         // consistent across the app. tauri-plugin-fs would work too but
         // requires scope config that write_file sidesteps.
         await invoke("write_file", { path: filePath, content: text });
-        flashExportStatus(
-          "success",
-          `Saved ${format.toUpperCase()} · ${describePayload(payload)}`
-        );
+        flashExportStatus("success", `Saved ${format.toUpperCase()} · ${describePayload(payload)}`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         flashExportStatus("error", `Save failed: ${msg}`);
@@ -1071,8 +1049,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
   // a useMemo) because the values are O(runs) to compute and runs are small
   // enough (< 100 in practice) that memoisation is overkill. React calls
   // this every render anyway.
-  const selectedRunFindingCount =
-    selectedRunId ? findingsByRun[selectedRunId]?.length ?? 0 : 0;
+  const selectedRunFindingCount = selectedRunId ? (findingsByRun[selectedRunId]?.length ?? 0) : 0;
   const allRunsFindingCount = Object.values(findingsByRun).reduce(
     (acc, arr) => acc + arr.length,
     0
@@ -1088,9 +1065,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
   // an empty scope preserves the pt.8 invariant that Export never pops a
   // menu over zero findings.
   const canExportCurrentScope =
-    exportScope === "selected"
-      ? selectedRunFindingCount > 0
-      : runsWithFindingsCount > 0;
+    exportScope === "selected" ? selectedRunFindingCount > 0 : runsWithFindingsCount > 0;
   // Title text for the button, mirrors the enable logic so users get a
   // reason when they hover a disabled button.
   const exportButtonTitle = canExportCurrentScope
@@ -1138,12 +1113,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
       const target = e.target as HTMLElement | null;
       if (target) {
         const tag = target.tagName;
-        if (
-          tag === "INPUT" ||
-          tag === "TEXTAREA" ||
-          tag === "SELECT" ||
-          target.isContentEditable
-        ) {
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable) {
           return;
         }
       }
@@ -1153,10 +1123,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
       // current scope to have something to export — otherwise we'd be
       // popping an empty/disabled menu, which is noise.
       const wantsToggle =
-        (e.ctrlKey || e.metaKey) &&
-        !e.shiftKey &&
-        !e.altKey &&
-        (e.key === "e" || e.key === "E");
+        (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === "e" || e.key === "E");
       if (!wantsToggle) return;
       if (exportMenuOpenRef.current) {
         e.preventDefault();
@@ -1203,8 +1170,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                color:
-                  exportStatus.kind === "success" ? "#059669" : "#B91C1C",
+                color: exportStatus.kind === "success" ? "#059669" : "#B91C1C",
               }}
               role="status"
             >
@@ -1219,10 +1185,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
               button and a title explaining why. Menu is absolutely
               positioned under the button; outside-click + Escape + Ctrl+E
               handlers all close via the effects above. */}
-          <div
-            ref={exportMenuRef}
-            style={{ position: "relative", display: "inline-block" }}
-          >
+          <div ref={exportMenuRef} style={{ position: "relative", display: "inline-block" }}>
             <button
               type="button"
               onClick={() => setExportMenuOpen((v) => !v)}
@@ -1287,9 +1250,10 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                         key: "all",
                         label: `All runs (${allRunsFindingCount})`,
                         disabled: runsWithFindingsCount === 0,
-                        title: runsWithFindingsCount > 0
-                          ? `Every run on this venture — ${allRunsFindingCount} findings across ${runsWithFindingsCount} run${runsWithFindingsCount === 1 ? "" : "s"}`
-                          : "No runs have findings",
+                        title:
+                          runsWithFindingsCount > 0
+                            ? `Every run on this venture — ${allRunsFindingCount} findings across ${runsWithFindingsCount} run${runsWithFindingsCount === 1 ? "" : "s"}`
+                            : "No runs have findings",
                       },
                     ] as const
                   ).map((opt) => {
@@ -1303,14 +1267,8 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                         title={opt.title}
                         style={{
                           background: active ? "#EEF2FF" : "transparent",
-                          border: active
-                            ? "1px solid #C7D2FE"
-                            : "1px solid transparent",
-                          color: opt.disabled
-                            ? "#9CA3AF"
-                            : active
-                              ? "#3730A3"
-                              : "#374151",
+                          border: active ? "1px solid #C7D2FE" : "1px solid transparent",
+                          color: opt.disabled ? "#9CA3AF" : active ? "#3730A3" : "#374151",
                           fontSize: 11,
                           fontWeight: active ? 600 : 500,
                           padding: "3px 8px",
@@ -1387,12 +1345,9 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                         paddingTop: idx === 2 ? 10 : 6,
                       }}
                       onMouseEnter={(e) => {
-                        if (!disabled)
-                          e.currentTarget.style.background = "#F5F3FF";
+                        if (!disabled) e.currentTarget.style.background = "#F5F3FF";
                       }}
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = "transparent")
-                      }
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
                       {item.label}
                     </button>
@@ -1454,8 +1409,8 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                 textAlign: "center",
               }}
             >
-              No pipeline runs yet. Click “Run Pipeline” on the Overview tab
-              to generate audit findings.
+              No pipeline runs yet. Click “Run Pipeline” on the Overview tab to generate audit
+              findings.
             </div>
           )}
           {runs.map((run) => {
@@ -1464,7 +1419,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
             // actionable issues, not the synthetic deferred-rules hint.
             // Same prefix split as in `selectedActionable` / `selectedMeta`.
             const ct = (findingsByRun[run.runId] ?? []).filter(
-              (f) => !f.ruleId.startsWith("audit.meta."),
+              (f) => !f.ruleId.startsWith("audit.meta.")
             );
             const isSelected = run.runId === selectedRunId;
             const counts = ct.reduce(
@@ -1485,9 +1440,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                   textAlign: "left",
                   padding: "10px 16px",
                   border: "none",
-                  borderLeft: isSelected
-                    ? "3px solid #6366F1"
-                    : "3px solid transparent",
+                  borderLeft: isSelected ? "3px solid #6366F1" : "3px solid transparent",
                   background: isSelected ? "#F5F3FF" : "transparent",
                   cursor: "pointer",
                   borderBottom: "1px solid #F9FAFB",
@@ -1541,24 +1494,23 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                       flexWrap: "wrap",
                     }}
                   >
-                    {(["critical", "high", "medium", "low"] as Severity[]).map(
-                      (sev) =>
-                        counts[sev] ? (
-                          <span
-                            key={sev}
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 700,
-                              padding: "1px 6px",
-                              borderRadius: 4,
-                              background: SEVERITY_META[sev].bg,
-                              color: SEVERITY_META[sev].fg,
-                              border: `1px solid ${SEVERITY_META[sev].border}`,
-                            }}
-                          >
-                            {counts[sev]} {SEVERITY_META[sev].label.toLowerCase()}
-                          </span>
-                        ) : null
+                    {(["critical", "high", "medium", "low"] as Severity[]).map((sev) =>
+                      counts[sev] ? (
+                        <span
+                          key={sev}
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 4,
+                            background: SEVERITY_META[sev].bg,
+                            color: SEVERITY_META[sev].fg,
+                            border: `1px solid ${SEVERITY_META[sev].border}`,
+                          }}
+                        >
+                          {counts[sev]} {SEVERITY_META[sev].label.toLowerCase()}
+                        </span>
+                      ) : null
                     )}
                   </div>
                 )}
@@ -1599,9 +1551,8 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
             >
               <strong>No findings for this run.</strong>
               <div style={{ marginTop: 4, fontSize: 13 }}>
-                Either the audit step passed cleanly or this run predates the
-                audit step being wired in. Re-run the pipeline to (re)generate
-                findings.
+                Either the audit step passed cleanly or this run predates the audit step being wired
+                in. Re-run the pipeline to (re)generate findings.
               </div>
             </div>
           )}
@@ -1650,12 +1601,8 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                     info
                   </span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, color: "#334155" }}>
-                      {f.title}
-                    </div>
-                    <div style={{ marginTop: 2, lineHeight: 1.4 }}>
-                      {f.message}
-                    </div>
+                    <div style={{ fontWeight: 600, color: "#334155" }}>{f.title}</div>
+                    <div style={{ marginTop: 2, lineHeight: 1.4 }}>{f.message}</div>
                   </div>
                 </div>
               ))}
@@ -1822,9 +1769,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                 >
                   {f.title}
                 </div>
-                <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.5 }}>
-                  {f.message}
-                </div>
+                <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.5 }}>{f.message}</div>
                 {f.filePath && (
                   <div
                     style={{
@@ -1911,24 +1856,23 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                                   ? "Stopping…"
                                   : "AI fix"}
                       </span>
-                      {(fix.status === "done" || fix.status === "cancelled") &&
-                        fix.text && (
-                          <button
-                            type="button"
-                            onClick={() => copyFix(fix.text)}
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: "#6366F1",
-                              fontSize: 11,
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              padding: 0,
-                            }}
-                          >
-                            Copy
-                          </button>
-                        )}
+                      {(fix.status === "done" || fix.status === "cancelled") && fix.text && (
+                        <button
+                          type="button"
+                          onClick={() => copyFix(fix.text)}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#6366F1",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            padding: 0,
+                          }}
+                        >
+                          Copy
+                        </button>
+                      )}
                     </div>
                     {fix.status === "error" ? (
                       <div style={{ fontSize: 12, color: "#991B1B" }}>
@@ -1963,8 +1907,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                       <pre
                         style={{
                           margin: 0,
-                          fontFamily:
-                            "ui-monospace, SFMono-Regular, Menlo, monospace",
+                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                           fontSize: 12,
                           lineHeight: 1.55,
                           color: "#111827",
@@ -1973,9 +1916,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                         }}
                       >
                         {fix.text}
-                        {fix.status === "streaming" && (
-                          <span style={{ color: "#6366F1" }}>▍</span>
-                        )}
+                        {fix.status === "streaming" && <span style={{ color: "#6366F1" }}>▍</span>}
                         {fix.status === "stopping" && (
                           // Faded cursor while we wait for the cancel event —
                           // signals that the stream is winding down without

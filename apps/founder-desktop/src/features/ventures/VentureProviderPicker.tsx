@@ -1,3 +1,5 @@
+import { type LlmProviderId, PROVIDER_CATALOG, getProvider } from "@founder-os/llm-providers";
+import { Card } from "@founder-os/ui";
 /**
  * Per-venture provider picker — lives on the Overview tab.
  *
@@ -9,8 +11,6 @@
  * first option in the dropdown.
  */
 import React, { useCallback, useEffect, useState } from "react";
-import { Card } from "@founder-os/ui";
-import { PROVIDER_CATALOG, getProvider, type LlmProviderId } from "@founder-os/llm-providers";
 import * as db from "../../lib/db.js";
 
 type Props = {
@@ -81,8 +81,8 @@ export function VentureProviderPicker({ ventureId }: Props) {
   return (
     <Card title="AI provider for this venture">
       <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 10 }}>
-        Override which LLM runs chat and fix-suggestions for this venture.
-        Leave on <em>Default</em> to follow the global Options tab setting.
+        Override which LLM runs chat and fix-suggestions for this venture. Leave on <em>Default</em>{" "}
+        to follow the global Options tab setting.
       </div>
       {loading ? (
         <div style={{ fontSize: 12, color: "#9CA3AF" }}>Loading…</div>
@@ -132,9 +132,7 @@ export function VentureProviderPicker({ ventureId }: Props) {
           )}
         </div>
       )}
-      {err && (
-        <div style={{ marginTop: 8, fontSize: 12, color: "#B91C1C" }}>{err}</div>
-      )}
+      {err && <div style={{ marginTop: 8, fontSize: 12, color: "#B91C1C" }}>{err}</div>}
     </Card>
   );
 }

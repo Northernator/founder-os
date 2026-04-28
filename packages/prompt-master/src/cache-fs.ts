@@ -18,15 +18,10 @@
  * runs opportunistically when writes detect we're over budget — no
  * background sweeper to keep things simple.
  */
-import { mkdir, readFile, writeFile, stat, unlink } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import {
-  setCacheBackend,
-  type CacheBackend,
-  type CachedEntry,
-  type CacheStats,
-} from "./cache.js";
+import { dirname, join } from "node:path";
+import { type CacheBackend, type CacheStats, type CachedEntry, setCacheBackend } from "./cache.js";
 
 const DEFAULT_MAX_BYTES = 200 * 1024 * 1024; // 200 MB
 const INDEX_FILE = "_index.json";
@@ -43,12 +38,14 @@ interface CacheIndex {
 }
 
 function cacheDir(): string {
-  return process.env.PROMPT_MASTER_CACHE_DIR ?? join(homedir(), ".founder-os", "cache", "prompt-master");
+  return (
+    process.env.PROMPT_MASTER_CACHE_DIR ?? join(homedir(), ".founder-os", "cache", "prompt-master")
+  );
 }
 
 function maxBytes(): number {
   const env = process.env.PROMPT_MASTER_CACHE_MAX_BYTES;
-  return env ? parseInt(env, 10) : DEFAULT_MAX_BYTES;
+  return env ? Number.parseInt(env, 10) : DEFAULT_MAX_BYTES;
 }
 
 function pathFor(hash: string): string {

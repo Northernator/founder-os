@@ -1,3 +1,21 @@
+import {
+  type ProductSpecCanvas,
+  ProductSpecCanvasSchema,
+  SHELL_TYPE_DESCRIPTIONS,
+  SHELL_TYPE_LABELS,
+  type Screen,
+  type ScreensCanvas,
+  ScreensCanvasSchema,
+  type ShellType,
+  ShellTypeSchema,
+  type Venture,
+  type VentureManifest,
+  createEmptyScreensCanvas,
+  deriveScreensRules,
+  isScreensCanvasComplete,
+} from "@founder-os/domain";
+import { getScreensCanvasPath, getSpecCanvasPath } from "@founder-os/workspace-core";
+import { invoke } from "@tauri-apps/api/core";
 /**
  * ScreensTab (pt.45 + pt.47) — guided UI for the Screens stage.
  *
@@ -27,33 +45,10 @@
  * arrays; the underlying issue is already flagged by the spec audit
  * block, no need to re-surface here.
  */
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import {
-  ScreensCanvasSchema,
-  ProductSpecCanvasSchema,
-  ShellTypeSchema,
-  SHELL_TYPE_LABELS,
-  SHELL_TYPE_DESCRIPTIONS,
-  createEmptyScreensCanvas,
-  deriveScreensRules,
-  isScreensCanvasComplete,
-  type ScreensCanvas,
-  type Screen,
-  type ShellType,
-  type ProductSpecCanvas,
-  type Venture,
-  type VentureManifest,
-} from "@founder-os/domain";
-import {
-  getScreensCanvasPath,
-  getSpecCanvasPath,
-} from "@founder-os/workspace-core";
+import type React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { type ScreensDraftResult, draftScreensCanvas } from "../../lib/screens-drafter.js";
 import { pushToast } from "../../lib/toasts.js";
-import {
-  draftScreensCanvas,
-  type ScreensDraftResult,
-} from "../../lib/screens-drafter.js";
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -127,21 +122,13 @@ function buildSpecSnapshot(spec: ProductSpecCanvas | null): SpecSnapshot {
 }
 
 export function ScreensTab({ venture, manifest }: Props) {
-  const canvasPath = useMemo(
-    () => getScreensCanvasPath(venture.rootPath),
-    [venture.rootPath]
-  );
-  const specPath = useMemo(
-    () => getSpecCanvasPath(venture.rootPath),
-    [venture.rootPath]
-  );
+  const canvasPath = useMemo(() => getScreensCanvasPath(venture.rootPath), [venture.rootPath]);
+  const specPath = useMemo(() => getSpecCanvasPath(venture.rootPath), [venture.rootPath]);
 
   const [canvas, setCanvas] = useState<ScreensCanvas | null>(null);
   const [specSnapshot, setSpecSnapshot] = useState<SpecSnapshot>(EMPTY_SPEC_SNAPSHOT);
   const [loading, setLoading] = useState(true);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">(
-    "saved"
-  );
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratedRef = useRef(false);
@@ -154,9 +141,9 @@ export function ScreensTab({ venture, manifest }: Props) {
   const [draftError, setDraftError] = useState<string | null>(null);
   const [draftProvider, setDraftProvider] = useState<string | null>(null);
   const [draftModel, setDraftModel] = useState<string | null>(null);
-  const [sectionStates, setSectionStates] = useState<
-    Partial<Record<DraftSectionId, SectionState>>
-  >({});
+  const [sectionStates, setSectionStates] = useState<Partial<Record<DraftSectionId, SectionState>>>(
+    {}
+  );
   /** Token-pulse counter — drives the panel's liveness label. We
    *  don't render partial JSON. */
   const [draftDeltaCount, setDraftDeltaCount] = useState(0);
@@ -208,10 +195,7 @@ export function ScreensTab({ venture, manifest }: Props) {
             // Malformed file on disk — render with fresh defaults but
             // DON'T overwrite (mirror SpecTab policy). Audit step
             // surfaces the parse failure as `screens.json.invalid`.
-            console.warn(
-              "[screens] canvas parse failed, using fresh defaults",
-              parsed.error
-            );
+            console.warn("[screens] canvas parse failed, using fresh defaults", parsed.error);
             if (!cancelled) setCanvas(createEmptyScreensCanvas(venture.id));
           }
         } else {
@@ -235,9 +219,7 @@ export function ScreensTab({ venture, manifest }: Props) {
           const parsedSpec = ProductSpecCanvasSchema.safeParse(JSON.parse(rawSpec));
           if (!cancelled) {
             setSpecSnapshot(
-              parsedSpec.success
-                ? buildSpecSnapshot(parsedSpec.data)
-                : EMPTY_SPEC_SNAPSHOT
+              parsedSpec.success ? buildSpecSnapshot(parsedSpec.data) : EMPTY_SPEC_SNAPSHOT
             );
           }
         } else if (!cancelled) {
@@ -289,9 +271,7 @@ export function ScreensTab({ venture, manifest }: Props) {
   }, [canvas, canvasPath]);
 
   if (loading || !canvas || !manifest) {
-    return (
-      <div style={{ padding: 28, color: "#6B7280" }}>Loading Screens canvas…</div>
-    );
+    return <div style={{ padding: 28, color: "#6B7280" }}>Loading Screens canvas…</div>;
   }
 
   const rules = deriveScreensRules(canvas, specSnapshot);
@@ -303,17 +283,14 @@ export function ScreensTab({ venture, manifest }: Props) {
   // editors. Keep the JSX below readable.
   // ─────────────────────────────────────────────────────────────
 
-  const updateNotes = (notes: string) =>
-    setCanvas((cur) => (cur ? { ...cur, notes } : cur));
+  const updateNotes = (notes: string) => setCanvas((cur) => (cur ? { ...cur, notes } : cur));
 
   const updateScreen = (id: string, patch: Partial<Screen>) =>
     setCanvas((cur) =>
       cur
         ? {
             ...cur,
-            screens: cur.screens.map((s) =>
-              s.id === id ? { ...s, ...patch } : s
-            ),
+            screens: cur.screens.map((s) => (s.id === id ? { ...s, ...patch } : s)),
           }
         : cur
     );
@@ -338,11 +315,7 @@ export function ScreensTab({ venture, manifest }: Props) {
         : cur
     );
   const removeScreen = (id: string) =>
-    setCanvas((cur) =>
-      cur
-        ? { ...cur, screens: cur.screens.filter((s) => s.id !== id) }
-        : cur
-    );
+    setCanvas((cur) => (cur ? { ...cur, screens: cur.screens.filter((s) => s.id !== id) } : cur));
 
   // ─────────────────────────────────────────────────────────────
   // Draft flow (pt.47) — mirror of SpecTab's startDraft/apply*
@@ -423,17 +396,12 @@ export function ScreensTab({ venture, manifest }: Props) {
     setCanvas((cur) => {
       if (!cur) return cur;
       if (mode === "replace") return { ...cur, screens: draftCanvas.screens };
-      if (mode === "merge")
-        return { ...cur, screens: [...cur.screens, ...draftCanvas.screens] };
+      if (mode === "merge") return { ...cur, screens: [...cur.screens, ...draftCanvas.screens] };
       return cur;
     });
     stampSection(
       "screens",
-      mode === "skip"
-        ? "skipped"
-        : mode === "replace"
-          ? "applied-replace"
-          : "applied-merge"
+      mode === "skip" ? "skipped" : mode === "replace" ? "applied-replace" : "applied-merge"
     );
   };
 
@@ -483,13 +451,11 @@ export function ScreensTab({ venture, manifest }: Props) {
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827" }}>
-              Screens
-            </h2>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827" }}>Screens</h2>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6B7280" }}>
-              Inventory of product screens — name, shell shape, mapped features and
-              entities. Stitch / v0 / Figma Make handle the visual layout downstream.
-              Saved to <code>06_product/wireframes/screens-canvas.json</code>.
+              Inventory of product screens — name, shell shape, mapped features and entities. Stitch
+              / v0 / Figma Make handle the visual layout downstream. Saved to{" "}
+              <code>06_product/wireframes/screens-canvas.json</code>.
             </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -520,10 +486,10 @@ export function ScreensTab({ venture, manifest }: Props) {
               lineHeight: 1.5,
             }}
           >
-            Start with the screen the user lands on. Aim for 5–12 total — one screen
-            per Must-priority feature is too granular, one mega-screen is too
-            monolithic. Cross-cutting features (auth, settings) live on their own
-            screens; in-line concerns (toasts, modals) don't.
+            Start with the screen the user lands on. Aim for 5–12 total — one screen per
+            Must-priority feature is too granular, one mega-screen is too monolithic. Cross-cutting
+            features (auth, settings) live on their own screens; in-line concerns (toasts, modals)
+            don't.
           </div>
         )}
 
@@ -544,8 +510,8 @@ export function ScreensTab({ venture, manifest }: Props) {
         {/* Notes ────────────────────────────────────────────────── */}
         <Section title="Notes" icon="🗒️">
           <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-            Anything that doesn't fit the per-screen fields — global navigation,
-            shared layout decisions, responsive notes.
+            Anything that doesn't fit the per-screen fields — global navigation, shared layout
+            decisions, responsive notes.
           </p>
           <textarea
             value={canvas.notes}
@@ -579,104 +545,99 @@ export function ScreensTab({ venture, manifest }: Props) {
           onApplyNotes={applyNotes}
         />
       ) : (
-      <aside
-        style={{
-          padding: 16,
-          background: "#F9FAFB",
-          border: "1px solid #E5E7EB",
-          borderRadius: 8,
-          alignSelf: "start",
-          position: "sticky",
-          top: 16,
-        }}
-      >
-        <div
+        <aside
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            marginBottom: 12,
+            padding: 16,
+            background: "#F9FAFB",
+            border: "1px solid #E5E7EB",
+            borderRadius: 8,
+            alignSelf: "start",
+            position: "sticky",
+            top: 16,
           }}
         >
-          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
-            Must-haves
-          </h3>
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: passCount === rules.length ? "#059669" : "#6B7280",
-            }}
-          >
-            {passCount} / {rules.length}
-          </span>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {rules.map((rule) => (
-            <div
-              key={rule.id}
-              style={{ display: "flex", alignItems: "flex-start", gap: 8 }}
-            >
-              <span
-                style={{
-                  fontSize: 12,
-                  marginTop: 1,
-                  color: rule.pass ? "#059669" : "#9CA3AF",
-                }}
-              >
-                {rule.pass ? "✅" : "○"}
-              </span>
-              <div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: rule.pass ? "#111827" : "#374151",
-                  }}
-                >
-                  {rule.label}
-                </div>
-                <div style={{ fontSize: 11, color: "#6B7280" }}>
-                  {rule.description}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        {complete && (
           <div
             style={{
-              marginTop: 14,
-              padding: 10,
-              background: "#ECFDF5",
-              border: "1px solid #A7F3D0",
-              borderRadius: 6,
-              fontSize: 12,
-              color: "#065F46",
-              fontWeight: 600,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              marginBottom: 12,
             }}
           >
-            ✓ Screens cover the must-haves — ready to advance to Stitch.
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
+              Must-haves
+            </h3>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: passCount === rules.length ? "#059669" : "#6B7280",
+              }}
+            >
+              {passCount} / {rules.length}
+            </span>
           </div>
-        )}
-        {/* Spec-not-loaded hint. Helpful when the founder lands here
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {rules.map((rule) => (
+              <div key={rule.id} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                <span
+                  style={{
+                    fontSize: 12,
+                    marginTop: 1,
+                    color: rule.pass ? "#059669" : "#9CA3AF",
+                  }}
+                >
+                  {rule.pass ? "✅" : "○"}
+                </span>
+                <div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: rule.pass ? "#111827" : "#374151",
+                    }}
+                  >
+                    {rule.label}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#6B7280" }}>{rule.description}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {complete && (
+            <div
+              style={{
+                marginTop: 14,
+                padding: 10,
+                background: "#ECFDF5",
+                border: "1px solid #A7F3D0",
+                borderRadius: 6,
+                fontSize: 12,
+                color: "#065F46",
+                fontWeight: 600,
+              }}
+            >
+              ✓ Screens cover the must-haves — ready to advance to Stitch.
+            </div>
+          )}
+          {/* Spec-not-loaded hint. Helpful when the founder lands here
             from a stage advance but the spec was never filled in — the
             feature multi-select and the coverage rule will both look
             broken otherwise. */}
-        {specSnapshot.features.length === 0 && (
-          <div
-            style={{
-              marginTop: 12,
-              fontSize: 11,
-              color: "#9CA3AF",
-              lineHeight: 1.5,
-            }}
-          >
-            No spec features detected yet — fill in the Spec tab first to enable
-            feature mapping and the coverage check.
-          </div>
-        )}
-      </aside>
+          {specSnapshot.features.length === 0 && (
+            <div
+              style={{
+                marginTop: 12,
+                fontSize: 11,
+                color: "#9CA3AF",
+                lineHeight: 1.5,
+              }}
+            >
+              No spec features detected yet — fill in the Spec tab first to enable feature mapping
+              and the coverage check.
+            </div>
+          )}
+        </aside>
       )}
     </div>
   );
@@ -703,17 +664,13 @@ function ScreenCard({
   const toggleFeature = (id: string) => {
     const has = screen.featureIds.includes(id);
     onChange({
-      featureIds: has
-        ? screen.featureIds.filter((x) => x !== id)
-        : [...screen.featureIds, id],
+      featureIds: has ? screen.featureIds.filter((x) => x !== id) : [...screen.featureIds, id],
     });
   };
   const toggleEntity = (id: string) => {
     const has = screen.entityIds.includes(id);
     onChange({
-      entityIds: has
-        ? screen.entityIds.filter((x) => x !== id)
-        : [...screen.entityIds, id],
+      entityIds: has ? screen.entityIds.filter((x) => x !== id) : [...screen.entityIds, id],
     });
   };
 
@@ -731,9 +688,7 @@ function ScreenCard({
         />
         <select
           value={screen.shellType}
-          onChange={(e) =>
-            onChange({ shellType: e.target.value as ShellType })
-          }
+          onChange={(e) => onChange({ shellType: e.target.value as ShellType })}
           title={shellDescription}
           style={{ ...inputStyle, width: "auto" }}
         >
@@ -768,9 +723,7 @@ function ScreenCard({
       {/* Feature mapping ───────────────────────────────────────── */}
       <Field label="Features fulfilled">
         {specSnapshot.features.length === 0 ? (
-          <EmptyHint>
-            Spec features will appear here once the spec is filled in.
-          </EmptyHint>
+          <EmptyHint>Spec features will appear here once the spec is filled in.</EmptyHint>
         ) : (
           <PillGrid>
             {specSnapshot.features.map((f) => {
@@ -797,19 +750,13 @@ function ScreenCard({
       {/* Entity mapping ────────────────────────────────────────── */}
       <Field label="Entities touched (optional)">
         {specSnapshot.entities.length === 0 ? (
-          <EmptyHint>
-            Spec entities will appear here once the data model is filled in.
-          </EmptyHint>
+          <EmptyHint>Spec entities will appear here once the data model is filled in.</EmptyHint>
         ) : (
           <PillGrid>
             {specSnapshot.entities.map((e) => {
               const selected = screen.entityIds.includes(e.id);
               return (
-                <Pill
-                  key={e.id}
-                  selected={selected}
-                  onClick={() => toggleEntity(e.id)}
-                >
+                <Pill key={e.id} selected={selected} onClick={() => toggleEntity(e.id)}>
                   {e.name.trim() || "(unnamed entity)"}
                 </Pill>
               );
@@ -876,9 +823,7 @@ function Field({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>
-        {label}
-      </span>
+      <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>{label}</span>
       {children}
     </label>
   );
@@ -1047,11 +992,7 @@ function SaveIndicator({
     saving: { color: "#6366F1", text: "Saving…" },
     unsaved: { color: "#D97706", text: "Unsaved" },
   }[status];
-  return (
-    <span style={{ fontSize: 11, color: cfg.color, fontWeight: 600 }}>
-      {cfg.text}
-    </span>
-  );
+  return <span style={{ fontSize: 11, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
 }
 
 // ── Shared input style ───────────────────────────────────────────
@@ -1184,14 +1125,14 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
   // the panel — the founder will see them after applying).
   const screensPreview = (() => {
     if (!draftCanvas) return "(none)";
-    const named = draftCanvas.screens.filter(
-      (s) => s.name.trim().length > 0
-    );
+    const named = draftCanvas.screens.filter((s) => s.name.trim().length > 0);
     if (named.length === 0) return "(none)";
-    return named
-      .slice(0, 5)
-      .map((s) => `${SHELL_TYPE_LABELS[s.shellType]}: ${s.name}`)
-      .join(" · ") + (named.length > 5 ? ` +${named.length - 5} more` : "");
+    return (
+      named
+        .slice(0, 5)
+        .map((s) => `${SHELL_TYPE_LABELS[s.shellType]}: ${s.name}`)
+        .join(" · ") + (named.length > 5 ? ` +${named.length - 5} more` : "")
+    );
   })();
 
   // Quick coverage hint: how many of the spec's Must features show up
@@ -1286,7 +1227,8 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
             : "Drafting with the active provider"}
           {phase === "success" && (
             <span style={{ color: "#6B7280" }}>
-              {" "}— Replace overwrites the section, Merge appends.
+              {" "}
+              — Replace overwrites the section, Merge appends.
             </span>
           )}
         </div>
@@ -1299,9 +1241,7 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
             Drafting your screen inventory from spec + brand brief…
           </div>
           <div style={{ fontSize: 11, color: "#9CA3AF" }}>
-            {deltaCount > 0
-              ? `Streaming · ${deltaCount} chunks`
-              : "Waiting for first token…"}
+            {deltaCount > 0 ? `Streaming · ${deltaCount} chunks` : "Waiting for first token…"}
           </div>
           <div style={{ fontSize: 11, color: "#6B7280", marginTop: 12 }}>
             This usually takes 15–45 seconds depending on provider.
@@ -1311,9 +1251,7 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
 
       {phase === "error" && (
         <div style={{ padding: 16, fontSize: 12, color: "#7F1D1D" }}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>
-            Couldn't complete the draft
-          </div>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>Couldn't complete the draft</div>
           <div
             style={{
               padding: 10,
@@ -1412,29 +1350,21 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
             <div
               style={{
                 padding: 8,
-                background:
-                  mustCoverage.hits === mustCoverage.total
-                    ? "#ECFDF5"
-                    : "#FFFBEB",
+                background: mustCoverage.hits === mustCoverage.total ? "#ECFDF5" : "#FFFBEB",
                 border: `1px solid ${
-                  mustCoverage.hits === mustCoverage.total
-                    ? "#A7F3D0"
-                    : "#FDE68A"
+                  mustCoverage.hits === mustCoverage.total ? "#A7F3D0" : "#FDE68A"
                 }`,
                 borderRadius: 6,
                 fontSize: 11,
-                color:
-                  mustCoverage.hits === mustCoverage.total
-                    ? "#065F46"
-                    : "#92400E",
+                color: mustCoverage.hits === mustCoverage.total ? "#065F46" : "#92400E",
                 fontWeight: 600,
               }}
             >
-              Draft covers {mustCoverage.hits}/{mustCoverage.total} Must
-              features
+              Draft covers {mustCoverage.hits}/{mustCoverage.total} Must features
               {mustCoverage.hits < mustCoverage.total && (
                 <span style={{ fontWeight: 500 }}>
-                  {" "}— consider Merge + add the missing screens.
+                  {" "}
+                  — consider Merge + add the missing screens.
                 </span>
               )}
             </div>
@@ -1444,9 +1374,7 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
             id="screens"
             label="Screens"
             preview={screensPreview}
-            count={
-              draftCanvas.screens.filter((s) => s.name.trim().length > 0).length
-            }
+            count={draftCanvas.screens.filter((s) => s.name.trim().length > 0).length}
             state={sectionStates.screens ?? "pending"}
             onAction={onApplyScreens}
           />
@@ -1458,9 +1386,7 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
             count={draftCanvas.notes.trim().length > 0 ? 1 : 0}
             singleton
             state={sectionStates.notes ?? "pending"}
-            onAction={(m) =>
-              onApplyNotes(m === "merge" ? "replace" : (m as "replace" | "skip"))
-            }
+            onAction={(m) => onApplyNotes(m === "merge" ? "replace" : (m as "replace" | "skip"))}
           />
         </div>
       )}
@@ -1555,11 +1481,7 @@ function DraftSectionRow({
               fontSize: 10,
               fontWeight: 600,
               color:
-                state === "skipped"
-                  ? "#6B7280"
-                  : state === "applied-merge"
-                    ? "#0E7490"
-                    : "#059669",
+                state === "skipped" ? "#6B7280" : state === "applied-merge" ? "#0E7490" : "#059669",
             }}
           >
             {state === "skipped"
@@ -1587,27 +1509,15 @@ function DraftSectionRow({
       </div>
       {!isCommitted && (
         <div style={{ display: "flex", gap: 4 }}>
-          <button
-            type="button"
-            onClick={() => onAction("replace")}
-            style={trioBtn("primary")}
-          >
+          <button type="button" onClick={() => onAction("replace")} style={trioBtn("primary")}>
             Replace
           </button>
           {!singleton && (
-            <button
-              type="button"
-              onClick={() => onAction("merge")}
-              style={trioBtn("secondary")}
-            >
+            <button type="button" onClick={() => onAction("merge")} style={trioBtn("secondary")}>
               Merge
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => onAction("skip")}
-            style={trioBtn("muted")}
-          >
+          <button type="button" onClick={() => onAction("skip")} style={trioBtn("muted")}>
             Skip
           </button>
         </div>
@@ -1616,9 +1526,7 @@ function DraftSectionRow({
   );
 }
 
-function trioBtn(
-  variant: "primary" | "secondary" | "muted"
-): React.CSSProperties {
+function trioBtn(variant: "primary" | "secondary" | "muted"): React.CSSProperties {
   if (variant === "primary") {
     return {
       flex: 1,

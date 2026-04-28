@@ -10,12 +10,9 @@
  * severity badges for visual consistency.
  */
 import React from "react";
-import { useToastStore, type Toast, type ToastKind } from "../../lib/toasts.js";
+import { type Toast, type ToastKind, useToastStore } from "../../lib/toasts.js";
 
-const KIND_STYLE: Record<
-  ToastKind,
-  { bg: string; border: string; fg: string; icon: string }
-> = {
+const KIND_STYLE: Record<ToastKind, { bg: string; border: string; fg: string; icon: string }> = {
   info: { bg: "#EFF6FF", border: "#BFDBFE", fg: "#1E3A8A", icon: "ℹ" },
   success: { bg: "#ECFDF5", border: "#A7F3D0", fg: "#065F46", icon: "✓" },
   warn: { bg: "#FFFBEB", border: "#FDE68A", fg: "#92400E", icon: "⚠" },
@@ -100,16 +97,13 @@ function ToastCard({
         {s.icon}
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, wordBreak: "break-word" }}>
-          {toast.message}
-        </div>
+        <div style={{ fontWeight: 600, wordBreak: "break-word" }}>{toast.message}</div>
         {toast.detail && (
           <div
             style={{
               marginTop: 4,
               fontSize: 11,
-              fontFamily:
-                "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
               opacity: 0.85,
               wordBreak: "break-word",
               whiteSpace: "pre-wrap",

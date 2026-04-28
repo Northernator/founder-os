@@ -14,10 +14,7 @@
     "vscode": "^1.89.0"
   },
   "icon": "images/icon.png",
-  "categories": [
-    "Other",
-    "Machine Learning"
-  ],
+  "categories": ["Other", "Machine Learning"],
   "keywords": [
     "ai",
     "claude",

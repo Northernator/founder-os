@@ -213,9 +213,7 @@ export function deriveScreensRules(
 ): ScreensRule[] {
   const rules: ScreensRule[] = [];
 
-  const namedScreens = canvas.screens.filter(
-    (s) => s.name.trim().length > 0
-  );
+  const namedScreens = canvas.screens.filter((s) => s.name.trim().length > 0);
 
   // Bare rule ids (no "screens." prefix) — the audit prepends the
   // namespace when emitting findings, matching the spec pattern
@@ -239,9 +237,7 @@ export function deriveScreensRules(
     // gate the empty case. shellType has a default of DASHBOARD so
     // the only failure mode here is a future schema change leaving
     // it optional; we keep the check defensively.
-    pass:
-      namedScreens.length > 0 &&
-      namedScreens.every((s) => s.shellType !== undefined),
+    pass: namedScreens.length > 0 && namedScreens.every((s) => s.shellType !== undefined),
   });
 
   // Coverage rule — only fires if there ARE Must features to cover.
@@ -260,8 +256,7 @@ export function deriveScreensRules(
     rules.push({
       id: "must-feature-coverage",
       label: "Every Must feature has a screen",
-      description:
-        "Each Must-priority feature is fulfilled by at least one screen",
+      description: "Each Must-priority feature is fulfilled by at least one screen",
       pass: mustFeatures.every((f) => coveredFeatureIds.has(f.id)),
     });
   }
@@ -307,10 +302,7 @@ export type ScreensMarkdownContext = {
  * Pure data → string; no IO. Lives in `domain` so any package can
  * call it (pipeline step, exports, tests) without pulling in node:fs.
  */
-export function renderScreensMarkdown(
-  canvas: ScreensCanvas,
-  ctx?: ScreensMarkdownContext
-): string {
+export function renderScreensMarkdown(canvas: ScreensCanvas, ctx?: ScreensMarkdownContext): string {
   const ventureName = ctx?.ventureName ?? "";
 
   const featuresById = new Map<string, string>();
@@ -323,13 +315,9 @@ export function renderScreensMarkdown(
   }
 
   const resolveFeatureLabels = (ids: string[]): string[] =>
-    ids
-      .map((id) => (featuresById.get(id) || id || "").trim())
-      .filter((s) => s.length > 0);
+    ids.map((id) => (featuresById.get(id) || id || "").trim()).filter((s) => s.length > 0);
   const resolveEntityLabels = (ids: string[]): string[] =>
-    ids
-      .map((id) => (entitiesById.get(id) || id || "").trim())
-      .filter((s) => s.length > 0);
+    ids.map((id) => (entitiesById.get(id) || id || "").trim()).filter((s) => s.length > 0);
 
   const lines: string[] = [];
   lines.push(

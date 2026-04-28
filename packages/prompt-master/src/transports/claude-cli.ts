@@ -58,9 +58,7 @@ export interface ClaudeCliTransportOpts {
   extraArgs?: string[];
 }
 
-export function createClaudeCliTransport(
-  opts: ClaudeCliTransportOpts = {},
-): PromptMasterTransport {
+export function createClaudeCliTransport(opts: ClaudeCliTransportOpts = {}): PromptMasterTransport {
   const binary = opts.binary ?? "claude";
   const system = opts.systemOverride ?? PROMPT_MASTER_SYSTEM;
   const timeoutMs = opts.timeoutMs ?? 30_000;
@@ -100,11 +98,7 @@ export function createClaudeCliTransport(
         child.on("close", (code: number | null) => {
           clearTimeout(timer);
           if (code !== 0) {
-            reject(
-              new Error(
-                `claude-cli: exit ${code ?? "?"} - ${stderr.slice(0, 240).trim()}`,
-              ),
-            );
+            reject(new Error(`claude-cli: exit ${code ?? "?"} - ${stderr.slice(0, 240).trim()}`));
             return;
           }
           const text = stdout.trim();

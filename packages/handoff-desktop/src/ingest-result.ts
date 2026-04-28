@@ -1,5 +1,5 @@
-import { createLogger } from "@founder-os/logger";
 import type { HandoffResult } from "@founder-os/handoff-contract";
+import { createLogger } from "@founder-os/logger";
 
 const log = createLogger("handoff-desktop:ingest-result");
 
@@ -26,7 +26,9 @@ export async function ingestResult(
     if (callbacks.onSuccess) {
       await callbacks.onSuccess(result);
     }
-    log.info(`Run ${result.runId} completed successfully — ${result.producedArtifacts.length} artifacts produced`);
+    log.info(
+      `Run ${result.runId} completed successfully — ${result.producedArtifacts.length} artifacts produced`
+    );
   } else if (result.status === "failed") {
     log.warn(`Run ${result.runId} failed: ${result.error ?? "unknown error"}`);
     if (callbacks.onFailure) {

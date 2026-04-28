@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
 import type {
   VaultDoc,
   VaultDocBody,
   VaultListResponse,
 } from "@founder-os/mission-control-protocol";
+import { useEffect, useState } from "react";
 import type { TabProps } from "../App.js";
 import { request } from "../lib/vscode.js";
 
@@ -35,7 +35,9 @@ export function VaultTab(_props: TabProps) {
     }
   }
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    void refresh();
+  }, []);
 
   async function loadDoc(id: string): Promise<void> {
     setBusy("load");
@@ -102,7 +104,9 @@ export function VaultTab(_props: TabProps) {
     <>
       <div className="mc-card">
         <div className="mc-row" style={{ justifyContent: "space-between" }}>
-          <h3 className="mc-card-title" style={{ margin: 0 }}>Vault</h3>
+          <h3 className="mc-card-title" style={{ margin: 0 }}>
+            Vault
+          </h3>
           <div className="mc-row" style={{ gap: 6 }}>
             <button className="secondary" onClick={() => setDraft(EMPTY_DRAFT)}>
               New doc
@@ -118,7 +122,10 @@ export function VaultTab(_props: TabProps) {
         </p>
       </div>
 
-      <div className="mc-grid" style={{ gridTemplateColumns: "minmax(220px, 280px) 1fr", alignItems: "start", gap: 14 }}>
+      <div
+        className="mc-grid"
+        style={{ gridTemplateColumns: "minmax(220px, 280px) 1fr", alignItems: "start", gap: 14 }}
+      >
         <div className="mc-card" style={{ marginBottom: 0 }}>
           <h3 className="mc-card-title">Docs</h3>
           {docs === null && !error && <div className="mc-empty">Loading…</div>}
@@ -146,7 +153,9 @@ export function VaultTab(_props: TabProps) {
                       {d.tags.length > 0 && (
                         <span>
                           {d.tags.map((t) => (
-                            <span key={t} className="mc-pill" style={{ marginRight: 4 }}>{t}</span>
+                            <span key={t} className="mc-pill" style={{ marginRight: 4 }}>
+                              {t}
+                            </span>
                           ))}
                         </span>
                       )}
@@ -189,7 +198,9 @@ export function VaultTab(_props: TabProps) {
               placeholder="comma, separated, tags"
               onChange={(e) => setDraft({ ...draft, tagsRaw: e.target.value })}
             />
-            <label htmlFor="vault-body" style={{ alignSelf: "start", marginTop: 6 }}>Body</label>
+            <label htmlFor="vault-body" style={{ alignSelf: "start", marginTop: 6 }}>
+              Body
+            </label>
             <textarea
               id="vault-body"
               rows={14}
@@ -199,10 +210,7 @@ export function VaultTab(_props: TabProps) {
             />
           </div>
           <div className="mc-row" style={{ marginTop: 10, justifyContent: "flex-end" }}>
-            <button
-              onClick={saveDraft}
-              disabled={!draft.title.trim() || busy !== null}
-            >
+            <button onClick={saveDraft} disabled={!draft.title.trim() || busy !== null}>
               {busy === "save" ? "Saving…" : draft.id ? "Save" : "Create"}
             </button>
           </div>
@@ -211,7 +219,9 @@ export function VaultTab(_props: TabProps) {
 
       {error && (
         <div className="mc-card" style={{ borderColor: "var(--fc-error)" }}>
-          <h3 className="mc-card-title" style={{ color: "var(--fc-error)" }}>Error</h3>
+          <h3 className="mc-card-title" style={{ color: "var(--fc-error)" }}>
+            Error
+          </h3>
           <pre style={{ whiteSpace: "pre-wrap", color: "var(--fc-error)" }}>{error}</pre>
         </div>
       )}

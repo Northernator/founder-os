@@ -1,12 +1,12 @@
+import type { Venture, VentureStage } from "@founder-os/domain";
 import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  type UseQueryResult,
   type UseMutationResult,
+  type UseQueryResult,
+  useMutation,
+  useQuery,
+  useQueryClient,
 } from "@tanstack/react-query";
 import { queryKeys } from "./query-keys.js";
-import type { Venture, VentureStage } from "@founder-os/domain";
 
 // ──────────────────────────────────────────────
 // Adapter interface — injected from the app layer
@@ -24,7 +24,8 @@ export function configureQueryAdapter(adapter: VentureAdapter): void {
 }
 
 function requireAdapter(): VentureAdapter {
-  if (!_adapter) throw new Error("Query adapter not configured — call configureQueryAdapter() at app startup");
+  if (!_adapter)
+    throw new Error("Query adapter not configured — call configureQueryAdapter() at app startup");
   return _adapter;
 }
 
@@ -52,8 +53,7 @@ export function useVenture(id: string): UseQueryResult<Venture | null> {
 export function useAdvanceStage(ventureId: string): UseMutationResult<void, Error, VentureStage> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (stage: VentureStage) =>
-      requireAdapter().updateVentureStage(ventureId, stage),
+    mutationFn: (stage: VentureStage) => requireAdapter().updateVentureStage(ventureId, stage),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.ventures.all() });
       qc.invalidateQueries({ queryKey: queryKeys.ventures.detail(ventureId) });

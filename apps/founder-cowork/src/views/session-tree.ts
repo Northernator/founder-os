@@ -1,5 +1,5 @@
-import * as vscode from "vscode";
 import type { AgentSession } from "@founder-os/agent-runner";
+import * as vscode from "vscode";
 
 export interface SessionEntry {
   id: string;
@@ -18,30 +18,34 @@ export interface SessionEntry {
 }
 
 export class SessionTreeProvider implements vscode.TreeDataProvider<SessionEntry> {
-  private _onDidChangeTreeData = new vscode.EventEmitter<
-    SessionEntry | undefined | null | void
-  >();
+  private _onDidChangeTreeData = new vscode.EventEmitter<SessionEntry | undefined | null | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly sessions = new Map<string, SessionEntry>();
 
   getTreeItem(entry: SessionEntry): vscode.TreeItem {
-    const item = new vscode.TreeItem(
-      entry.agent,
-      vscode.TreeItemCollapsibleState.None,
-    );
+    const item = new vscode.TreeItem(entry.agent, vscode.TreeItemCollapsibleState.None);
     item.description = entry.branch + " · " + entry.status;
     item.contextValue = "agentSession";
     item.iconPath = new vscode.ThemeIcon(
-      entry.status === "running" ? "debug-start" :
-      entry.status === "exited" ? "check" : "stop-circle",
+      entry.status === "running"
+        ? "debug-start"
+        : entry.status === "exited"
+          ? "check"
+          : "stop-circle"
     );
     item.tooltip =
-      entry.agent + " session " + entry.id +
-      "\nBranch: " + entry.branch +
-      "\nWorktree: " + entry.worktreePath +
-      "\nPID: " + entry.session.pid +
-      "\nStarted: " + new Date(entry.startedAt).toLocaleTimeString();
+      entry.agent +
+      " session " +
+      entry.id +
+      "\nBranch: " +
+      entry.branch +
+      "\nWorktree: " +
+      entry.worktreePath +
+      "\nPID: " +
+      entry.session.pid +
+      "\nStarted: " +
+      new Date(entry.startedAt).toLocaleTimeString();
     item.command = {
       command: "founderCowork.showSession",
       title: "Show",

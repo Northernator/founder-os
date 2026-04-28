@@ -15,14 +15,28 @@
     "desktop:tauri": "pnpm --filter founder-desktop tauri dev",
     "extension:build": "pnpm --filter founder-cowork build",
     "extension:package": "pnpm --filter founder-cowork package",
-    "seed": "pnpm --filter founder-desktop seed"
+    "seed": "pnpm --filter founder-desktop seed",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm exec lint-staged"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,mjs,cjs}": [
+      "biome check --no-errors-on-unmatched --files-ignore-unknown=true"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "biome format --write --no-errors-on-unmatched --files-ignore-unknown=true"
+    ]
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/node": "^22.15.3",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "lint-staged": "^16.4.0",
     "rimraf": "^6.0.1",
+    "simple-git-hooks": "^2.13.1",
     "turbo": "^2.5.0",
     "typescript": "^5.8.3"
   },
@@ -30,11 +44,6 @@
     "node": ">=20"
   },
   "pnpm": {
-    "onlyBuiltDependencies": [
-      "@biomejs/biome",
-      "better-sqlite3",
-      "esbuild",
-      "node-pty"
-    ]
+    "onlyBuiltDependencies": ["@biomejs/biome", "better-sqlite3", "esbuild", "node-pty"]
   }
 }

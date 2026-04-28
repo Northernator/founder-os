@@ -1,6 +1,6 @@
+import type { RunPlan } from "@founder-os/pipeline-core";
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import type { RunPlan } from "@founder-os/pipeline-core";
 
 export type PipelineStore = {
   // State

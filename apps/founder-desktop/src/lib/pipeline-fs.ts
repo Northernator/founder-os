@@ -1,3 +1,4 @@
+import type { Filesystem } from "@founder-os/pipeline-runner";
 /**
  * Tauri-backed Filesystem adapter for the pipeline-runner.
  *
@@ -8,7 +9,6 @@
  * paths with `~` and they'll be resolved against the user's home dir.
  */
 import { invoke } from "@tauri-apps/api/core";
-import type { Filesystem } from "@founder-os/pipeline-runner";
 
 export const tauriFs: Filesystem = {
   async mkdir(path) {

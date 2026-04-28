@@ -1,5 +1,5 @@
-import { and, eq } from "drizzle-orm";
 import type { Artifact, ArtifactType } from "@founder-os/artifacts-core";
+import { and, eq } from "drizzle-orm";
 import type { FounderDb } from "../client";
 import { artifacts } from "../schema";
 

@@ -1,22 +1,22 @@
-import { useEffect, useState } from "react";
 import type {
+  AgentHealthMap,
+  AgentSummary,
   HostToWebviewMessage,
   InitState,
-  AgentSummary,
-  AgentHealthMap,
   SessionSummary,
 } from "@founder-os/mission-control-protocol";
+import { useEffect, useState } from "react";
+import { TAB_DEFS, TabBar, type TabId } from "./components/TabBar.js";
 import { onHostMessage, send } from "./lib/vscode.js";
-import { TabBar, type TabId, TAB_DEFS } from "./components/TabBar.js";
-import { TaskTab } from "./tabs/TaskTab.js";
 import { AgentsTab } from "./tabs/AgentsTab.js";
-import { SkillsTab } from "./tabs/SkillsTab.js";
+import { ExplainTab } from "./tabs/ExplainTab.js";
 import { GitHubTab } from "./tabs/GitHubTab.js";
 import { MemoryTab } from "./tabs/MemoryTab.js";
-import { VaultTab } from "./tabs/VaultTab.js";
-import { TruthTab } from "./tabs/TruthTab.js";
 import { OllamaTab } from "./tabs/OllamaTab.js";
-import { ExplainTab } from "./tabs/ExplainTab.js";
+import { SkillsTab } from "./tabs/SkillsTab.js";
+import { TaskTab } from "./tabs/TaskTab.js";
+import { TruthTab } from "./tabs/TruthTab.js";
+import { VaultTab } from "./tabs/VaultTab.js";
 
 const EMPTY_STATE: InitState = {
   protocolVersion: 1,
@@ -53,7 +53,7 @@ export function App() {
           setState((s) => ({
             ...s,
             sessions: s.sessions.map((sess) =>
-              sess.id === m.sessionId ? { ...sess, status: "exited" } : sess,
+              sess.id === m.sessionId ? { ...sess, status: "exited" } : sess
             ),
           }));
           break;
@@ -85,9 +85,7 @@ export function App() {
         </p>
         <TabBar active={activeTab} onChange={setActiveTab} />
       </header>
-      <main className="mc-body">
-        {renderTab(activeTab, state)}
-      </main>
+      <main className="mc-body">{renderTab(activeTab, state)}</main>
     </div>
   );
 }
@@ -100,15 +98,24 @@ function renderTab(id: TabId, state: InitState) {
     ventureRoot: state.ventureRoot,
   };
   switch (id) {
-    case "task":    return <TaskTab {...props} />;
-    case "agents":  return <AgentsTab {...props} />;
-    case "skills":  return <SkillsTab {...props} />;
-    case "github":  return <GitHubTab {...props} />;
-    case "memory":  return <MemoryTab {...props} />;
-    case "vault":   return <VaultTab {...props} />;
-    case "truth":   return <TruthTab {...props} />;
-    case "ollama":  return <OllamaTab {...props} />;
-    case "explain": return <ExplainTab {...props} />;
+    case "task":
+      return <TaskTab {...props} />;
+    case "agents":
+      return <AgentsTab {...props} />;
+    case "skills":
+      return <SkillsTab {...props} />;
+    case "github":
+      return <GitHubTab {...props} />;
+    case "memory":
+      return <MemoryTab {...props} />;
+    case "vault":
+      return <VaultTab {...props} />;
+    case "truth":
+      return <TruthTab {...props} />;
+    case "ollama":
+      return <OllamaTab {...props} />;
+    case "explain":
+      return <ExplainTab {...props} />;
   }
   // Exhaustiveness check
   const _exhaustive: never = id;

@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
 import type { AuditFinding } from "@founder-os/audit-contract";
+import { eq } from "drizzle-orm";
 import type { FounderDb } from "../client";
 import { auditFindings } from "../schema";
 

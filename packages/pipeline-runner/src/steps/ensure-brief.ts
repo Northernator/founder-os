@@ -1,6 +1,6 @@
 import { createLogger } from "@founder-os/logger";
-import { getBriefDir } from "@founder-os/workspace-core";
 import type { RunStep } from "@founder-os/pipeline-core";
+import { getBriefDir } from "@founder-os/workspace-core";
 import type { Filesystem } from "../fs.js";
 
 const log = createLogger("pipeline-runner:ensure-brief");

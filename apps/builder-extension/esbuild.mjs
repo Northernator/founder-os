@@ -8,11 +8,17 @@ const options = {
   bundle: true,
   outfile: "out/extension.js",
   external: [
-    "vscode",          // VS Code API — provided by the extension host
-    "node:*",          // Node built-ins
-    "fs", "path", "os", "crypto", "util", "stream", "events",
+    "vscode", // VS Code API — provided by the extension host
+    "node:*", // Node built-ins
+    "fs",
+    "path",
+    "os",
+    "crypto",
+    "util",
+    "stream",
+    "events",
   ],
-  format: "cjs",       // VS Code extensions must be CommonJS
+  format: "cjs", // VS Code extensions must be CommonJS
   platform: "node",
   target: "node20",
   sourcemap: true,

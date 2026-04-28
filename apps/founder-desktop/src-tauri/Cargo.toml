@@ -66,6 +66,13 @@ walkdir = "2"
 # the `serde` feature — events stay in-Rust and we project them to JSON for
 # the frontend.
 notify = { version = "6", default-features = false, features = ["macos_kqueue"] }
+# SQLite client used by the Prompt Master persistent cache (cache.rs). We
+# open a separate connection to the same `founder.db` that tauri-plugin-sql
+# manages — SQLite handles intra-process locking, and the cache writes are
+# infrequent enough that contention with the plugin pool is a non-issue.
+# `bundled` ships a vendored SQLite so Windows/macOS/Linux all build without
+# an external sqlite3 dev package.
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 [features]
 default = ["custom-protocol"]

@@ -1,3 +1,5 @@
+import type { LlmProviderId } from "@founder-os/llm-providers";
+import { optimize } from "@founder-os/prompt-master";
 /**
  * brand-gen.ts — AI-driven brand asset generation.
  *
@@ -20,7 +22,6 @@
  * resist wrapping in ```svg``` fences anyway.
  */
 import { streamChat } from "./llm-client.js";
-import type { LlmProviderId } from "@founder-os/llm-providers";
 
 // ──────────────────────────────────────────────
 // Brief shape (subset) — the parts we pass to the LLM as context
@@ -58,11 +59,7 @@ export type BrandGenBrief = {
 // ──────────────────────────────────────────────
 
 /** Logo archetype label used in UI cards + prompts. */
-export type LogoArchetype =
-  | "wordmark"
-  | "lettermark"
-  | "icon-wordmark"
-  | "abstract-mark";
+export type LogoArchetype = "wordmark" | "lettermark" | "icon-wordmark" | "abstract-mark";
 
 export type LogoCandidate = {
   archetype: LogoArchetype;
@@ -76,20 +73,11 @@ export type LogoCandidate = {
 const SYSTEM_PROMPT_SVG =
   "You are a senior brand designer fluent in SVG. You output only raw SVG markup — no explanation, no commentary, no markdown fences. Every response is valid SVG that renders in a modern browser. Keep it minimal and elegant: few elements, clean geometry, tasteful use of the brand palette. No filters, gradients, or effects unless specifically asked — flat vector only. Never include <script> tags. Always include a viewBox attribute.";
 
-function buildArchetypePrompt(
-  brief: BrandGenBrief,
-  archetype: LogoArchetype
-): string {
-  const personality = brief.personality.length
-    ? brief.personality.join(", ")
-    : "balanced";
+function buildArchetypePrompt(brief: BrandGenBrief, archetype: LogoArchetype): string {
+  const personality = brief.personality.length ? brief.personality.join(", ") : "balanced";
   const paletteLine = `Primary ${brief.palette.primary}, secondary ${brief.palette.secondary}, accent ${brief.palette.accent}, text ${brief.palette.text}, background ${brief.palette.background}.`;
-  const voice = brief.toneOfVoice
-    ? ` Voice: ${brief.toneOfVoice}.`
-    : "";
-  const audience = brief.targetAudience
-    ? ` Audience: ${brief.targetAudience}.`
-    : "";
+  const voice = brief.toneOfVoice ? ` Voice: ${brief.toneOfVoice}.` : "";
+  const audience = brief.targetAudience ? ` Audience: ${brief.targetAudience}.` : "";
   const context = `Brand: ${brief.companyName}.${brief.tagline ? ` Tagline: ${brief.tagline}.` : ""}${voice}${audience} Personality: ${personality}. Palette — ${paletteLine}`;
 
   // Each archetype gets a tight spec — viewBox, what to use, what to
@@ -132,12 +120,22 @@ export async function generateLogoCandidates(opts: {
   onArchetypeStart?: (archetype: LogoArchetype) => void;
   onArchetypeDone?: (candidate: LogoCandidate & { error?: string }) => void;
 }): Promise<(LogoCandidate & { error?: string })[]> {
-  const archetypes: LogoArchetype[] = [
-    "wordmark",
-    "lettermark",
-    "icon-wordmark",
-    "abstract-mark",
-  ];
+  const archetypes: LogoArchetype[] = ["wordmark", "lettermark", "icon-wordmark", "abstract-mark"];
+
+  // Optimise the shared SVG system prompt once, before fanning out the
+  // four archetype calls. If we did it per-archetype, four parallel
+  // optimize() calls would all miss the cache simultaneously and burn
+  // four redundant transport hits.
+  const optimizedSystem = await optimize({
+    prompt: SYSTEM_PROMPT_SVG,
+    context: "wireframe",
+  });
+  console.info(
+    "[prompt-master] brand-gen.logo",
+    optimizedSystem.fallbackUsed
+      ? "(fallback — transport unavailable)"
+      : `tokensSaved=${optimizedSystem.tokensSaved} cacheHit=${optimizedSystem.cacheHit}`
+  );
 
   const results = await Promise.all(
     archetypes.map(async (archetype) => {
@@ -145,10 +143,8 @@ export async function generateLogoCandidates(opts: {
       try {
         const raw = await streamChat({
           provider: opts.provider,
-          system: SYSTEM_PROMPT_SVG,
-          messages: [
-            { role: "user", content: buildArchetypePrompt(opts.brief, archetype) },
-          ],
+          system: optimizedSystem.optimized,
+          messages: [{ role: "user", content: buildArchetypePrompt(opts.brief, archetype) }],
           temperature: 0.8,
           maxTokens: 2000,
           signal: opts.signal,
@@ -161,14 +157,12 @@ export async function generateLogoCandidates(opts: {
           provider: opts.provider,
         };
         if (!svg) {
-          result.error =
-            "Model returned no valid SVG — try regenerating this archetype.";
+          result.error = "Model returned no valid SVG — try regenerating this archetype.";
         }
         opts.onArchetypeDone?.(result);
         return result;
       } catch (err) {
-        const msg =
-          err instanceof Error ? err.message : String(err);
+        const msg = err instanceof Error ? err.message : String(err);
         const result: LogoCandidate & { error?: string } = {
           archetype,
           svg: "",
@@ -285,9 +279,24 @@ export async function generateFullPack(opts: {
       opts.onAssetStart?.(spec);
       try {
         const system = systemPromptFor(spec.kind);
+        // The pack runs all six assets in parallel, but each spec.kind
+        // may pick a different system prompt — optimise per-call rather
+        // than once outside. Repeated kinds (e.g. multiple "svg" specs)
+        // share a cache key so only the first burst pays the optimizer
+        // round-trip; the rest hit the LRU.
+        const optimizedSystem = await optimize({
+          prompt: system,
+          context: "wireframe",
+        });
+        console.info(
+          `[prompt-master] brand-gen.${spec.key}`,
+          optimizedSystem.fallbackUsed
+            ? "(fallback — transport unavailable)"
+            : `tokensSaved=${optimizedSystem.tokensSaved} cacheHit=${optimizedSystem.cacheHit}`
+        );
         const raw = await streamChat({
           provider: opts.provider,
-          system,
+          system: optimizedSystem.optimized,
           messages: [
             {
               role: "user",
@@ -302,8 +311,8 @@ export async function generateFullPack(opts: {
           spec.kind === "svg"
             ? extractSvg(raw)
             : spec.kind === "html"
-            ? extractHtml(raw)
-            : extractMarkdown(raw);
+              ? extractHtml(raw)
+              : extractMarkdown(raw);
         const result: PackAssetResult = { spec, content };
         if (!content) {
           result.error = "Model returned empty content. Retry this asset.";
@@ -372,9 +381,7 @@ export function extractHtml(raw: string): string {
   if (!raw) return "";
   const trimmed = raw.trim();
   // Handle ```html … ``` fences.
-  const fenced = trimmed.match(
-    /^```(?:html)?\s*\n([\s\S]*?)\n```\s*$/i
-  );
+  const fenced = trimmed.match(/^```(?:html)?\s*\n([\s\S]*?)\n```\s*$/i);
   if (fenced) return fenced[1].trim();
   return trimmed;
 }
@@ -385,9 +392,7 @@ export function extractHtml(raw: string): string {
 export function extractMarkdown(raw: string): string {
   if (!raw) return "";
   const trimmed = raw.trim();
-  const fenced = trimmed.match(
-    /^```(?:markdown|md)?\s*\n([\s\S]*?)\n```\s*$/i
-  );
+  const fenced = trimmed.match(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```\s*$/i);
   if (fenced) return fenced[1].trim();
   return trimmed;
 }

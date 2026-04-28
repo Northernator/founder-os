@@ -1,11 +1,8 @@
 import * as fs from "node:fs";
-import chokidar from "chokidar";
+import { type HandoffBundle, safeParseBundle } from "@founder-os/handoff-contract";
 import { createLogger } from "@founder-os/logger";
-import {
-  safeParseBundle,
-  type HandoffBundle,
-} from "@founder-os/handoff-contract";
 import { ventureHandoffPaths } from "@founder-os/workspace-core";
+import chokidar from "chokidar";
 
 const log = createLogger("handoff-vscode:watch-inbox");
 
@@ -32,7 +29,7 @@ const log = createLogger("handoff-vscode:watch-inbox");
  */
 export function watchInbox(
   ventureRoot: string,
-  onBundle: (bundle: HandoffBundle) => void | Promise<void>,
+  onBundle: (bundle: HandoffBundle) => void | Promise<void>
 ): () => void {
   const paths = ventureHandoffPaths(ventureRoot);
   fs.mkdirSync(paths.inbox, { recursive: true });
@@ -58,17 +55,13 @@ export function watchInbox(
       const raw = JSON.parse(fs.readFileSync(filePath, "utf-8"));
       const parsed = safeParseBundle(raw);
       if (!parsed.success) {
-        log.warn(
-          "Invalid bundle at " + filePath + ": " + parsed.error.message,
-        );
+        log.warn("Invalid bundle at " + filePath + ": " + parsed.error.message);
         return;
       }
       log.info("Picked up bundle " + parsed.data.runId + " from inbox");
       await onBundle(parsed.data);
     } catch (err) {
-      log.warn(
-        "Failed to process inbox file " + filePath + ": " + String(err),
-      );
+      log.warn("Failed to process inbox file " + filePath + ": " + String(err));
     }
   };
 
@@ -82,10 +75,18 @@ export function watchInbox(
     },
   });
 
-  watcher.on("add",   (filePath) => { void processFile(filePath); });
-  watcher.on("change", (filePath) => { void processFile(filePath); });
-  watcher.on("error",  (err) => { log.warn("chokidar error: " + String(err)); });
-  watcher.on("ready",  () => { log.info("chokidar ready on " + paths.inbox); });
+  watcher.on("add", (filePath) => {
+    void processFile(filePath);
+  });
+  watcher.on("change", (filePath) => {
+    void processFile(filePath);
+  });
+  watcher.on("error", (err) => {
+    log.warn("chokidar error: " + String(err));
+  });
+  watcher.on("ready", () => {
+    log.info("chokidar ready on " + paths.inbox);
+  });
 
   return () => {
     void watcher.close();

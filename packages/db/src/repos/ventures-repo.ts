@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
 import type { Venture, VentureStage } from "@founder-os/domain";
+import { eq } from "drizzle-orm";
 import type { FounderDb } from "../client";
 import { ventures } from "../schema";
 
@@ -52,11 +52,7 @@ export function getVentureBySlug(db: FounderDb, slug: string): VentureRow | unde
 }
 
 export function listVentures(db: FounderDb): VentureRow[] {
-  return db
-    .select()
-    .from(ventures)
-    .all()
-    .map(rowToVenture);
+  return db.select().from(ventures).all().map(rowToVenture);
 }
 
 export function updateStage(db: FounderDb, id: string, stage: VentureStage): void {

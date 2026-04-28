@@ -12,8 +12,8 @@
  *     real process; the VS Code terminal is just a viewport.
  */
 
-import * as vscode from "vscode";
 import type { AgentSession } from "@founder-os/agent-runner";
+import * as vscode from "vscode";
 
 export interface SessionTerminalHandles {
   /** The terminal shown in the VS Code panel. */
@@ -22,17 +22,12 @@ export interface SessionTerminalHandles {
   dispose(): void;
 }
 
-export function createSessionTerminal(
-  session: AgentSession,
-  name: string,
-): SessionTerminalHandles {
+export function createSessionTerminal(session: AgentSession, name: string): SessionTerminalHandles {
   const writeEmitter = new vscode.EventEmitter<string>();
   const closeEmitter = new vscode.EventEmitter<number>();
 
   const dataSub = session.onData((chunk) => writeEmitter.fire(chunk));
-  const exitSub = session.onExit(({ exitCode }) =>
-    closeEmitter.fire(exitCode),
-  );
+  const exitSub = session.onExit(({ exitCode }) => closeEmitter.fire(exitCode));
 
   const pty: vscode.Pseudoterminal = {
     onDidWrite: writeEmitter.event,

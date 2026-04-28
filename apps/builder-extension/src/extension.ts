@@ -1,10 +1,15 @@
-import * as vscode from "vscode";
 import { watchInbox } from "@founder-os/handoff-vscode";
 import { acceptBundle, consumeInboxFile } from "@founder-os/handoff-vscode";
-import { writeResult, writeProgress, makeSuccessResult, makeFailureResult } from "@founder-os/handoff-vscode";
+import {
+  makeFailureResult,
+  makeSuccessResult,
+  writeProgress,
+  writeResult,
+} from "@founder-os/handoff-vscode";
 import { createLogger } from "@founder-os/logger";
 import { setTransport } from "@founder-os/prompt-master";
 import { createClaudeCliTransport, installNodeBackends } from "@founder-os/prompt-master/node";
+import * as vscode from "vscode";
 
 // Wire the Node-only cache + telemetry backends once at extension load. Idempotent.
 installNodeBackends();
@@ -29,7 +34,7 @@ export function activate(context: vscode.ExtensionContext): void {
       createClaudeCliTransport({
         binary: "claude",
         extraArgs: ["--model", "claude-haiku-4-5-20251001"],
-      }),
+      })
     );
     log.info("prompt-master: claude-cli transport registered (uses CLI auth)");
   } catch (err) {
@@ -45,7 +50,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("founderOs.pickVentureRoot", cmdPickVentureRoot),
     vscode.commands.registerCommand("founderOs.runPipeline", cmdRunPipeline),
     vscode.commands.registerCommand("founderOs.acceptHandoff", cmdAcceptHandoff),
-    vscode.commands.registerCommand("founderOs.showStatus", cmdShowStatus),
+    vscode.commands.registerCommand("founderOs.showStatus", cmdShowStatus)
   );
 
   // Auto-watch if configured
@@ -60,7 +65,10 @@ export function activate(context: vscode.ExtensionContext): void {
   // Watch for config changes
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("founderOs.ventureRoot") || e.affectsConfiguration("founderOs.autoWatch")) {
+      if (
+        e.affectsConfiguration("founderOs.ventureRoot") ||
+        e.affectsConfiguration("founderOs.autoWatch")
+      ) {
         restartWatch(context);
       }
     })
@@ -87,18 +95,18 @@ async function cmdPickVentureRoot(): Promise<void> {
   });
   if (!result?.[0]) return;
   const path = result[0].fsPath;
-  await vscode.workspace.getConfiguration("founderOs").update(
-    "ventureRoot",
-    path,
-    vscode.ConfigurationTarget.Global
-  );
+  await vscode.workspace
+    .getConfiguration("founderOs")
+    .update("ventureRoot", path, vscode.ConfigurationTarget.Global);
   vscode.window.showInformationMessage(`Venture root set to: ${path}`);
 }
 
 async function cmdRunPipeline(): Promise<void> {
   const ventureRoot = getVentureRoot();
   if (!ventureRoot) return;
-  vscode.window.showInformationMessage("Pipeline run initiated (desktop app controls the pipeline)");
+  vscode.window.showInformationMessage(
+    "Pipeline run initiated (desktop app controls the pipeline)"
+  );
 }
 
 async function cmdAcceptHandoff(): Promise<void> {
@@ -134,12 +142,10 @@ function restartWatch(context: vscode.ExtensionContext): void {
 }
 
 function getVentureRoot(): string | null {
-  const root = vscode.workspace
-    .getConfiguration("founderOs")
-    .get<string>("ventureRoot");
+  const root = vscode.workspace.getConfiguration("founderOs").get<string>("ventureRoot");
   if (!root) {
     vscode.window.showWarningMessage(
-      "Founder OS: venture root not set. Run 'Founder OS: Select Venture Folder' first.",
+      "Founder OS: venture root not set. Run 'Founder OS: Select Venture Folder' first."
     );
     return null;
   }
@@ -153,9 +159,8 @@ async function handleBundle(
 ): Promise<void> {
   log.info(`Received bundle ${bundle.runId} (${bundle.type})`);
 
-  const claudeBinary = vscode.workspace
-    .getConfiguration("founderOs")
-    .get<string>("claudeBinaryName") ?? "claude";
+  const claudeBinary =
+    vscode.workspace.getConfiguration("founderOs").get<string>("claudeBinaryName") ?? "claude";
 
   const { bundle: accepted } = acceptBundle(bundle);
   consumeInboxFile(bundle.runId, ventureRoot);
@@ -169,11 +174,7 @@ async function handleBundle(
     });
     const result = await runner.run();
     writeResult(result, ventureRoot);
-    statusProvider?.updateRun(
-      bundle.runId,
-      result.status,
-      100,
-    );
+    statusProvider?.updateRun(bundle.runId, result.status, 100);
   } catch (err) {
     log.error(`handleBundle error: ${err}`);
     const failure = makeFailureResult(bundle, `Runner error: ${err}`);

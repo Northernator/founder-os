@@ -1,5 +1,5 @@
+import { type VentureStage, VentureStageSchema } from "@founder-os/domain";
 import { z } from "zod";
-import { VentureStageSchema, type VentureStage } from "@founder-os/domain";
 
 export const RunStepStatusSchema = z.enum(["pending", "running", "done", "skipped", "failed"]);
 export type RunStepStatus = z.infer<typeof RunStepStatusSchema>;
@@ -44,11 +44,7 @@ export function createRunPlan(opts: {
   });
 }
 
-export function updateStep(
-  plan: RunPlan,
-  stepId: string,
-  patch: Partial<RunStep>
-): RunPlan {
+export function updateStep(plan: RunPlan, stepId: string, patch: Partial<RunStep>): RunPlan {
   return {
     ...plan,
     steps: plan.steps.map((s) => (s.id === stepId ? { ...s, ...patch } : s)),

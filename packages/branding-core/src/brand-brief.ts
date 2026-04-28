@@ -59,9 +59,7 @@ export const BrandBriefSchema = z.object({
 });
 export type BrandBrief = z.infer<typeof BrandBriefSchema>;
 
-export function createBrandBrief(
-  opts: Omit<BrandBrief, "createdAt" | "version">
-): BrandBrief {
+export function createBrandBrief(opts: Omit<BrandBrief, "createdAt" | "version">): BrandBrief {
   return BrandBriefSchema.parse({
     ...opts,
     createdAt: new Date().toISOString(),

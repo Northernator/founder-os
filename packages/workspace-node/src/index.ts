@@ -1,8 +1,8 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import chokidar, { type FSWatcher } from "chokidar";
-import { VENTURE_DIR_SKELETON } from "@founder-os/workspace-core";
 import { createLogger } from "@founder-os/logger";
+import { VENTURE_DIR_SKELETON } from "@founder-os/workspace-core";
+import chokidar, { type FSWatcher } from "chokidar";
 
 const logger = createLogger("workspace-node");
 

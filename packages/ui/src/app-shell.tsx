@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 
 export type AppShellProps = {
   sidebar: React.ReactNode;
@@ -6,14 +6,15 @@ export type AppShellProps = {
   sidebarWidth?: number;
 };
 
-export function AppShell({
-  sidebar,
-  children,
-  sidebarWidth = 240,
-}: AppShellProps) {
+export function AppShell({ sidebar, children, sidebarWidth = 240 }: AppShellProps) {
   return (
     <div
-      style={{ display: "flex", height: "100vh", overflow: "hidden", fontFamily: "Inter, sans-serif" }}
+      style={{
+        display: "flex",
+        height: "100vh",
+        overflow: "hidden",
+        fontFamily: "Inter, sans-serif",
+      }}
     >
       <aside
         style={{

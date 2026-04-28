@@ -106,10 +106,7 @@ export const useToastStore = create<ToastState>((set, get) => ({
     // on screen, refresh its TTL rather than stacking a duplicate. Same
     // message = same id = same React element, so no flicker.
     const existing = get().toasts.find(
-      (t) =>
-        t.kind === input.kind &&
-        t.message === input.message &&
-        t.detail === input.detail
+      (t) => t.kind === input.kind && t.message === input.message && t.detail === input.detail
     );
     if (existing) {
       scheduleAutoDismiss(existing.id, ttlMs, get().dismiss);
