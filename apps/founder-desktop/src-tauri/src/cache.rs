@@ -28,9 +28,12 @@
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{Manager, State};
+
+use crate::pricing::dollars_for_tokens_saved;
 
 /// Maximum bytes the cache is allowed to occupy. 200MB matches the cap
 /// hinted at in the user-facing CacheStats; the optimized prompts we
@@ -73,6 +76,13 @@ pub struct CacheStats {
 /// events only; fallback events don't count toward the denominator
 /// because the cache never had a chance to hit. NaN is impossible —
 /// when there are no optimize events we return 0.0.
+///
+/// Dollar fields multiply each (provider, model) bucket's tokens_saved
+/// by its input list price (see crate::pricing) — events with NULL
+/// provider/model fall back to a midrange bucket so old/cache-hit rows
+/// don't render as $0. The numbers are estimates: tokens_saved is
+/// itself a chars/4 heuristic, and the pricing table tracks list rates,
+/// not the per-account discounts a real invoice might apply.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EventStats {
@@ -85,6 +95,15 @@ pub struct EventStats {
     /// global-scope events with no venture in scope) live on in the
     /// table for lifetime totals but don't appear here.
     pub top_ventures: Vec<TopVenture>,
+    /// Estimated lifetime USD saved across every event in the table.
+    pub estimated_dollars_saved_lifetime: f64,
+    /// Top 5 ventures ranked by estimated dollars saved (not tokens).
+    /// Different from `top_ventures` because a venture sending a lot of
+    /// tokens against a cheap model can save fewer dollars than a
+    /// venture sending fewer tokens against an expensive one.
+    pub top_ventures_by_dollars: Vec<TopVentureDollars>,
+    /// Top 3 (provider, model) pairs by estimated dollars saved.
+    pub top_models_by_dollars: Vec<TopModelDollars>,
 }
 
 #[derive(Serialize)]
@@ -93,12 +112,41 @@ pub struct TopContext {
     pub context: String,
     pub tokens_saved: i64,
     pub count: i64,
+    /// Estimated USD saved for this context, summed across the
+    /// (provider, model) buckets that emitted under it. Approximate —
+    /// see EventStats doc.
+    pub dollars_saved: f64,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TopVenture {
     pub venture_id: String,
+    pub tokens_saved: i64,
+    pub events: i64,
+    /// Estimated USD saved for this venture, summed across
+    /// (provider, model) buckets. Approximate — see EventStats doc.
+    pub dollars_saved: f64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TopVentureDollars {
+    pub venture_id: String,
+    pub dollars_saved: f64,
+    pub tokens_saved: i64,
+    pub events: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TopModelDollars {
+    /// Provider id ("anthropic", "openai", ...) or "unknown" when the
+    /// row pre-dates migration 0010.
+    pub provider: String,
+    /// Model id (catalog model string) or "unknown" for legacy rows.
+    pub model: String,
+    pub dollars_saved: f64,
     pub tokens_saved: i64,
     pub events: i64,
 }
@@ -273,6 +321,7 @@ pub fn pm_cache_inspect(
 /// so the TS sink can swallow them — telemetry must never break
 /// optimize().
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn pm_event_log(
     app: tauri::AppHandle,
     state: State<'_, CacheState>,
@@ -283,14 +332,16 @@ pub fn pm_event_log(
     transport: Option<String>,
     latency_ms: Option<i64>,
     venture_id: Option<String>,
+    provider: Option<String>,
+    model: Option<String>,
 ) -> Result<(), String> {
     with_conn(&state, &app, |conn| {
         let now = current_iso();
         let cache_hit_int: i64 = if cache_hit { 1 } else { 0 };
         conn.execute(
             "INSERT INTO prompt_master_events \
-             (ts, event, context, tokens_saved, cache_hit, transport, latency_ms, venture_id) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+             (ts, event, context, tokens_saved, cache_hit, transport, latency_ms, venture_id, provider, model) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 now,
                 event,
@@ -299,7 +350,9 @@ pub fn pm_event_log(
                 cache_hit_int,
                 transport,
                 latency_ms,
-                venture_id
+                venture_id,
+                provider,
+                model
             ],
         )
         .map_err(|e| format!("event log insert: {e}"))?;
@@ -361,60 +414,176 @@ pub fn pm_event_stats(
             0.0
         };
 
-        // Top contexts by tokens saved. Optimize events only — fallback
-        // rows have tokens_saved = 0 and would dilute the GROUP BY.
-        let mut stmt = conn
+        // Granular roll-up: every (context, venture, provider, model)
+        // bucket with its summed tokens_saved + event count. We do the
+        // pricing math in Rust because the SQL doesn't know per-model
+        // rates — see crate::pricing. One scan, then we fold into the
+        // four shapes the UI needs (lifetime $, top contexts, top
+        // ventures, top models). Cheap because EVENT_LOG_CAP keeps the
+        // table at ≤10k rows and the (provider, model) index covers
+        // the GROUP BY.
+        struct Bucket {
+            context: String,
+            venture_id: Option<String>,
+            provider: Option<String>,
+            model: Option<String>,
+            tokens_saved: i64,
+            events: i64,
+        }
+        let mut bstmt = conn
             .prepare(
-                "SELECT context, COALESCE(SUM(tokens_saved), 0) AS ts_total, COUNT(*) \
+                "SELECT context, venture_id, provider, model, \
+                        COALESCE(SUM(tokens_saved), 0), COUNT(*) \
                  FROM prompt_master_events \
                  WHERE event = 'optimize' \
-                 GROUP BY context \
-                 ORDER BY ts_total DESC \
-                 LIMIT 3",
+                 GROUP BY context, venture_id, provider, model",
             )
-            .map_err(|e| format!("event stats top prepare: {e}"))?;
-        let rows = stmt
+            .map_err(|e| format!("event stats buckets prepare: {e}"))?;
+        let brows = bstmt
             .query_map([], |r| {
-                Ok(TopContext {
+                Ok(Bucket {
                     context: r.get(0)?,
-                    tokens_saved: r.get(1)?,
-                    count: r.get(2)?,
+                    venture_id: r.get(1)?,
+                    provider: r.get(2)?,
+                    model: r.get(3)?,
+                    tokens_saved: r.get(4)?,
+                    events: r.get(5)?,
                 })
             })
-            .map_err(|e| format!("event stats top query: {e}"))?;
-        let mut top_contexts: Vec<TopContext> = Vec::new();
-        for row in rows {
-            top_contexts.push(row.map_err(|e| format!("event stats top row: {e}"))?);
+            .map_err(|e| format!("event stats buckets query: {e}"))?;
+
+        // Aggregator: roll the granular buckets up into the four
+        // dimensions the EventStats response carries. Each accumulator
+        // is keyed by its grouping field and tracks (tokens, dollars,
+        // events) so a later sort + truncate gives us the top-N panels.
+        struct Acc {
+            tokens_saved: i64,
+            dollars_saved: f64,
+            events: i64,
+        }
+        let mut by_context: HashMap<String, Acc> = HashMap::new();
+        let mut by_venture: HashMap<String, Acc> = HashMap::new();
+        let mut by_model: HashMap<(String, String), Acc> = HashMap::new();
+        let mut estimated_dollars_saved_lifetime: f64 = 0.0;
+
+        for row in brows {
+            let b = row.map_err(|e| format!("event stats bucket row: {e}"))?;
+            let dollars = dollars_for_tokens_saved(
+                b.provider.as_deref(),
+                b.model.as_deref(),
+                b.tokens_saved,
+            );
+            estimated_dollars_saved_lifetime += dollars;
+
+            // Context bucket — every row contributes (no NULL filter).
+            let ctx = by_context.entry(b.context.clone()).or_insert(Acc {
+                tokens_saved: 0,
+                dollars_saved: 0.0,
+                events: 0,
+            });
+            ctx.tokens_saved += b.tokens_saved;
+            ctx.dollars_saved += dollars;
+            ctx.events += b.events;
+
+            // Venture bucket — skip NULL venture_id rows. Events emitted
+            // before migration 0009 (and global-scope events) live in
+            // the lifetime totals but don't get attributed to any
+            // venture.
+            if let Some(vid) = b.venture_id.clone() {
+                let v = by_venture.entry(vid).or_insert(Acc {
+                    tokens_saved: 0,
+                    dollars_saved: 0.0,
+                    events: 0,
+                });
+                v.tokens_saved += b.tokens_saved;
+                v.dollars_saved += dollars;
+                v.events += b.events;
+            }
+
+            // Model bucket — only emit when we actually know the
+            // (provider, model). Pre-migration-0010 rows + cache hits
+            // both write NULL and we'd rather hide them than show a
+            // single "unknown / unknown" row that drowns out the real
+            // signal.
+            if let (Some(prov), Some(model_id)) = (b.provider.as_ref(), b.model.as_ref()) {
+                let m = by_model
+                    .entry((prov.clone(), model_id.clone()))
+                    .or_insert(Acc {
+                        tokens_saved: 0,
+                        dollars_saved: 0.0,
+                        events: 0,
+                    });
+                m.tokens_saved += b.tokens_saved;
+                m.dollars_saved += dollars;
+                m.events += b.events;
+            }
         }
 
-        // Top ventures by tokens saved. Optimize events only — fallback
-        // rows have tokens_saved = 0 and dilute the GROUP BY. Rows with
-        // NULL venture_id (events emitted before migration 0009, or
-        // global-scope events with no venture in scope) are filtered out
-        // here so the panel only shows real per-venture data.
-        let mut vstmt = conn
-            .prepare(
-                "SELECT venture_id, COALESCE(SUM(tokens_saved), 0) AS ts_total, COUNT(*) \
-                 FROM prompt_master_events \
-                 WHERE event = 'optimize' AND venture_id IS NOT NULL \
-                 GROUP BY venture_id \
-                 ORDER BY ts_total DESC \
-                 LIMIT 5",
-            )
-            .map_err(|e| format!("event stats top ventures prepare: {e}"))?;
-        let vrows = vstmt
-            .query_map([], |r| {
-                Ok(TopVenture {
-                    venture_id: r.get(0)?,
-                    tokens_saved: r.get(1)?,
-                    events: r.get(2)?,
-                })
+        // Top contexts: sort by tokens (matches existing UI ordering)
+        // and keep top 3.
+        let mut top_contexts: Vec<TopContext> = by_context
+            .into_iter()
+            .map(|(context, acc)| TopContext {
+                context,
+                tokens_saved: acc.tokens_saved,
+                count: acc.events,
+                dollars_saved: acc.dollars_saved,
             })
-            .map_err(|e| format!("event stats top ventures query: {e}"))?;
-        let mut top_ventures: Vec<TopVenture> = Vec::new();
-        for row in vrows {
-            top_ventures.push(row.map_err(|e| format!("event stats top ventures row: {e}"))?);
-        }
+            .collect();
+        top_contexts.sort_by(|a, b| b.tokens_saved.cmp(&a.tokens_saved));
+        top_contexts.truncate(3);
+
+        // Top ventures by tokens (back-compat shape) + by dollars
+        // (new). Two sorts of the same data — cheap, and keeps the
+        // existing consumer working unchanged while the new card
+        // surfaces the dollar ranking.
+        let venture_rows: Vec<(String, Acc)> = by_venture.into_iter().collect();
+
+        let mut top_ventures: Vec<TopVenture> = venture_rows
+            .iter()
+            .map(|(venture_id, acc)| TopVenture {
+                venture_id: venture_id.clone(),
+                tokens_saved: acc.tokens_saved,
+                events: acc.events,
+                dollars_saved: acc.dollars_saved,
+            })
+            .collect();
+        top_ventures.sort_by(|a, b| b.tokens_saved.cmp(&a.tokens_saved));
+        top_ventures.truncate(5);
+
+        let mut top_ventures_by_dollars: Vec<TopVentureDollars> = venture_rows
+            .into_iter()
+            .map(|(venture_id, acc)| TopVentureDollars {
+                venture_id,
+                dollars_saved: acc.dollars_saved,
+                tokens_saved: acc.tokens_saved,
+                events: acc.events,
+            })
+            .collect();
+        top_ventures_by_dollars.sort_by(|a, b| {
+            b.dollars_saved
+                .partial_cmp(&a.dollars_saved)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        top_ventures_by_dollars.truncate(5);
+
+        // Top models by dollars saved.
+        let mut top_models_by_dollars: Vec<TopModelDollars> = by_model
+            .into_iter()
+            .map(|((provider, model), acc)| TopModelDollars {
+                provider,
+                model,
+                dollars_saved: acc.dollars_saved,
+                tokens_saved: acc.tokens_saved,
+                events: acc.events,
+            })
+            .collect();
+        top_models_by_dollars.sort_by(|a, b| {
+            b.dollars_saved
+                .partial_cmp(&a.dollars_saved)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        top_models_by_dollars.truncate(3);
 
         Ok(EventStats {
             lifetime_tokens_saved,
@@ -422,6 +591,9 @@ pub fn pm_event_stats(
             cache_hit_rate,
             top_contexts,
             top_ventures,
+            estimated_dollars_saved_lifetime,
+            top_ventures_by_dollars,
+            top_models_by_dollars,
         })
     })
 }

@@ -21,6 +21,7 @@ import { optimize } from "@founder-os/prompt-master";
  * `extractSvg` below handles the 5% of responses where the model can't
  * resist wrapping in ```svg``` fences anyway.
  */
+import { injectImageRefs } from "./brand-chat/refs.js";
 import { streamChat } from "./llm-client.js";
 
 // ──────────────────────────────────────────────
@@ -70,7 +71,7 @@ export type LogoCandidate = {
   provider: LlmProviderId;
 };
 
-const SYSTEM_PROMPT_SVG =
+export const SYSTEM_PROMPT_SVG =
   "You are a senior brand designer fluent in SVG. You output only raw SVG markup — no explanation, no commentary, no markdown fences. Every response is valid SVG that renders in a modern browser. Keep it minimal and elegant: few elements, clean geometry, tasteful use of the brand palette. No filters, gradients, or effects unless specifically asked — flat vector only. Never include <script> tags. Always include a viewBox attribute.";
 
 function buildArchetypePrompt(brief: BrandGenBrief, archetype: LogoArchetype): string {
@@ -119,11 +120,24 @@ export async function generateLogoCandidates(opts: {
   /** Optional venture id forwarded to Prompt Master telemetry so the
    *  Options-tab stats card can attribute tokens saved to this venture. */
   ventureId?: string;
+  /** Optional reference image absolute paths. When provided, each
+   *  archetype's user prompt is prefixed with `@<path>` tokens so a
+   *  multimodal provider (e.g. gemini-cli subscription mode) treats
+   *  them as style anchors. Empty / omitted = behaves as before. */
+  imageRefs?: readonly string[];
+  /** Optional subset of archetypes to generate. When omitted, all four
+   *  fire in parallel as before. Used by the Brand chat panel's
+   *  /logo <archetype> command to target a single archetype. */
+  archetypes?: readonly LogoArchetype[];
   signal?: AbortSignal;
   onArchetypeStart?: (archetype: LogoArchetype) => void;
   onArchetypeDone?: (candidate: LogoCandidate & { error?: string }) => void;
 }): Promise<(LogoCandidate & { error?: string })[]> {
-  const archetypes: LogoArchetype[] = ["wordmark", "lettermark", "icon-wordmark", "abstract-mark"];
+  const ALL_ARCHETYPES: LogoArchetype[] = ["wordmark", "lettermark", "icon-wordmark", "abstract-mark"];
+  // When opts.archetypes is provided, run only that subset (preserving caller order).
+  const archetypes: LogoArchetype[] = opts.archetypes
+    ? opts.archetypes.filter((a) => ALL_ARCHETYPES.includes(a))
+    : ALL_ARCHETYPES;
 
   // Optimise the shared SVG system prompt once, before fanning out the
   // four archetype calls. If we did it per-archetype, four parallel
@@ -145,10 +159,17 @@ export async function generateLogoCandidates(opts: {
     archetypes.map(async (archetype) => {
       opts.onArchetypeStart?.(archetype);
       try {
+        // Refs (if any) ride into the user content as `@<abs-path>`
+        // tokens. gemini-cli parses them itself; non-multimodal
+        // providers will see them as literal text in the prompt body.
+        const userContent = injectImageRefs(
+          buildArchetypePrompt(opts.brief, archetype),
+          opts.imageRefs ?? []
+        );
         const raw = await streamChat({
           provider: opts.provider,
           system: optimizedSystem.optimized,
-          messages: [{ role: "user", content: buildArchetypePrompt(opts.brief, archetype) }],
+          messages: [{ role: "user", content: userContent }],
           temperature: 0.8,
           maxTokens: 2000,
           signal: opts.signal,
@@ -161,7 +182,15 @@ export async function generateLogoCandidates(opts: {
           provider: opts.provider,
         };
         if (!svg) {
-          result.error = "Model returned no valid SVG — try regenerating this archetype.";
+          // Include a preview of the raw response so we can tell what
+          // the model actually returned (markdown fences, prose,
+          // truncated output, empty string, etc.).
+          const preview = raw.trim().slice(0, 220);
+          const tail = raw.length > 220 ? "..." : "";
+          result.error = preview
+            ? `Model returned no valid SVG. Raw response begins: ${preview}${tail}`
+            : "Model returned an empty response. Check that gemini-cli is responsive.";
+          console.warn("[brand-gen] extractSvg returned empty for", archetype, "; raw:", raw);
         }
         opts.onArchetypeDone?.(result);
         return result;

@@ -16,6 +16,7 @@ import {
   ProductSpecCanvasSchema,
   type Venture,
   type VentureManifest,
+  type VentureStage,
   createEmptyProductSpecCanvas,
   deriveProductSpecRules,
   isProductSpecComplete,
@@ -45,8 +46,16 @@ import { invoke } from "@tauri-apps/api/core";
  */
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { type AdvancePreflight, runAdvancePreflight } from "../../lib/advance-gate.js";
+import { type DistilledSpecFields, distillSpec } from "../../lib/spec-distiller.js";
 import { type SpecDraftResult, draftSpecCanvas } from "../../lib/spec-drafter.js";
 import { pushToast } from "../../lib/toasts.js";
+import { AdvanceConfirmModal } from "./AdvanceConfirmModal.js";
+import {
+  type DistillFieldConfig,
+  DistillDiffModal,
+  distillTextField,
+} from "./DistillDiffModal.js";
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -82,7 +91,58 @@ type DraftSectionId =
 type Props = {
   venture: Venture;
   manifest: VentureManifest | null;
+  /** Optional: when present, the header shows an "Advance" button that
+   *  runs the pre-flight audit and gates the SPEC_READY transition. */
+  onAdvanceStage?: (stage: VentureStage) => void;
 };
+
+// ─────────────────────────────────────────────────────────────────
+// Distill field config (text-shaped subset of ProductSpecCanvas)
+// ─────────────────────────────────────────────────────────────────
+
+function renderStringList(value: unknown): React.ReactNode {
+  if (!Array.isArray(value) || value.length === 0) {
+    return <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>(empty)</span>;
+  }
+  return (
+    <ul style={{ margin: 0, paddingLeft: 18 }}>
+      {(value as unknown[]).map((entry, i) => (
+        <li key={`spec-list-${i}`} style={{ marginBottom: 4 }}>
+          {typeof entry === "string" ? entry : JSON.stringify(entry)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function stringListEquals(current: unknown, proposed: unknown): boolean {
+  const a = (Array.isArray(current) ? current : []) as unknown[];
+  const b = (Array.isArray(proposed) ? proposed : []) as unknown[];
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ai = typeof a[i] === "string" ? (a[i] as string).trim() : "";
+    const bi = typeof b[i] === "string" ? (b[i] as string).trim() : "";
+    if (ai !== bi) return false;
+  }
+  return true;
+}
+
+const SPEC_DISTILL_FIELDS: DistillFieldConfig[] = [
+  distillTextField("purpose", "Purpose"),
+  {
+    key: "inScope",
+    label: "In scope (v1)",
+    render: renderStringList,
+    equals: stringListEquals,
+  },
+  {
+    key: "outOfScope",
+    label: "Out of scope",
+    render: renderStringList,
+    equals: stringListEquals,
+  },
+  distillTextField("notes", "Notes"),
+];
 
 // ─────────────────────────────────────────────────────────────────
 // ID helpers
@@ -101,7 +161,7 @@ function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function SpecTab({ venture, manifest }: Props) {
+export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
   const canvasPath = useMemo(() => getSpecCanvasPath(venture.rootPath), [venture.rootPath]);
 
   const [canvas, setCanvas] = useState<ProductSpecCanvas | null>(null);
@@ -126,6 +186,18 @@ export function SpecTab({ venture, manifest }: Props) {
    *  to animate the spinner label. */
   const [draftDeltaCount, setDraftDeltaCount] = useState(0);
   const draftAbortRef = useRef<AbortController | null>(null);
+
+  // Distill from chat + docs — orthogonal to the AI Draft flow above.
+  // Distill targets only the free-text fields; structured rows are
+  // owned by `draftSpecCanvas`.
+  const [distilling, setDistilling] = useState(false);
+  const [distillDraft, setDistillDraft] = useState<DistilledSpecFields | null>(null);
+
+  // Advance-stage gate (pre-flight audit). `advancing` toggles the button
+  // spinner; `advanceModal` holds the preflight result while the
+  // AdvanceConfirmModal is open.
+  const [advancing, setAdvancing] = useState(false);
+  const [advanceModal, setAdvanceModal] = useState<AdvancePreflight | null>(null);
 
   /** Reset the draft surface back to closed/idle — used by Discard,
    *  by venture switch, and by Cancel-during-loading. */
@@ -219,11 +291,50 @@ export function SpecTab({ venture, manifest }: Props) {
   }, [canvas, canvasPath]);
 
   if (loading || !canvas || !manifest) {
-    return <div style={{ padding: 28, color: "#6B7280" }}>Loading Spec canvas…</div>;
+    return <div style={{ padding: 28, color: "var(--text-tertiary)" }}>Loading Spec canvas…</div>;
   }
 
   const rules = deriveProductSpecRules(canvas);
   const passCount = rules.filter((r) => r.pass).length;
+  const specComplete = isProductSpecComplete(canvas);
+
+  // ─────────────────────────────────────────────────────────────
+  // Advance-stage handlers (pre-flight audit gate)
+  // ─────────────────────────────────────────────────────────────
+  const commitAdvance = () => {
+    if (!onAdvanceStage) return;
+    onAdvanceStage("SPEC_READY");
+    pushToast({ kind: "success", message: "Advanced to Spec Ready", ttlMs: 3000 });
+    setAdvanceModal(null);
+    setAdvancing(false);
+  };
+
+  const handleAdvance = async () => {
+    if (!onAdvanceStage || !specComplete || advancing) return;
+    setAdvancing(true);
+    try {
+      const preflight = await runAdvancePreflight({
+        ventureId: venture.id,
+        ventureRoot: venture.rootPath,
+        nextStage: "SPEC_READY",
+        manifest,
+      });
+      if (preflight.blockers.length === 0 && preflight.warnings.length === 0) {
+        commitAdvance();
+        return;
+      }
+      setAdvanceModal(preflight);
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Pre-flight audit failed",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+      commitAdvance();
+      return;
+    }
+    setAdvancing(false);
+  };
 
   // ─────────────────────────────────────────────────────────────
   // Update helpers
@@ -231,6 +342,83 @@ export function SpecTab({ venture, manifest }: Props) {
 
   const update = <K extends keyof ProductSpecCanvas>(key: K, value: ProductSpecCanvas[K]) =>
     setCanvas((cur) => (cur ? { ...cur, [key]: value } : cur));
+
+  // ─────────────────────────────────────────────────────────────
+  // Distill from chat + docs
+  // ─────────────────────────────────────────────────────────────
+  const handleDistill = async () => {
+    if (distilling || !canvas) return;
+    setDistilling(true);
+    try {
+      const draft = await distillSpec({
+        ventureId: venture.id,
+        stage: venture.stage,
+        ventureRootPath: venture.rootPath,
+        currentFields: {
+          purpose: canvas.purpose,
+          inScope: canvas.inScope,
+          outOfScope: canvas.outOfScope,
+          notes: canvas.notes,
+        },
+      });
+      if (Object.keys(draft).length === 0) {
+        pushToast({
+          kind: "warn",
+          message: "Nothing to distill yet",
+          detail: "No chat history or text-shaped docs found in the venture folder.",
+          ttlMs: 5000,
+        });
+        return;
+      }
+      setDistillDraft(draft);
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Distill failed",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setDistilling(false);
+    }
+  };
+
+  const handleApplyDistill = (selected: Record<string, unknown>) => {
+    if (Object.keys(selected).length === 0 || !canvas) {
+      setDistillDraft(null);
+      return;
+    }
+    let applied = 0;
+    if (typeof selected.purpose === "string") {
+      update("purpose", selected.purpose);
+      applied++;
+    }
+    if (typeof selected.notes === "string") {
+      update("notes", selected.notes);
+      applied++;
+    }
+    if (Array.isArray(selected.inScope)) {
+      update(
+        "inScope",
+        (selected.inScope as unknown[]).filter((e): e is string => typeof e === "string")
+      );
+      applied++;
+    }
+    if (Array.isArray(selected.outOfScope)) {
+      update(
+        "outOfScope",
+        (selected.outOfScope as unknown[]).filter((e): e is string => typeof e === "string")
+      );
+      applied++;
+    }
+    if (applied > 0) {
+      pushToast({
+        kind: "success",
+        message: `✨ Applied ${applied} distilled field${applied === 1 ? "" : "s"}`,
+        ttlMs: 4000,
+      });
+    }
+    setDistillDraft(null);
+  };
 
   // Generic list editors — each section's list-of-objects pattern
   // boils down to "replace the whole list" via setCanvas. The
@@ -726,10 +914,10 @@ export function SpecTab({ venture, manifest }: Props) {
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827" }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
               Product Spec
             </h2>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-tertiary)" }}>
               Purpose → personas → features → scope → data model → API → NFRs → metrics. Saved to{" "}
               <code>06_product/specs/spec-canvas.json</code>; markdown view re-rendered on each
               pipeline run.
@@ -737,6 +925,29 @@ export function SpecTab({ venture, manifest }: Props) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <SaveIndicator status={saveStatus} />
+            <button
+              type="button"
+              onClick={handleDistill}
+              disabled={distilling}
+              title="Distill your chat history + uploaded docs into draft Spec free-text fields"
+              style={{
+                padding: "8px 14px",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: distilling ? "var(--bg-elevated)" : "var(--accent-soft)",
+                border: `1px solid ${distilling ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+                color: distilling ? "var(--text-muted)" : "var(--accent-hover)",
+                borderRadius: 6,
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: distilling ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span>{distilling ? "⏳" : "✨"}</span>
+              {distilling ? "Distilling…" : "Distill from chat + docs"}
+            </button>
             <DraftWithAiButton
               phase={draftPhase}
               onClick={() => {
@@ -745,12 +956,37 @@ export function SpecTab({ venture, manifest }: Props) {
                 }
               }}
             />
+            {onAdvanceStage && (
+              <button
+                type="button"
+                onClick={handleAdvance}
+                disabled={!specComplete || advancing}
+                title={
+                  specComplete
+                    ? "Run pre-flight audit and advance to Spec Ready"
+                    : `${passCount}/${rules.length} must-haves complete — finish the checklist`
+                }
+                style={{
+                  padding: "8px 16px",
+                  background: specComplete ? "var(--accent)" : "var(--border-subtle)",
+                  color: specComplete ? "var(--bg-panel)" : "var(--text-muted)",
+                  border: "none",
+                  borderRadius: 6,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: specComplete && !advancing ? "pointer" : "not-allowed",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {advancing ? "Checking…" : "Advance to Spec Ready →"}
+              </button>
+            )}
           </div>
         </div>
 
         {/* 1. Purpose ───────────────────────────────────────────── */}
         <Section title="1. Purpose" icon="🎯">
-          <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
             One paragraph: what does this product do, for whom, and why does it matter? Specific
             noun, specific verb, specific outcome.
           </p>
@@ -765,7 +1001,7 @@ export function SpecTab({ venture, manifest }: Props) {
 
         {/* 2. Personas ──────────────────────────────────────────── */}
         <Section title="2. Personas" icon="👥">
-          <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
             Who are you building this for? Push for one primary persona at v1. Real pain points,
             real goals.
           </p>
@@ -782,7 +1018,7 @@ export function SpecTab({ venture, manifest }: Props) {
 
         {/* 3. Features ──────────────────────────────────────────── */}
         <Section title="3. Features" icon="⚙️">
-          <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
             MoSCoW-prioritised. Every Must-have feature needs at least one acceptance criterion — a
             checkable statement.
           </p>
@@ -800,7 +1036,7 @@ export function SpecTab({ venture, manifest }: Props) {
 
         {/* 4. Scope ─────────────────────────────────────────────── */}
         <Section title="4. Scope" icon="🪟">
-          <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
             Explicit in/out-of-scope statements reduce ambiguity at handoff.
           </p>
           <Field label="In scope (one per line)">
@@ -841,7 +1077,7 @@ export function SpecTab({ venture, manifest }: Props) {
 
         {/* 5. Data Model ────────────────────────────────────────── */}
         <Section title="5. Data Model" icon="🗄️">
-          <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
             Entities and their fields. 3-7 entities is typical for an MVP; more than 10 needs
             justification.
           </p>
@@ -858,7 +1094,7 @@ export function SpecTab({ venture, manifest }: Props) {
 
         {/* 6. API Surface ───────────────────────────────────────── */}
         <Section title="6. API Surface" icon="🔌">
-          <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
             REST or RPC-style endpoints. Method + path + description; notes for non-obvious shapes.
           </p>
           {canvas.apiSurface.endpoints.map((ep) => (
@@ -874,7 +1110,7 @@ export function SpecTab({ venture, manifest }: Props) {
 
         {/* 7. Non-functional Requirements ───────────────────────── */}
         <Section title="7. Non-functional Requirements" icon="🛡️">
-          <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
             Performance, security, accessibility, compliance. Pick the few that actually matter;
             each needs a measurable target.
           </p>
@@ -891,7 +1127,7 @@ export function SpecTab({ venture, manifest }: Props) {
 
         {/* 8. Success Metrics ───────────────────────────────────── */}
         <Section title="8. Success Metrics" icon="📈">
-          <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
             How will you know v1 is working? Avoid vanity metrics (signups, page views) without
             conversion gating.
           </p>
@@ -949,8 +1185,8 @@ export function SpecTab({ venture, manifest }: Props) {
         <aside
           style={{
             padding: 16,
-            background: "#F9FAFB",
-            border: "1px solid #E5E7EB",
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: 8,
             alignSelf: "start",
             position: "sticky",
@@ -965,14 +1201,14 @@ export function SpecTab({ venture, manifest }: Props) {
               marginBottom: 12,
             }}
           >
-            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
               Must-haves
             </h3>
             <span
               style={{
                 fontSize: 12,
                 fontWeight: 600,
-                color: passCount === rules.length ? "#059669" : "#6B7280",
+                color: passCount === rules.length ? "var(--success)" : "var(--text-tertiary)",
               }}
             >
               {passCount} / {rules.length}
@@ -985,7 +1221,7 @@ export function SpecTab({ venture, manifest }: Props) {
                   style={{
                     fontSize: 12,
                     marginTop: 1,
-                    color: rule.pass ? "#059669" : "#9CA3AF",
+                    color: rule.pass ? "var(--success)" : "var(--text-muted)",
                   }}
                 >
                   {rule.pass ? "✅" : "○"}
@@ -995,12 +1231,12 @@ export function SpecTab({ venture, manifest }: Props) {
                     style={{
                       fontSize: 12,
                       fontWeight: 600,
-                      color: rule.pass ? "#111827" : "#374151",
+                      color: rule.pass ? "var(--text-primary)" : "var(--text-secondary)",
                     }}
                   >
                     {rule.label}
                   </div>
-                  <div style={{ fontSize: 11, color: "#6B7280" }}>{rule.description}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{rule.description}</div>
                 </div>
               </div>
             ))}
@@ -1010,11 +1246,11 @@ export function SpecTab({ venture, manifest }: Props) {
               style={{
                 marginTop: 14,
                 padding: 10,
-                background: "#ECFDF5",
-                border: "1px solid #A7F3D0",
+                background: "var(--success-soft)",
+                border: "1px solid var(--success-soft)",
                 borderRadius: 6,
                 fontSize: 12,
-                color: "#065F46",
+                color: "var(--success)",
                 fontWeight: 600,
               }}
             >
@@ -1022,6 +1258,33 @@ export function SpecTab({ venture, manifest }: Props) {
             </div>
           )}
         </aside>
+      )}
+      {advanceModal !== null && (
+        <AdvanceConfirmModal
+          blockers={advanceModal.blockers}
+          warnings={advanceModal.warnings}
+          currentStage={venture.stage}
+          nextStage="SPEC_READY"
+          onAdvance={commitAdvance}
+          onClose={() => {
+            setAdvanceModal(null);
+            setAdvancing(false);
+          }}
+        />
+      )}
+      {distillDraft !== null && (
+        <DistillDiffModal
+          current={{
+            purpose: canvas.purpose,
+            inScope: canvas.inScope,
+            outOfScope: canvas.outOfScope,
+            notes: canvas.notes,
+          }}
+          proposed={distillDraft as Record<string, unknown>}
+          fields={SPEC_DISTILL_FIELDS}
+          onApply={handleApplyDistill}
+          onClose={() => setDistillDraft(null)}
+        />
       )}
     </div>
   );
@@ -1044,15 +1307,15 @@ function Section({
     <section
       style={{
         padding: 16,
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 8,
         display: "flex",
         flexDirection: "column",
         gap: 10,
       }}
     >
-      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
+      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
         <span style={{ marginRight: 6 }}>{icon}</span>
         {title}
       </h3>
@@ -1070,7 +1333,7 @@ function Field({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 600 }}>{label}</span>
       {children}
     </label>
   );
@@ -1091,9 +1354,9 @@ function AddRowButton({
         alignSelf: "flex-start",
         padding: "6px 12px",
         fontSize: 12,
-        background: "#FFFFFF",
-        color: "#4338CA",
-        border: "1px dashed #C7D2FE",
+        background: "var(--bg-panel)",
+        color: "var(--accent)",
+        border: "1px dashed var(--accent-soft)",
         borderRadius: 4,
         cursor: "pointer",
         fontWeight: 600,
@@ -1114,9 +1377,9 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
         marginLeft: "auto",
         padding: "2px 8px",
         fontSize: 11,
-        background: "#FFFFFF",
-        color: "#DC2626",
-        border: "1px solid #FEE2E2",
+        background: "var(--bg-panel)",
+        color: "var(--danger)",
+        border: "1px solid var(--danger-soft)",
         borderRadius: 4,
         cursor: "pointer",
         fontWeight: 600,
@@ -1132,8 +1395,8 @@ function CardShell({ children }: { children: React.ReactNode }) {
     <div
       style={{
         padding: 12,
-        background: "#FAFAFB",
-        border: "1px solid #E5E7EB",
+        background: "var(--bg-elevated)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 6,
         display: "flex",
         flexDirection: "column",
@@ -1334,7 +1597,7 @@ function EntityCard({
         />
       </Field>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>Fields</span>
+        <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 600 }}>Fields</span>
         {entity.fields.map((f, idx) => (
           <div
             key={idx}
@@ -1365,7 +1628,7 @@ function EntityCard({
                 alignItems: "center",
                 gap: 4,
                 fontSize: 11,
-                color: "#374151",
+                color: "var(--text-secondary)",
               }}
             >
               <input
@@ -1382,9 +1645,9 @@ function EntityCard({
               style={{
                 padding: "2px 6px",
                 fontSize: 11,
-                background: "#FFFFFF",
-                color: "#9CA3AF",
-                border: "1px solid #E5E7EB",
+                background: "var(--bg-panel)",
+                color: "var(--text-muted)",
+                border: "1px solid var(--border-subtle)",
                 borderRadius: 4,
                 cursor: "pointer",
               }}
@@ -1576,9 +1839,9 @@ function SaveIndicator({
   status: "saved" | "saving" | "unsaved";
 }) {
   const cfg = {
-    saved: { color: "#059669", text: "Saved" },
-    saving: { color: "#6366F1", text: "Saving…" },
-    unsaved: { color: "#D97706", text: "Unsaved" },
+    saved: { color: "var(--success)", text: "Saved" },
+    saving: { color: "var(--accent)", text: "Saving…" },
+    unsaved: { color: "var(--warning)", text: "Unsaved" },
   }[status];
   return <span style={{ fontSize: 11, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
 }
@@ -1625,9 +1888,9 @@ function DraftWithAiButton({
         padding: "6px 14px",
         fontSize: 12,
         fontWeight: 600,
-        background: isBusy ? "#EEF2FF" : "#4338CA",
-        color: isBusy ? "#4338CA" : "#FFFFFF",
-        border: "1px solid #4338CA",
+        background: isBusy ? "var(--accent-soft)" : "var(--accent)",
+        color: isBusy ? "var(--accent)" : "var(--bg-panel)",
+        border: "1px solid var(--accent)",
         borderRadius: 6,
         cursor: isBusy ? "default" : "pointer",
         opacity: isBusy ? 0.85 : 1,
@@ -1701,8 +1964,8 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
     <aside
       style={{
         padding: 0,
-        background: "#FFFFFF",
-        border: "1px solid #C7D2FE",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--accent-soft)",
         borderRadius: 8,
         alignSelf: "start",
         position: "sticky",
@@ -1717,8 +1980,8 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
       <div
         style={{
           padding: "12px 14px",
-          borderBottom: "1px solid #E5E7EB",
-          background: "#F5F3FF",
+          borderBottom: "1px solid var(--border-subtle)",
+          background: "var(--accent-soft)",
           position: "sticky",
           top: 0,
           zIndex: 1,
@@ -1737,7 +2000,7 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
               margin: 0,
               fontSize: 13,
               fontWeight: 700,
-              color: "#3730A3",
+              color: "var(--accent-hover)",
             }}
           >
             ✨ AI Draft
@@ -1748,9 +2011,9 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
             style={{
               padding: "2px 8px",
               fontSize: 11,
-              background: "#FFFFFF",
-              color: "#4338CA",
-              border: "1px solid #C7D2FE",
+              background: "var(--bg-panel)",
+              color: "var(--accent)",
+              border: "1px solid var(--accent-soft)",
               borderRadius: 4,
               cursor: "pointer",
               fontWeight: 600,
@@ -1763,14 +2026,14 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
           style={{
             marginTop: 6,
             fontSize: 11,
-            color: "#4B5563",
+            color: "var(--text-secondary)",
           }}
         >
           {providerDisplayName && model
             ? `Drafting with ${providerDisplayName} · ${model}`
             : "Drafting with the active provider"}
           {phase === "success" && (
-            <span style={{ color: "#6B7280" }}>
+            <span style={{ color: "var(--text-tertiary)" }}>
               {" "}
               — Replace overwrites the section, Merge appends.
             </span>
@@ -1780,27 +2043,27 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
 
       {/* ── Body ───────────────────────────────────────────────── */}
       {phase === "loading" && (
-        <div style={{ padding: 16, fontSize: 12, color: "#4B5563" }}>
+        <div style={{ padding: 16, fontSize: 12, color: "var(--text-secondary)" }}>
           <div style={{ marginBottom: 8 }}>Drafting your spec from brand brief + research…</div>
-          <div style={{ fontSize: 11, color: "#9CA3AF" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
             {deltaCount > 0 ? `Streaming · ${deltaCount} chunks` : "Waiting for first token…"}
           </div>
-          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 12 }}>
+          <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 12 }}>
             This usually takes 20–60 seconds depending on provider.
           </div>
         </div>
       )}
 
       {phase === "error" && (
-        <div style={{ padding: 16, fontSize: 12, color: "#7F1D1D" }}>
+        <div style={{ padding: 16, fontSize: 12, color: "var(--danger)" }}>
           <div style={{ fontWeight: 600, marginBottom: 8 }}>Couldn't complete the draft</div>
           <div
             style={{
               padding: 10,
-              background: "#FEF2F2",
-              border: "1px solid #FECACA",
+              background: "var(--danger-soft)",
+              border: "1px solid var(--danger-border)",
               borderRadius: 6,
-              color: "#991B1B",
+              color: "var(--danger)",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
             }}
@@ -1814,9 +2077,9 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
               style={{
                 padding: "6px 12px",
                 fontSize: 12,
-                background: "#4338CA",
-                color: "#FFFFFF",
-                border: "1px solid #4338CA",
+                background: "var(--accent)",
+                color: "var(--bg-panel)",
+                border: "1px solid var(--accent)",
                 borderRadius: 6,
                 cursor: "pointer",
                 fontWeight: 600,
@@ -1830,9 +2093,9 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
               style={{
                 padding: "6px 12px",
                 fontSize: 12,
-                background: "#FFFFFF",
-                color: "#374151",
-                border: "1px solid #D1D5DB",
+                background: "var(--bg-panel)",
+                color: "var(--text-secondary)",
+                border: "1px solid var(--border-input)",
                 borderRadius: 6,
                 cursor: "pointer",
                 fontWeight: 600,
@@ -1857,15 +2120,15 @@ function SpecDraftPanel(props: SpecDraftPanelProps) {
           <div
             style={{
               padding: 10,
-              background: "#F9FAFB",
-              border: "1px solid #E5E7EB",
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: 6,
               display: "flex",
               flexDirection: "column",
               gap: 6,
             }}
           >
-            <div style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>
+            <div style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 600 }}>
               Apply all sections
             </div>
             <div style={{ display: "flex", gap: 6 }}>
@@ -2014,9 +2277,9 @@ function applyAllBtn(mode: "replace" | "merge"): React.CSSProperties {
     padding: "6px 10px",
     fontSize: 11,
     fontWeight: 600,
-    background: mode === "replace" ? "#4338CA" : "#FFFFFF",
-    color: mode === "replace" ? "#FFFFFF" : "#4338CA",
-    border: "1px solid #4338CA",
+    background: mode === "replace" ? "var(--accent)" : "var(--bg-panel)",
+    color: mode === "replace" ? "var(--bg-panel)" : "var(--accent)",
+    border: "1px solid var(--accent)",
     borderRadius: 4,
     cursor: "pointer",
   };
@@ -2052,8 +2315,8 @@ function DraftSectionRow({
     <div
       style={{
         padding: 10,
-        background: isCommitted ? "#F9FAFB" : "#FFFFFF",
-        border: "1px solid #E5E7EB",
+        background: isCommitted ? "var(--bg-elevated)" : "var(--bg-panel)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 6,
         display: "flex",
         flexDirection: "column",
@@ -2073,7 +2336,7 @@ function DraftSectionRow({
           style={{
             fontSize: 12,
             fontWeight: 600,
-            color: "#111827",
+            color: "var(--text-primary)",
             display: "flex",
             alignItems: "center",
             gap: 6,
@@ -2085,8 +2348,8 @@ function DraftSectionRow({
               fontSize: 10,
               padding: "1px 6px",
               borderRadius: 999,
-              background: count > 0 ? "#E0E7FF" : "#F3F4F6",
-              color: count > 0 ? "#3730A3" : "#9CA3AF",
+              background: count > 0 ? "var(--accent-soft)" : "var(--bg-hover)",
+              color: count > 0 ? "var(--accent-hover)" : "var(--text-muted)",
               fontWeight: 600,
             }}
           >
@@ -2099,7 +2362,7 @@ function DraftSectionRow({
               fontSize: 10,
               fontWeight: 600,
               color:
-                state === "skipped" ? "#6B7280" : state === "applied-merge" ? "#0E7490" : "#059669",
+                state === "skipped" ? "var(--text-tertiary)" : state === "applied-merge" ? "var(--success)" : "var(--success)",
             }}
           >
             {state === "skipped"
@@ -2113,7 +2376,7 @@ function DraftSectionRow({
       <div
         style={{
           fontSize: 11,
-          color: "#6B7280",
+          color: "var(--text-tertiary)",
           lineHeight: 1.4,
           maxHeight: 72,
           overflow: "hidden",
@@ -2151,9 +2414,9 @@ function trioBtn(variant: "primary" | "secondary" | "muted"): React.CSSPropertie
       padding: "5px 8px",
       fontSize: 11,
       fontWeight: 600,
-      background: "#4338CA",
-      color: "#FFFFFF",
-      border: "1px solid #4338CA",
+      background: "var(--accent)",
+      color: "var(--bg-panel)",
+      border: "1px solid var(--accent)",
       borderRadius: 4,
       cursor: "pointer",
     };
@@ -2164,9 +2427,9 @@ function trioBtn(variant: "primary" | "secondary" | "muted"): React.CSSPropertie
       padding: "5px 8px",
       fontSize: 11,
       fontWeight: 600,
-      background: "#FFFFFF",
-      color: "#4338CA",
-      border: "1px solid #C7D2FE",
+      background: "var(--bg-panel)",
+      color: "var(--accent)",
+      border: "1px solid var(--accent-soft)",
       borderRadius: 4,
       cursor: "pointer",
     };
@@ -2176,9 +2439,9 @@ function trioBtn(variant: "primary" | "secondary" | "muted"): React.CSSPropertie
     padding: "5px 8px",
     fontSize: 11,
     fontWeight: 600,
-    background: "#FFFFFF",
-    color: "#6B7280",
-    border: "1px solid #E5E7EB",
+    background: "var(--bg-panel)",
+    color: "var(--text-tertiary)",
+    border: "1px solid var(--border-subtle)",
     borderRadius: 4,
     cursor: "pointer",
   };
@@ -2192,8 +2455,8 @@ const inputStyle: React.CSSProperties = {
   fontSize: 13,
   padding: "7px 10px",
   borderRadius: 6,
-  border: "1px solid #D1D5DB",
-  background: "#FFFFFF",
+  border: "1px solid var(--border-input)",
+  background: "var(--bg-panel)",
   fontFamily: "inherit",
   outline: "none",
   width: "100%",

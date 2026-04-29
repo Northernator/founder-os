@@ -25,6 +25,7 @@ import { invoke } from "@tauri-apps/api/core";
  *    providers so a user can't pick one that will fail on first send.
  */
 import React, { useEffect, useState } from "react";
+import { ThemeToggle } from "../chrome/ThemeToggle.js";
 import * as db from "../../lib/db.js";
 import { streamChat } from "../../lib/llm-client.js";
 import {
@@ -32,6 +33,7 @@ import {
   readSharedConfig,
   writeSharedConfig,
 } from "../../lib/prompt-master-config.js";
+import { useTheme } from "../../lib/theme.js";
 import { pushToast } from "../../lib/toasts.js";
 import { SubscriptionsSection } from "./SubscriptionsSection.js";
 
@@ -40,13 +42,44 @@ import { SubscriptionsSection } from "./SubscriptionsSection.js";
  *
  *  topVentures excludes rows where venture_id IS NULL — events emitted
  *  before migration 0009 (and global-scope events) live on in the table
- *  but don't appear here. */
+ *  but don't appear here.
+ *
+ *  Dollar fields are estimates from migration 0010 onward — Rust
+ *  multiplies (provider, model) buckets by their input list price (see
+ *  src-tauri/src/pricing.rs, mirrored from
+ *  packages/llm-providers/src/pricing.ts). Pre-0010 events with NULL
+ *  provider/model land in a midrange fallback bucket so they don't
+ *  render as $0 in the UI. */
 type EventStats = {
   lifetimeTokensSaved: number;
   totalEvents: number;
   cacheHitRate: number;
-  topContexts: Array<{ context: string; tokensSaved: number; count: number }>;
-  topVentures: Array<{ ventureId: string; tokensSaved: number; events: number }>;
+  topContexts: Array<{
+    context: string;
+    tokensSaved: number;
+    count: number;
+    dollarsSaved: number;
+  }>;
+  topVentures: Array<{
+    ventureId: string;
+    tokensSaved: number;
+    events: number;
+    dollarsSaved: number;
+  }>;
+  estimatedDollarsSavedLifetime: number;
+  topVenturesByDollars: Array<{
+    ventureId: string;
+    dollarsSaved: number;
+    tokensSaved: number;
+    events: number;
+  }>;
+  topModelsByDollars: Array<{
+    provider: string;
+    model: string;
+    dollarsSaved: number;
+    tokensSaved: number;
+    events: number;
+  }>;
 };
 
 type ProviderFormState = {
@@ -253,9 +286,15 @@ export function OptionsTab() {
 
   return (
     <div style={{ padding: 28, overflow: "auto", height: "100%" }}>
+      <AppearanceSection />
+
+      <div style={{ height: 20 }} />
+
       <div style={{ marginBottom: 20 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px" }}>AI providers</h3>
-        <p style={{ margin: 0, fontSize: 13, color: "#6B7280", lineHeight: 1.5 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px", color: "var(--text-primary)" }}>
+          AI providers
+        </h3>
+        <p style={{ margin: 0, fontSize: 13, color: "var(--text-tertiary)", lineHeight: 1.5 }}>
           Paste an API key for any provider you want to use. Keys stay on this machine — they live
           in the app's local SQLite database and are sent only to the provider's API. Ollama runs
           locally and needs no key.
@@ -386,6 +425,36 @@ export function OptionsTab() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Appearance — light / dark / grey / rainbow toggle exposed in Options
+ * for users who never look at the title-bar widget. Reads the same
+ * zustand store as the chrome toggle so the two stay in sync.
+ */
+function AppearanceSection() {
+  const { theme } = useTheme();
+  const themeLabel: Record<typeof theme, string> = {
+    light: "Light",
+    dark: "Dark",
+    grey: "Grey",
+    rainbow: "Rainbow",
+  };
+  return (
+    <Card title="Appearance">
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <ThemeToggle />
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+            Theme: {themeLabel[theme]}
+          </span>
+          <span style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
+            Cycles light → dark → grey → rainbow. Shift-click in rainbow mode for warp speed.
+          </span>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -1030,6 +1099,23 @@ function formatPercent(ratio: number): string {
   return `${(ratio * 100).toFixed(1)}%`;
 }
 
+/** Format a dollar amount for the savings card.
+ *
+ *  Returns null below 1¢ so the caller can hide the line entirely
+ *  rather than render "$0.00" — early in the lifetime totals the
+ *  number is a fraction of a cent and printing $0.00 makes Prompt
+ *  Master look broken. Above 1¢ we show 2 decimals, which is what
+ *  users expect for a USD value. */
+function formatDollars(value: number): string | null {
+  if (!Number.isFinite(value) || value < 0.01) return null;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 function PromptMasterStats({
   cacheStats,
   eventStats,
@@ -1222,7 +1308,29 @@ function OptimisationStatsPanel({
         >
           {stats ? formatNumber(stats.lifetimeTokensSaved) : "—"}
         </div>
-        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>tokens saved (lifetime)</div>
+        <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>
+          tokens saved (lifetime)
+          {stats &&
+            (() => {
+              // Below 1¢ we hide the line — printing "$0.00" while
+              // pricing data is still accumulating reads as broken
+              // rather than precise. formatDollars already returns
+              // null for that case.
+              const dollars = formatDollars(stats.estimatedDollarsSavedLifetime);
+              return dollars ? (
+                <span
+                  style={{
+                    marginLeft: 6,
+                    color: "#059669",
+                    fontWeight: 600,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  (~{dollars})
+                </span>
+              ) : null;
+            })()}
+        </div>
       </div>
       <StatRow label="Cache hit rate" value={stats ? formatPercent(stats.cacheHitRate) : "—"} />
       <StatRow label="Total events" value={stats ? formatNumber(stats.totalEvents) : "—"} />
@@ -1248,29 +1356,35 @@ function OptimisationStatsPanel({
               gap: 4,
             }}
           >
-            {stats.topContexts.map((c) => (
-              <li
-                key={c.context}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 12,
-                  color: "#374151",
-                }}
-              >
-                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-                  {c.context}
-                </span>
-                <span
+            {stats.topContexts.map((c) => {
+              const dollars = formatDollars(c.dollarsSaved);
+              return (
+                <li
+                  key={c.context}
                   style={{
-                    color: "#6B7280",
-                    fontVariantNumeric: "tabular-nums",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 12,
+                    color: "#374151",
                   }}
                 >
-                  {formatNumber(c.tokensSaved)} ({c.count})
-                </span>
-              </li>
-            ))}
+                  <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                    {c.context}
+                  </span>
+                  <span
+                    style={{
+                      color: "#6B7280",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {formatNumber(c.tokensSaved)} ({c.count})
+                    {dollars && (
+                      <span style={{ marginLeft: 6, fontSize: 10, color: "#059669" }}>{dollars}</span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p style={{ margin: 0, fontSize: 12, color: "#9CA3AF" }}>—</p>
@@ -1304,6 +1418,7 @@ function OptimisationStatsPanel({
               // logged. Tooltip carries the raw id either way so a
               // power user can grep for it without renaming a venture.
               const name = ventureNamesById[v.ventureId] ?? v.ventureId;
+              const dollars = formatDollars(v.dollarsSaved);
               return (
                 <li
                   key={v.ventureId}
@@ -1332,6 +1447,77 @@ function OptimisationStatsPanel({
                     }}
                   >
                     {formatNumber(v.tokensSaved)} ({v.events})
+                    {dollars && (
+                      <span style={{ marginLeft: 6, fontSize: 10, color: "#059669" }}>{dollars}</span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {stats && stats.topModelsByDollars.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: "#6B7280",
+              marginBottom: 4,
+            }}
+          >
+            Top models
+          </div>
+          <ul
+            style={{
+              listStyle: "none",
+              margin: 0,
+              padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+            }}
+          >
+            {stats.topModelsByDollars.map((m) => {
+              // Hide the dollar tail when sub-cent so the row collapses
+              // to "<provider>/<model> N (events)" — same shape as the
+              // contexts/ventures fallback. Most rows here have a real
+              // dollar value because they're keyed off provider/model.
+              const dollars = formatDollars(m.dollarsSaved);
+              return (
+                <li
+                  key={`${m.provider}::${m.model}`}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 12,
+                    color: "#374151",
+                    gap: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      maxWidth: "60%",
+                    }}
+                    title={`${m.provider}/${m.model}`}
+                  >
+                    {m.provider}/{m.model}
+                  </span>
+                  <span
+                    style={{
+                      color: "#6B7280",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {formatNumber(m.tokensSaved)} ({m.events})
+                    {dollars && (
+                      <span style={{ marginLeft: 6, fontSize: 10, color: "#059669" }}>{dollars}</span>
+                    )}
                   </span>
                 </li>
               );

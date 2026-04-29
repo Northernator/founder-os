@@ -12,10 +12,13 @@ export type CardProps = {
 export function Card({ title, description, children, footer, style, onClick }: CardProps) {
   return (
     <div
+      data-fos-panel
+      className="fos-panel"
       onClick={onClick}
       style={{
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
+        background: "var(--bg-panel)",
+        color: "var(--text-primary)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 10,
         overflow: "hidden",
         cursor: onClick ? "pointer" : undefined,
@@ -27,14 +30,18 @@ export function Card({ title, description, children, footer, style, onClick }: C
         <div
           style={{
             padding: "16px 20px",
-            borderBottom: children || footer ? "1px solid #F3F4F6" : undefined,
+            borderBottom: children || footer ? "1px solid var(--border-subtle)" : undefined,
           }}
         >
           {title && (
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#111827" }}>{title}</h3>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
+              {title}
+            </h3>
           )}
           {description && (
-            <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6B7280" }}>{description}</p>
+            <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-tertiary)" }}>
+              {description}
+            </p>
           )}
         </div>
       )}
@@ -43,8 +50,8 @@ export function Card({ title, description, children, footer, style, onClick }: C
         <div
           style={{
             padding: "12px 20px",
-            borderTop: "1px solid #F3F4F6",
-            background: "#FAFAFA",
+            borderTop: "1px solid var(--border-subtle)",
+            background: "var(--bg-elevated)",
           }}
         >
           {footer}

@@ -24,6 +24,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type AdvancePreflight,
+  nextStageAfter,
+  runAdvancePreflight,
+} from "../../lib/advance-gate.js";
 import { buildAttachmentBlock, extractAttachment } from "../../lib/chat-attachments.js";
 import * as db from "../../lib/db.js";
 import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
@@ -1685,14 +1690,14 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
       <div
         style={{
           padding: "20px 28px",
-          borderBottom: "1px solid #E5E7EB",
+          borderBottom: "1px solid var(--border-subtle)",
           display: "flex",
           alignItems: "center",
           gap: 12,
         }}
       >
         <div>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "#111827" }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>
             {venture.name}
           </h2>
           <div style={{ marginTop: 6 }}>
@@ -1743,7 +1748,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
         style={{
           display: "flex",
           gap: 0,
-          borderBottom: "1px solid #E5E7EB",
+          borderBottom: "1px solid var(--border-subtle)",
           padding: "0 28px",
         }}
       >
@@ -1755,10 +1760,11 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
               padding: "12px 18px",
               fontWeight: tab === t ? 700 : 500,
               fontSize: 14,
-              color: tab === t ? "#6366F1" : "#6B7280",
+              color: tab === t ? "var(--accent)" : "var(--text-tertiary)",
               background: "none",
               border: "none",
-              borderBottom: tab === t ? "2px solid #6366F1" : "2px solid transparent",
+              borderBottom:
+                tab === t ? "2px solid var(--accent)" : "2px solid transparent",
               cursor: "pointer",
               marginBottom: -1,
             }}
@@ -1815,7 +1821,12 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
           // state resets on venture switch. Manifest passed through
           // for parity even though deriveProductSpecRules currently
           // doesn't need flags; future appType-specific gating could.
-          <SpecTab key={venture.id} venture={venture} manifest={manifest} />
+          <SpecTab
+            key={venture.id}
+            venture={venture}
+            manifest={manifest}
+            onAdvanceStage={handleStageChange}
+          />
         )}
         {tab === "screens" && (
           // pt.45: Screens tab (legacy stage enum WIREFRAME_READY).
@@ -1824,11 +1835,17 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
           // beyond the loading guard but kept on the prop signature
           // for future appType-aware gating (e.g. hiding the AUTH
           // shell type for browser_extension/game).
-          <ScreensTab key={venture.id} venture={venture} manifest={manifest} />
+          <ScreensTab
+            key={venture.id}
+            venture={venture}
+            manifest={manifest}
+            onAdvanceStage={handleStageChange}
+          />
         )}
         {tab === "overview" && (
           <OverviewTab
             venture={venture}
+            manifest={manifest}
             onOpenInFinder={handleOpenInFinder}
             onRequestDelete={() => setDeleteConfirmOpen(true)}
             onRunPipeline={handleRunPipeline}
@@ -2272,14 +2289,131 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   );
 }
 
+/**
+ * In-memory cache for the per-venture pre-flight result. Keyed by
+ * venture id so switching ventures doesn't pollute another's badge.
+ * 30-second TTL: long enough that the tab doesn't re-audit on every
+ * render, short enough that a save in another tab is reflected within
+ * half a minute. Lives at module scope rather than a hook because the
+ * Overview tab unmounts on tab switch and we want the cache to survive.
+ */
+const PREFLIGHT_CACHE_TTL_MS = 30_000;
+const preflightCache = new Map<
+  string,
+  { fetchedAt: number; nextStage: VentureStage; result: AdvancePreflight }
+>();
+
+function NextStageProgressHint({
+  venture,
+  manifest,
+}: {
+  venture: Venture;
+  manifest: VentureManifest | null;
+}) {
+  const nextStage = nextStageAfter(venture.stage);
+  const [hint, setHint] = useState<{
+    blockers: number;
+    warnings: number;
+    loading: boolean;
+    error: string | null;
+  }>({ blockers: 0, warnings: 0, loading: nextStage !== null, error: null });
+
+  useEffect(() => {
+    if (!nextStage) {
+      setHint({ blockers: 0, warnings: 0, loading: false, error: null });
+      return;
+    }
+    let cancelled = false;
+    const cacheKey = `${venture.id}::${nextStage}`;
+    const cached = preflightCache.get(cacheKey);
+    const fresh = cached && Date.now() - cached.fetchedAt < PREFLIGHT_CACHE_TTL_MS;
+    if (fresh && cached.nextStage === nextStage) {
+      setHint({
+        blockers: cached.result.blockers.length,
+        warnings: cached.result.warnings.length,
+        loading: false,
+        error: null,
+      });
+      return;
+    }
+    setHint((prev) => ({ ...prev, loading: true, error: null }));
+    runAdvancePreflight({
+      ventureId: venture.id,
+      ventureRoot: venture.rootPath,
+      nextStage,
+      manifest,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        preflightCache.set(cacheKey, { fetchedAt: Date.now(), nextStage, result });
+        setHint({
+          blockers: result.blockers.length,
+          warnings: result.warnings.length,
+          loading: false,
+          error: null,
+        });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        setHint({ blockers: 0, warnings: 0, loading: false, error: msg });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.id, venture.rootPath, nextStage, manifest]);
+
+  if (!nextStage) {
+    return (
+      <span style={{ fontSize: 11, color: "#6B7280" }}>End of pipeline — no further stages.</span>
+    );
+  }
+  if (hint.loading) {
+    return (
+      <span style={{ fontSize: 11, color: "#6B7280" }}>
+        Checking readiness for {nextStage.replace(/_/g, " ")}…
+      </span>
+    );
+  }
+  if (hint.error) {
+    return (
+      <span style={{ fontSize: 11, color: "#92400E" }} title={hint.error}>
+        Couldn't run pre-flight audit.
+      </span>
+    );
+  }
+  const total = hint.blockers + hint.warnings;
+  if (total === 0) {
+    return (
+      <span style={{ fontSize: 11, color: "#059669", fontWeight: 600 }}>
+        ✅ Ready to advance to {nextStage.replace(/_/g, " ")}.
+      </span>
+    );
+  }
+  const color = hint.blockers > 0 ? "#991B1B" : "#92400E";
+  return (
+    <span style={{ fontSize: 11, color, fontWeight: 600 }}>
+      {hint.blockers > 0
+        ? `${hint.blockers} blocker${hint.blockers === 1 ? "" : "s"}`
+        : `${hint.warnings} warning${hint.warnings === 1 ? "" : "s"}`}{" "}
+      before {nextStage.replace(/_/g, " ")}
+      {hint.blockers > 0 && hint.warnings > 0
+        ? ` (+${hint.warnings} warning${hint.warnings === 1 ? "" : "s"})`
+        : ""}
+    </span>
+  );
+}
+
 function OverviewTab({
   venture,
+  manifest,
   onOpenInFinder,
   onRequestDelete,
   onRunPipeline,
   isRunning,
 }: {
   venture: Venture;
+  manifest: VentureManifest | null;
   onOpenInFinder: () => void;
   onRequestDelete: () => void;
   onRunPipeline: () => void;
@@ -2294,7 +2428,11 @@ function OverviewTab({
           gap: 16,
         }}
       >
-        <Card title="Current Stage" description={`${venture.stage.replace(/_/g, " ")}`} />
+        <Card
+          title="Current Stage"
+          description={`${venture.stage.replace(/_/g, " ")}`}
+          footer={<NextStageProgressHint venture={venture} manifest={manifest} />}
+        />
         <Card title="Venture ID" description={venture.id} />
         <Card title="Artifacts" description="Scan pending" />
         <Card title="Handoffs" description="None active" />

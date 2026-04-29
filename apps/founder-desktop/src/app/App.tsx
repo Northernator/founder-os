@@ -2,6 +2,7 @@ import { FounderQueryProvider } from "@founder-os/query";
 import { useVentureStore } from "@founder-os/state";
 import { AppShell, Sidebar } from "@founder-os/ui";
 import React, { useEffect, useState } from "react";
+import { ThemeToggle } from "../features/chrome/ThemeToggle.js";
 import { ToastContainer } from "../features/toasts/ToastContainer.js";
 import {
   type CreateVentureInput,
@@ -213,6 +214,21 @@ export function App() {
           <NewVentureWizard onClose={() => setShowWizard(false)} onCreate={handleCreate} />
         )}
 
+        {/* Top-right theme toggle — fixed-position so it floats above the
+            main content regardless of which screen is mounted (Welcome,
+            VentureDashboard, etc.). One source of truth; the Options-tab
+            copy reads the same store. */}
+        <div
+          style={{
+            position: "fixed",
+            top: 12,
+            right: 16,
+            zIndex: 50,
+          }}
+        >
+          <ThemeToggle />
+        </div>
+
         {/* App-wide toast surface. Mounted once so every db/keyring path can
             push notifications via `pushToast` without threading a ref. */}
         <ToastContainer />
@@ -229,7 +245,7 @@ function LoadingScreen() {
         alignItems: "center",
         justifyContent: "center",
         height: "100%",
-        color: "#9CA3AF",
+        color: "var(--text-muted)",
         fontSize: 14,
       }}
     >

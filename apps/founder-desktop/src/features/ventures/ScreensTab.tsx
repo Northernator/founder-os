@@ -10,6 +10,7 @@ import {
   ShellTypeSchema,
   type Venture,
   type VentureManifest,
+  type VentureStage,
   createEmptyScreensCanvas,
   deriveScreensRules,
   isScreensCanvasComplete,
@@ -47,8 +48,20 @@ import { invoke } from "@tauri-apps/api/core";
  */
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { type AdvancePreflight, runAdvancePreflight } from "../../lib/advance-gate.js";
 import { type ScreensDraftResult, draftScreensCanvas } from "../../lib/screens-drafter.js";
+import {
+  type DistilledScreen,
+  type DistilledScreensFields,
+  distillScreens,
+} from "../../lib/screens-distiller.js";
 import { pushToast } from "../../lib/toasts.js";
+import { AdvanceConfirmModal } from "./AdvanceConfirmModal.js";
+import {
+  type DistillFieldConfig,
+  DistillDiffModal,
+  distillTextField,
+} from "./DistillDiffModal.js";
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -79,6 +92,9 @@ type DraftSectionId = "screens" | "notes";
 type Props = {
   venture: Venture;
   manifest: VentureManifest | null;
+  /** Optional: when present, the header shows an "Advance" button that
+   *  runs the pre-flight audit and gates the WIREFRAME_READY transition. */
+  onAdvanceStage?: (stage: VentureStage) => void;
 };
 
 /**
@@ -106,6 +122,64 @@ type SpecSnapshot = {
 
 const EMPTY_SPEC_SNAPSHOT: SpecSnapshot = { features: [], entities: [] };
 
+// ─────────────────────────────────────────────────────────────────
+// Distill field config (text-shaped subset of ScreensCanvas)
+// ─────────────────────────────────────────────────────────────────
+
+function renderScreensList(value: unknown): React.ReactNode {
+  if (!Array.isArray(value) || value.length === 0) {
+    return <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>(empty)</span>;
+  }
+  return (
+    <ul style={{ margin: 0, paddingLeft: 18 }}>
+      {(value as unknown[]).map((entry, i) => {
+        if (!entry || typeof entry !== "object") return null;
+        const e = entry as { name?: unknown; description?: unknown; notes?: unknown };
+        const name = typeof e.name === "string" ? e.name : "(unnamed)";
+        const desc = typeof e.description === "string" ? e.description : "";
+        const notes = typeof e.notes === "string" ? e.notes : "";
+        return (
+          <li key={`screens-list-${i}`} style={{ marginBottom: 6 }}>
+            <strong>{name}</strong>
+            {desc ? ` — ${desc}` : ""}
+            {notes ? (
+              <div style={{ marginTop: 2, color: "var(--text-tertiary)", fontSize: 12 }}>{notes}</div>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function screensListEquals(current: unknown, proposed: unknown): boolean {
+  const a = (Array.isArray(current) ? current : []) as Array<Record<string, unknown>>;
+  const b = (Array.isArray(proposed) ? proposed : []) as Array<Record<string, unknown>>;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const an = typeof a[i].name === "string" ? (a[i].name as string).trim() : "";
+    const bn = typeof b[i].name === "string" ? (b[i].name as string).trim() : "";
+    if (an !== bn) return false;
+    const ad = typeof a[i].description === "string" ? (a[i].description as string).trim() : "";
+    const bd = typeof b[i].description === "string" ? (b[i].description as string).trim() : "";
+    if (ad !== bd) return false;
+    const aon = typeof a[i].notes === "string" ? (a[i].notes as string).trim() : "";
+    const bon = typeof b[i].notes === "string" ? (b[i].notes as string).trim() : "";
+    if (aon !== bon) return false;
+  }
+  return true;
+}
+
+const SCREENS_DISTILL_FIELDS: DistillFieldConfig[] = [
+  distillTextField("notes", "Architecture notes"),
+  {
+    key: "screens",
+    label: "Screens",
+    render: renderScreensList,
+    equals: screensListEquals,
+  },
+];
+
 function buildSpecSnapshot(spec: ProductSpecCanvas | null): SpecSnapshot {
   if (!spec) return EMPTY_SPEC_SNAPSHOT;
   return {
@@ -121,7 +195,7 @@ function buildSpecSnapshot(spec: ProductSpecCanvas | null): SpecSnapshot {
   };
 }
 
-export function ScreensTab({ venture, manifest }: Props) {
+export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
   const canvasPath = useMemo(() => getScreensCanvasPath(venture.rootPath), [venture.rootPath]);
   const specPath = useMemo(() => getSpecCanvasPath(venture.rootPath), [venture.rootPath]);
 
@@ -148,6 +222,18 @@ export function ScreensTab({ venture, manifest }: Props) {
    *  don't render partial JSON. */
   const [draftDeltaCount, setDraftDeltaCount] = useState(0);
   const draftAbortRef = useRef<AbortController | null>(null);
+
+  // Distill from chat + docs — orthogonal to the AI Draft flow above.
+  // Distill targets only free-text fields; structured shell/feature/entity
+  // mappings are owned by `draftScreensCanvas`.
+  const [distilling, setDistilling] = useState(false);
+  const [distillDraft, setDistillDraft] = useState<DistilledScreensFields | null>(null);
+
+  // Advance-stage gate (pre-flight audit). `advancing` toggles the button
+  // spinner; `advanceModal` holds the preflight result while the
+  // AdvanceConfirmModal is open.
+  const [advancing, setAdvancing] = useState(false);
+  const [advanceModal, setAdvanceModal] = useState<AdvancePreflight | null>(null);
 
   /** Reset the draft surface back to closed/idle — used by Discard,
    *  by venture switch, and by Cancel-during-loading. */
@@ -271,12 +357,50 @@ export function ScreensTab({ venture, manifest }: Props) {
   }, [canvas, canvasPath]);
 
   if (loading || !canvas || !manifest) {
-    return <div style={{ padding: 28, color: "#6B7280" }}>Loading Screens canvas…</div>;
+    return <div style={{ padding: 28, color: "var(--text-tertiary)" }}>Loading Screens canvas…</div>;
   }
 
   const rules = deriveScreensRules(canvas, specSnapshot);
   const passCount = rules.filter((r) => r.pass).length;
   const complete = isScreensCanvasComplete(canvas, specSnapshot);
+
+  // ─────────────────────────────────────────────────────────────
+  // Advance-stage handlers (pre-flight audit gate)
+  // ─────────────────────────────────────────────────────────────
+  const commitAdvance = () => {
+    if (!onAdvanceStage) return;
+    onAdvanceStage("WIREFRAME_READY");
+    pushToast({ kind: "success", message: "Advanced to Screens (Wireframe Ready)", ttlMs: 3000 });
+    setAdvanceModal(null);
+    setAdvancing(false);
+  };
+
+  const handleAdvance = async () => {
+    if (!onAdvanceStage || !complete || advancing) return;
+    setAdvancing(true);
+    try {
+      const preflight = await runAdvancePreflight({
+        ventureId: venture.id,
+        ventureRoot: venture.rootPath,
+        nextStage: "WIREFRAME_READY",
+        manifest,
+      });
+      if (preflight.blockers.length === 0 && preflight.warnings.length === 0) {
+        commitAdvance();
+        return;
+      }
+      setAdvanceModal(preflight);
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Pre-flight audit failed",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+      commitAdvance();
+      return;
+    }
+    setAdvancing(false);
+  };
 
   // ─────────────────────────────────────────────────────────────
   // Update helpers — list pattern mirrors SpecTab's section
@@ -316,6 +440,93 @@ export function ScreensTab({ venture, manifest }: Props) {
     );
   const removeScreen = (id: string) =>
     setCanvas((cur) => (cur ? { ...cur, screens: cur.screens.filter((s) => s.id !== id) } : cur));
+
+  // ─────────────────────────────────────────────────────────────
+  // Distill from chat + docs
+  // Replaces (does not merge) the screens list when accepted —
+  // the diff modal makes the swap explicit. Notes is a singleton.
+  // ─────────────────────────────────────────────────────────────
+  const handleDistill = async () => {
+    if (distilling || !canvas) return;
+    setDistilling(true);
+    try {
+      const draft = await distillScreens({
+        ventureId: venture.id,
+        stage: venture.stage,
+        ventureRootPath: venture.rootPath,
+        currentFields: {
+          notes: canvas.notes,
+          screens: canvas.screens.map((s) => ({
+            name: s.name,
+            description: s.description,
+            notes: s.notes,
+          })),
+        },
+      });
+      if (Object.keys(draft).length === 0) {
+        pushToast({
+          kind: "warn",
+          message: "Nothing to distill yet",
+          detail: "No chat history or text-shaped docs found in the venture folder.",
+          ttlMs: 5000,
+        });
+        return;
+      }
+      setDistillDraft(draft);
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Distill failed",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setDistilling(false);
+    }
+  };
+
+  const handleApplyDistill = (selected: Record<string, unknown>) => {
+    if (Object.keys(selected).length === 0 || !canvas) {
+      setDistillDraft(null);
+      return;
+    }
+    let applied = 0;
+    if (typeof selected.notes === "string") {
+      updateNotes(selected.notes);
+      applied++;
+    }
+    if (Array.isArray(selected.screens)) {
+      const drafted = (selected.screens as DistilledScreen[]).filter(
+        (s): s is DistilledScreen => !!s && typeof s.name === "string" && s.name.trim().length > 0
+      );
+      // Replace, not merge: distill returned a fresh inventory and the
+      // founder explicitly accepted it in the diff modal.
+      setCanvas((cur) =>
+        cur
+          ? {
+              ...cur,
+              screens: drafted.map((s) => ({
+                id: newId("screen"),
+                name: s.name,
+                description: s.description ?? "",
+                shellType: "DASHBOARD" as ShellType,
+                featureIds: [],
+                entityIds: [],
+                notes: s.notes ?? "",
+              })),
+            }
+          : cur
+      );
+      applied++;
+    }
+    if (applied > 0) {
+      pushToast({
+        kind: "success",
+        message: `✨ Applied ${applied} distilled field${applied === 1 ? "" : "s"}`,
+        ttlMs: 4000,
+      });
+    }
+    setDistillDraft(null);
+  };
 
   // ─────────────────────────────────────────────────────────────
   // Draft flow (pt.47) — mirror of SpecTab's startDraft/apply*
@@ -451,8 +662,8 @@ export function ScreensTab({ venture, manifest }: Props) {
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827" }}>Screens</h2>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6B7280" }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>Screens</h2>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-tertiary)" }}>
               Inventory of product screens — name, shell shape, mapped features and entities. Stitch
               / v0 / Figma Make handle the visual layout downstream. Saved to{" "}
               <code>06_product/wireframes/screens-canvas.json</code>.
@@ -460,6 +671,29 @@ export function ScreensTab({ venture, manifest }: Props) {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <SaveIndicator status={saveStatus} />
+            <button
+              type="button"
+              onClick={handleDistill}
+              disabled={distilling}
+              title="Distill your chat history + uploaded docs into draft Screens free-text fields"
+              style={{
+                padding: "8px 14px",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: distilling ? "var(--bg-elevated)" : "var(--accent-soft)",
+                border: `1px solid ${distilling ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+                color: distilling ? "var(--text-muted)" : "var(--accent-hover)",
+                borderRadius: 6,
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: distilling ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <span>{distilling ? "⏳" : "✨"}</span>
+              {distilling ? "Distilling…" : "Distill from chat + docs"}
+            </button>
             <DraftWithAiButton
               phase={draftPhase}
               onClick={() => {
@@ -468,6 +702,31 @@ export function ScreensTab({ venture, manifest }: Props) {
                 }
               }}
             />
+            {onAdvanceStage && (
+              <button
+                type="button"
+                onClick={handleAdvance}
+                disabled={!complete || advancing}
+                title={
+                  complete
+                    ? "Run pre-flight audit and advance to Screens (Wireframe Ready)"
+                    : `${passCount}/${rules.length} must-haves complete — finish the checklist`
+                }
+                style={{
+                  padding: "8px 16px",
+                  background: complete ? "var(--accent)" : "var(--border-subtle)",
+                  color: complete ? "var(--bg-panel)" : "var(--text-muted)",
+                  border: "none",
+                  borderRadius: 6,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: complete && !advancing ? "pointer" : "not-allowed",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {advancing ? "Checking…" : "Advance to Screens →"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -478,11 +737,11 @@ export function ScreensTab({ venture, manifest }: Props) {
           <div
             style={{
               padding: 14,
-              background: "#F9FAFB",
-              border: "1px dashed #D1D5DB",
+              background: "var(--bg-elevated)",
+              border: "1px dashed var(--border-input)",
               borderRadius: 8,
               fontSize: 12,
-              color: "#4B5563",
+              color: "var(--text-secondary)",
               lineHeight: 1.5,
             }}
           >
@@ -509,7 +768,7 @@ export function ScreensTab({ venture, manifest }: Props) {
 
         {/* Notes ────────────────────────────────────────────────── */}
         <Section title="Notes" icon="🗒️">
-          <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
             Anything that doesn't fit the per-screen fields — global navigation, shared layout
             decisions, responsive notes.
           </p>
@@ -548,8 +807,8 @@ export function ScreensTab({ venture, manifest }: Props) {
         <aside
           style={{
             padding: 16,
-            background: "#F9FAFB",
-            border: "1px solid #E5E7EB",
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--border-subtle)",
             borderRadius: 8,
             alignSelf: "start",
             position: "sticky",
@@ -564,14 +823,14 @@ export function ScreensTab({ venture, manifest }: Props) {
               marginBottom: 12,
             }}
           >
-            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
               Must-haves
             </h3>
             <span
               style={{
                 fontSize: 12,
                 fontWeight: 600,
-                color: passCount === rules.length ? "#059669" : "#6B7280",
+                color: passCount === rules.length ? "var(--success)" : "var(--text-tertiary)",
               }}
             >
               {passCount} / {rules.length}
@@ -584,7 +843,7 @@ export function ScreensTab({ venture, manifest }: Props) {
                   style={{
                     fontSize: 12,
                     marginTop: 1,
-                    color: rule.pass ? "#059669" : "#9CA3AF",
+                    color: rule.pass ? "var(--success)" : "var(--text-muted)",
                   }}
                 >
                   {rule.pass ? "✅" : "○"}
@@ -594,12 +853,12 @@ export function ScreensTab({ venture, manifest }: Props) {
                     style={{
                       fontSize: 12,
                       fontWeight: 600,
-                      color: rule.pass ? "#111827" : "#374151",
+                      color: rule.pass ? "var(--text-primary)" : "var(--text-secondary)",
                     }}
                   >
                     {rule.label}
                   </div>
-                  <div style={{ fontSize: 11, color: "#6B7280" }}>{rule.description}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{rule.description}</div>
                 </div>
               </div>
             ))}
@@ -609,11 +868,11 @@ export function ScreensTab({ venture, manifest }: Props) {
               style={{
                 marginTop: 14,
                 padding: 10,
-                background: "#ECFDF5",
-                border: "1px solid #A7F3D0",
+                background: "var(--success-soft)",
+                border: "1px solid var(--success-soft)",
                 borderRadius: 6,
                 fontSize: 12,
-                color: "#065F46",
+                color: "var(--success)",
                 fontWeight: 600,
               }}
             >
@@ -629,7 +888,7 @@ export function ScreensTab({ venture, manifest }: Props) {
               style={{
                 marginTop: 12,
                 fontSize: 11,
-                color: "#9CA3AF",
+                color: "var(--text-muted)",
                 lineHeight: 1.5,
               }}
             >
@@ -638,6 +897,35 @@ export function ScreensTab({ venture, manifest }: Props) {
             </div>
           )}
         </aside>
+      )}
+      {advanceModal !== null && (
+        <AdvanceConfirmModal
+          blockers={advanceModal.blockers}
+          warnings={advanceModal.warnings}
+          currentStage={venture.stage}
+          nextStage="WIREFRAME_READY"
+          onAdvance={commitAdvance}
+          onClose={() => {
+            setAdvanceModal(null);
+            setAdvancing(false);
+          }}
+        />
+      )}
+      {distillDraft !== null && (
+        <DistillDiffModal
+          current={{
+            notes: canvas.notes,
+            screens: canvas.screens.map((s) => ({
+              name: s.name,
+              description: s.description,
+              notes: s.notes,
+            })),
+          }}
+          proposed={distillDraft as Record<string, unknown>}
+          fields={SCREENS_DISTILL_FIELDS}
+          onApply={handleApplyDistill}
+          onClose={() => setDistillDraft(null)}
+        />
       )}
     </div>
   );
@@ -703,7 +991,7 @@ function ScreenCard({
       <div
         style={{
           fontSize: 11,
-          color: "#6B7280",
+          color: "var(--text-tertiary)",
           marginTop: -2,
           fontStyle: "italic",
         }}
@@ -797,15 +1085,15 @@ function Section({
     <section
       style={{
         padding: 16,
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 8,
         display: "flex",
         flexDirection: "column",
         gap: 10,
       }}
     >
-      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
+      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
         <span style={{ marginRight: 6 }}>{icon}</span>
         {title}
       </h3>
@@ -823,7 +1111,7 @@ function Field({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 600 }}>{label}</span>
       {children}
     </label>
   );
@@ -834,8 +1122,8 @@ function CardShell({ children }: { children: React.ReactNode }) {
     <div
       style={{
         padding: 12,
-        background: "#FAFAFB",
-        border: "1px solid #E5E7EB",
+        background: "var(--bg-elevated)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 6,
         display: "flex",
         flexDirection: "column",
@@ -862,9 +1150,9 @@ function AddRowButton({
         alignSelf: "flex-start",
         padding: "6px 12px",
         fontSize: 12,
-        background: "#FFFFFF",
-        color: "#4338CA",
-        border: "1px dashed #C7D2FE",
+        background: "var(--bg-panel)",
+        color: "var(--accent)",
+        border: "1px dashed var(--accent-soft)",
         borderRadius: 4,
         cursor: "pointer",
         fontWeight: 600,
@@ -885,9 +1173,9 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
         marginLeft: "auto",
         padding: "2px 8px",
         fontSize: 11,
-        background: "#FFFFFF",
-        color: "#DC2626",
-        border: "1px solid #FEE2E2",
+        background: "var(--bg-panel)",
+        color: "var(--danger)",
+        border: "1px solid var(--danger-soft)",
         borderRadius: 4,
         cursor: "pointer",
         fontWeight: 600,
@@ -932,9 +1220,9 @@ function Pill({
         padding: "4px 10px",
         fontSize: 12,
         fontWeight: 600,
-        background: selected ? "#EEF2FF" : "#FFFFFF",
-        color: selected ? "#4338CA" : "#374151",
-        border: `1px solid ${selected ? "#C7D2FE" : "#E5E7EB"}`,
+        background: selected ? "var(--accent-soft)" : "var(--bg-panel)",
+        color: selected ? "var(--accent)" : "var(--text-secondary)",
+        border: `1px solid ${selected ? "var(--accent-soft)" : "var(--border-subtle)"}`,
         borderRadius: 999,
         cursor: "pointer",
         display: "inline-flex",
@@ -949,8 +1237,8 @@ function Pill({
             fontSize: 10,
             fontWeight: 700,
             padding: "1px 5px",
-            background: selected ? "#4338CA" : "#F3F4F6",
-            color: selected ? "#FFFFFF" : "#6B7280",
+            background: selected ? "var(--accent)" : "var(--bg-hover)",
+            color: selected ? "var(--bg-panel)" : "var(--text-tertiary)",
             borderRadius: 4,
             textTransform: "uppercase",
             letterSpacing: 0.4,
@@ -969,9 +1257,9 @@ function EmptyHint({ children }: { children: React.ReactNode }) {
       style={{
         padding: "6px 8px",
         fontSize: 12,
-        color: "#6B7280",
-        background: "#F9FAFB",
-        border: "1px dashed #E5E7EB",
+        color: "var(--text-tertiary)",
+        background: "var(--bg-elevated)",
+        border: "1px dashed var(--border-subtle)",
         borderRadius: 4,
       }}
     >
@@ -988,9 +1276,9 @@ function SaveIndicator({
   status: "saved" | "saving" | "unsaved";
 }) {
   const cfg = {
-    saved: { color: "#059669", text: "Saved" },
-    saving: { color: "#6366F1", text: "Saving…" },
-    unsaved: { color: "#D97706", text: "Unsaved" },
+    saved: { color: "var(--success)", text: "Saved" },
+    saving: { color: "var(--accent)", text: "Saving…" },
+    unsaved: { color: "var(--warning)", text: "Unsaved" },
   }[status];
   return <span style={{ fontSize: 11, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
 }
@@ -1003,8 +1291,8 @@ const inputStyle: React.CSSProperties = {
   fontSize: 13,
   padding: "7px 10px",
   borderRadius: 6,
-  border: "1px solid #D1D5DB",
-  background: "#FFFFFF",
+  border: "1px solid var(--border-input)",
+  background: "var(--bg-panel)",
   fontFamily: "inherit",
   outline: "none",
   width: "100%",
@@ -1054,9 +1342,9 @@ function DraftWithAiButton({
         padding: "6px 14px",
         fontSize: 12,
         fontWeight: 600,
-        background: isBusy ? "#EEF2FF" : "#4338CA",
-        color: isBusy ? "#4338CA" : "#FFFFFF",
-        border: "1px solid #4338CA",
+        background: isBusy ? "var(--accent-soft)" : "var(--accent)",
+        color: isBusy ? "var(--accent)" : "var(--bg-panel)",
+        border: "1px solid var(--accent)",
         borderRadius: 6,
         cursor: isBusy ? "default" : "pointer",
         opacity: isBusy ? 0.85 : 1,
@@ -1157,8 +1445,8 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
     <aside
       style={{
         padding: 0,
-        background: "#FFFFFF",
-        border: "1px solid #C7D2FE",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--accent-soft)",
         borderRadius: 8,
         alignSelf: "start",
         position: "sticky",
@@ -1173,8 +1461,8 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
       <div
         style={{
           padding: "12px 14px",
-          borderBottom: "1px solid #E5E7EB",
-          background: "#F5F3FF",
+          borderBottom: "1px solid var(--border-subtle)",
+          background: "var(--accent-soft)",
           position: "sticky",
           top: 0,
           zIndex: 1,
@@ -1193,7 +1481,7 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
               margin: 0,
               fontSize: 13,
               fontWeight: 700,
-              color: "#3730A3",
+              color: "var(--accent-hover)",
             }}
           >
             ✨ AI Draft
@@ -1204,9 +1492,9 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
             style={{
               padding: "2px 8px",
               fontSize: 11,
-              background: "#FFFFFF",
-              color: "#4338CA",
-              border: "1px solid #C7D2FE",
+              background: "var(--bg-panel)",
+              color: "var(--accent)",
+              border: "1px solid var(--accent-soft)",
               borderRadius: 4,
               cursor: "pointer",
               fontWeight: 600,
@@ -1219,14 +1507,14 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
           style={{
             marginTop: 6,
             fontSize: 11,
-            color: "#4B5563",
+            color: "var(--text-secondary)",
           }}
         >
           {providerDisplayName && model
             ? `Drafting with ${providerDisplayName} · ${model}`
             : "Drafting with the active provider"}
           {phase === "success" && (
-            <span style={{ color: "#6B7280" }}>
+            <span style={{ color: "var(--text-tertiary)" }}>
               {" "}
               — Replace overwrites the section, Merge appends.
             </span>
@@ -1236,29 +1524,29 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
 
       {/* ── Body ───────────────────────────────────────────────── */}
       {phase === "loading" && (
-        <div style={{ padding: 16, fontSize: 12, color: "#4B5563" }}>
+        <div style={{ padding: 16, fontSize: 12, color: "var(--text-secondary)" }}>
           <div style={{ marginBottom: 8 }}>
             Drafting your screen inventory from spec + brand brief…
           </div>
-          <div style={{ fontSize: 11, color: "#9CA3AF" }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
             {deltaCount > 0 ? `Streaming · ${deltaCount} chunks` : "Waiting for first token…"}
           </div>
-          <div style={{ fontSize: 11, color: "#6B7280", marginTop: 12 }}>
+          <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 12 }}>
             This usually takes 15–45 seconds depending on provider.
           </div>
         </div>
       )}
 
       {phase === "error" && (
-        <div style={{ padding: 16, fontSize: 12, color: "#7F1D1D" }}>
+        <div style={{ padding: 16, fontSize: 12, color: "var(--danger)" }}>
           <div style={{ fontWeight: 600, marginBottom: 8 }}>Couldn't complete the draft</div>
           <div
             style={{
               padding: 10,
-              background: "#FEF2F2",
-              border: "1px solid #FECACA",
+              background: "var(--danger-soft)",
+              border: "1px solid var(--danger-border)",
               borderRadius: 6,
-              color: "#991B1B",
+              color: "var(--danger)",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
             }}
@@ -1272,9 +1560,9 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
               style={{
                 padding: "6px 12px",
                 fontSize: 12,
-                background: "#4338CA",
-                color: "#FFFFFF",
-                border: "1px solid #4338CA",
+                background: "var(--accent)",
+                color: "var(--bg-panel)",
+                border: "1px solid var(--accent)",
                 borderRadius: 6,
                 cursor: "pointer",
                 fontWeight: 600,
@@ -1288,9 +1576,9 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
               style={{
                 padding: "6px 12px",
                 fontSize: 12,
-                background: "#FFFFFF",
-                color: "#374151",
-                border: "1px solid #D1D5DB",
+                background: "var(--bg-panel)",
+                color: "var(--text-secondary)",
+                border: "1px solid var(--border-input)",
                 borderRadius: 6,
                 cursor: "pointer",
                 fontWeight: 600,
@@ -1315,15 +1603,15 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
           <div
             style={{
               padding: 10,
-              background: "#F9FAFB",
-              border: "1px solid #E5E7EB",
+              background: "var(--bg-elevated)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: 6,
               display: "flex",
               flexDirection: "column",
               gap: 6,
             }}
           >
-            <div style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>
+            <div style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 600 }}>
               Apply all sections
             </div>
             <div style={{ display: "flex", gap: 6 }}>
@@ -1350,13 +1638,13 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
             <div
               style={{
                 padding: 8,
-                background: mustCoverage.hits === mustCoverage.total ? "#ECFDF5" : "#FFFBEB",
+                background: mustCoverage.hits === mustCoverage.total ? "var(--success-soft)" : "var(--warning-soft)",
                 border: `1px solid ${
-                  mustCoverage.hits === mustCoverage.total ? "#A7F3D0" : "#FDE68A"
+                  mustCoverage.hits === mustCoverage.total ? "var(--success-soft)" : "var(--warning-soft)"
                 }`,
                 borderRadius: 6,
                 fontSize: 11,
-                color: mustCoverage.hits === mustCoverage.total ? "#065F46" : "#92400E",
+                color: mustCoverage.hits === mustCoverage.total ? "var(--success)" : "var(--warning)",
                 fontWeight: 600,
               }}
             >
@@ -1400,9 +1688,9 @@ function applyAllBtn(mode: "replace" | "merge"): React.CSSProperties {
     padding: "6px 10px",
     fontSize: 11,
     fontWeight: 600,
-    background: mode === "replace" ? "#4338CA" : "#FFFFFF",
-    color: mode === "replace" ? "#FFFFFF" : "#4338CA",
-    border: "1px solid #4338CA",
+    background: mode === "replace" ? "var(--accent)" : "var(--bg-panel)",
+    color: mode === "replace" ? "var(--bg-panel)" : "var(--accent)",
+    border: "1px solid var(--accent)",
     borderRadius: 4,
     cursor: "pointer",
   };
@@ -1434,8 +1722,8 @@ function DraftSectionRow({
     <div
       style={{
         padding: 10,
-        background: isCommitted ? "#F9FAFB" : "#FFFFFF",
-        border: "1px solid #E5E7EB",
+        background: isCommitted ? "var(--bg-elevated)" : "var(--bg-panel)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 6,
         display: "flex",
         flexDirection: "column",
@@ -1455,7 +1743,7 @@ function DraftSectionRow({
           style={{
             fontSize: 12,
             fontWeight: 600,
-            color: "#111827",
+            color: "var(--text-primary)",
             display: "flex",
             alignItems: "center",
             gap: 6,
@@ -1467,8 +1755,8 @@ function DraftSectionRow({
               fontSize: 10,
               padding: "1px 6px",
               borderRadius: 999,
-              background: count > 0 ? "#E0E7FF" : "#F3F4F6",
-              color: count > 0 ? "#3730A3" : "#9CA3AF",
+              background: count > 0 ? "var(--accent-soft)" : "var(--bg-hover)",
+              color: count > 0 ? "var(--accent-hover)" : "var(--text-muted)",
               fontWeight: 600,
             }}
           >
@@ -1481,7 +1769,7 @@ function DraftSectionRow({
               fontSize: 10,
               fontWeight: 600,
               color:
-                state === "skipped" ? "#6B7280" : state === "applied-merge" ? "#0E7490" : "#059669",
+                state === "skipped" ? "var(--text-tertiary)" : state === "applied-merge" ? "var(--success)" : "var(--success)",
             }}
           >
             {state === "skipped"
@@ -1495,7 +1783,7 @@ function DraftSectionRow({
       <div
         style={{
           fontSize: 11,
-          color: "#6B7280",
+          color: "var(--text-tertiary)",
           lineHeight: 1.4,
           maxHeight: 72,
           overflow: "hidden",
@@ -1533,9 +1821,9 @@ function trioBtn(variant: "primary" | "secondary" | "muted"): React.CSSPropertie
       padding: "5px 8px",
       fontSize: 11,
       fontWeight: 600,
-      background: "#4338CA",
-      color: "#FFFFFF",
-      border: "1px solid #4338CA",
+      background: "var(--accent)",
+      color: "var(--bg-panel)",
+      border: "1px solid var(--accent)",
       borderRadius: 4,
       cursor: "pointer",
     };
@@ -1546,9 +1834,9 @@ function trioBtn(variant: "primary" | "secondary" | "muted"): React.CSSPropertie
       padding: "5px 8px",
       fontSize: 11,
       fontWeight: 600,
-      background: "#FFFFFF",
-      color: "#4338CA",
-      border: "1px solid #C7D2FE",
+      background: "var(--bg-panel)",
+      color: "var(--accent)",
+      border: "1px solid var(--accent-soft)",
       borderRadius: 4,
       cursor: "pointer",
     };
@@ -1558,9 +1846,9 @@ function trioBtn(variant: "primary" | "secondary" | "muted"): React.CSSPropertie
     padding: "5px 8px",
     fontSize: 11,
     fontWeight: 600,
-    background: "#FFFFFF",
-    color: "#6B7280",
-    border: "1px solid #E5E7EB",
+    background: "var(--bg-panel)",
+    color: "var(--text-tertiary)",
+    border: "1px solid var(--border-subtle)",
     borderRadius: 4,
     cursor: "pointer",
   };

@@ -24,6 +24,16 @@ export type TelemetryEvent =
       transport: string;
       /** Optional consumer-supplied venture id for per-venture grouping. */
       ventureId?: string;
+      /**
+       * Backend provider id that ran the optimisation (e.g. "anthropic",
+       * "openai", "ollama"). Forwarded to the sink so per-model dollar
+       * savings can be computed. Cache-hit events have no live transport
+       * so this is undefined for them — pricing falls back to the
+       * unknown-model bucket on the read side.
+       */
+      provider?: string;
+      /** Model id used for the optimisation, e.g. "claude-opus-4-6". */
+      model?: string;
     }
   | {
       event: "prompt_master.fallback";

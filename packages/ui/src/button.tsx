@@ -11,10 +11,18 @@ export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const VARIANT_STYLES: Record<ButtonVariant, React.CSSProperties> = {
-  primary: { background: "#6366F1", color: "#fff", border: "none" },
-  secondary: { background: "#F3F4F6", color: "#374151", border: "1px solid #D1D5DB" },
-  ghost: { background: "transparent", color: "#374151", border: "1px solid transparent" },
-  danger: { background: "#EF4444", color: "#fff", border: "none" },
+  primary: { background: "var(--accent)", color: "var(--accent-fg)", border: "none" },
+  secondary: {
+    background: "var(--bg-hover)",
+    color: "var(--text-secondary)",
+    border: "1px solid var(--border-input)",
+  },
+  ghost: {
+    background: "transparent",
+    color: "var(--text-secondary)",
+    border: "1px solid transparent",
+  },
+  danger: { background: "var(--danger)", color: "var(--danger-fg)", border: "none" },
 };
 
 const SIZE_STYLES: Record<ButtonSize, React.CSSProperties> = {

@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app/App.js";
 import { initPromptMaster } from "./lib/prompt-master-init.js";
+import "./styles/themes.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("No #root element found");

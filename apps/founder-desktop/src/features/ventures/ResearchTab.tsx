@@ -3,9 +3,22 @@ import { optimize } from "@founder-os/prompt-master";
 import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { type AdvancePreflight, runAdvancePreflight } from "../../lib/advance-gate.js";
+import * as db from "../../lib/db.js";
 import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
+import {
+  type DistilledCompetitor,
+  type DistilledFields,
+  distillResearch,
+} from "../../lib/research-distiller.js";
 import { pushToast } from "../../lib/toasts.js";
-import { joinPath, writeVentureManifest } from "../../lib/venture-io.js";
+import { joinPath } from "../../lib/venture-io.js";
+import { AdvanceConfirmModal } from "./AdvanceConfirmModal.js";
+import {
+  type DistillFieldConfig,
+  DistillDiffModal,
+  distillTextField,
+} from "./DistillDiffModal.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -122,6 +135,52 @@ const CHECK_HINTS: Record<CheckKey, string> = {
   conclusionReached: "Decide Go or No-Go at the bottom",
 };
 
+function competitorsEqual(current: unknown, proposed: unknown): boolean {
+  const a = (Array.isArray(current) ? current : []) as DistilledCompetitor[];
+  const b = (Array.isArray(proposed) ? proposed : []) as DistilledCompetitor[];
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].name !== b[i].name || a[i].weakness !== b[i].weakness) return false;
+  }
+  return true;
+}
+
+function renderCompetitorList(value: unknown): React.ReactNode {
+  if (!Array.isArray(value) || value.length === 0) {
+    return <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>(empty)</span>;
+  }
+  const list = value as DistilledCompetitor[];
+  return (
+    <ul style={{ margin: 0, paddingLeft: 18 }}>
+      {list.map((c, i) => (
+        <li key={`${c.name}-${i}`} style={{ marginBottom: 4 }}>
+          <strong>{c.name || "(unnamed)"}</strong>
+          {c.weakness ? ` — ${c.weakness}` : ""}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const RESEARCH_DISTILL_FIELDS: DistillFieldConfig[] = [
+  distillTextField("marketSummary", "Market summary"),
+  distillTextField("tamEstimate", "TAM estimate"),
+  distillTextField("samEstimate", "SAM estimate"),
+  distillTextField("keyMarketGap", "Key market gap"),
+  distillTextField("differentiator", "Differentiator"),
+  distillTextField("topProblems", "Top customer problems"),
+  distillTextField("customerQuotes", "Customer quotes"),
+  distillTextField("evidenceNotes", "Evidence notes"),
+  {
+    key: "competitors",
+    label: "Competitors",
+    render: renderCompetitorList,
+    equals: competitorsEqual,
+  },
+  distillTextField("researchSummary", "Research summary"),
+  distillTextField("goNoGoReason", "Go / no-go reasoning"),
+];
+
 const EVIDENCE_OPTIONS: { value: EvidenceType; label: string }[] = [
   { value: "customer_interviews", label: "Customer interviews" },
   { value: "surveys", label: "Online surveys" },
@@ -181,6 +240,10 @@ export function ResearchTab({
   const [advancing, setAdvancing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [aiFillingDocs, setAiFillingDocs] = useState(false);
+  const [chatMessageCount, setChatMessageCount] = useState(0);
+  const [distilling, setDistilling] = useState(false);
+  const [distillDraft, setDistillDraft] = useState<DistilledFields | null>(null);
+  const [advanceModal, setAdvanceModal] = useState<AdvancePreflight | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -227,6 +290,23 @@ export function ResearchTab({
       cancelled = true;
     };
   }, [venture.id, venture.rootPath]);
+
+  // Load chat message count for the current venture+stage so the
+  // "Distill from chat" button can be greyed out when there's nothing
+  // to distill from.
+  useEffect(() => {
+    let cancelled = false;
+    db.listChatMessages(venture.id, venture.stage)
+      .then((msgs) => {
+        if (!cancelled) setChatMessageCount(msgs.length);
+      })
+      .catch(() => {
+        if (!cancelled) setChatMessageCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.id, venture.stage]);
 
   // Debounced save
   const scheduleSave = useCallback(
@@ -377,6 +457,13 @@ export function ResearchTab({
     setUploading(false);
   };
 
+  const commitAdvance = () => {
+    onAdvanceStage("VALIDATED");
+    pushToast({ kind: "success", message: "Advanced to Validated", ttlMs: 3000 });
+    setAdvanceModal(null);
+    setAdvancing(false);
+  };
+
   const handleAdvance = async () => {
     if (!allDone || advancing) return;
     setAdvancing(true);
@@ -397,8 +484,116 @@ export function ResearchTab({
         detail: errDetail(err),
       });
     }
-    onAdvanceStage("VALIDATED");
+
+    try {
+      const preflight = await runAdvancePreflight({
+        ventureId: venture.id,
+        ventureRoot: venture.rootPath,
+        nextStage: "VALIDATED",
+        manifest,
+      });
+      if (preflight.blockers.length === 0 && preflight.warnings.length === 0) {
+        commitAdvance();
+        return;
+      }
+      setAdvanceModal(preflight);
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Pre-flight audit failed",
+        detail: errDetail(err),
+      });
+      // Fail open: allow the user to advance manually rather than trapping
+      // them on the tab if the audit step itself errors.
+      commitAdvance();
+      return;
+    }
     setAdvancing(false);
+  };
+
+  const handleDistill = async () => {
+    if (distilling) return;
+    setDistilling(true);
+    try {
+      const draft = await distillResearch({
+        ventureId: venture.id,
+        stage: venture.stage,
+        ventureRootPath: venture.rootPath,
+        currentFields: {
+          marketSummary: canvas.marketSummary,
+          tamEstimate: canvas.tamEstimate,
+          samEstimate: canvas.samEstimate,
+          keyMarketGap: canvas.keyMarketGap,
+          differentiator: canvas.differentiator,
+          topProblems: canvas.topProblems,
+          customerQuotes: canvas.customerQuotes,
+          evidenceNotes: canvas.evidenceNotes,
+          researchSummary: canvas.researchSummary,
+          goNoGoReason: canvas.goNoGoReason,
+          competitors: canvas.competitors.map((c) => ({
+            name: c.name,
+            weakness: c.weakness,
+          })),
+        },
+      });
+      if (Object.keys(draft).length === 0) {
+        pushToast({
+          kind: "warn",
+          message: "Nothing to distill yet",
+          detail: "No chat history or text-shaped docs found in the venture folder.",
+          ttlMs: 5000,
+        });
+        return;
+      }
+      setDistillDraft(draft);
+    } catch (err) {
+      pushToast({ kind: "error", message: "Distill failed", detail: errDetail(err) });
+    } finally {
+      setDistilling(false);
+    }
+  };
+
+  const handleApplyDistill = (selected: Record<string, unknown>) => {
+    if (Object.keys(selected).length === 0) {
+      setDistillDraft(null);
+      return;
+    }
+    const patch: Partial<ResearchCanvas> = {};
+    let applied = 0;
+    const assignString = (key: keyof DistilledFields & keyof ResearchCanvas) => {
+      const v = selected[key];
+      if (typeof v === "string") {
+        (patch as Record<string, unknown>)[key] = v;
+        applied++;
+      }
+    };
+    assignString("marketSummary");
+    assignString("tamEstimate");
+    assignString("samEstimate");
+    assignString("keyMarketGap");
+    assignString("differentiator");
+    assignString("topProblems");
+    assignString("customerQuotes");
+    assignString("evidenceNotes");
+    assignString("researchSummary");
+    assignString("goNoGoReason");
+    if (Array.isArray(selected.competitors) && selected.competitors.length > 0) {
+      patch.competitors = (selected.competitors as DistilledCompetitor[]).map((c) => ({
+        id: makeid(),
+        name: c.name,
+        weakness: c.weakness,
+      }));
+      applied++;
+    }
+    if (applied > 0) {
+      updateCanvas(patch);
+      pushToast({
+        kind: "success",
+        message: `✨ Applied ${applied} distilled field${applied === 1 ? "" : "s"}`,
+        ttlMs: 4000,
+      });
+    }
+    setDistillDraft(null);
   };
 
   const handleAiFill = async () => {
@@ -556,15 +751,43 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
         }}
       >
         <div>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>
             Research Canvas
           </h3>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6B7280" }}>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-tertiary)" }}>
             Validate your idea with real market data before building anything. Saves automatically.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <SaveIndicator status={saveStatus} />
+          <button
+            type="button"
+            onClick={handleDistill}
+            disabled={distilling}
+            title={
+              chatMessageCount === 0
+                ? "Distill any uploaded docs into draft Research-tab fields"
+                : "Distill your chat history + uploaded docs into draft Research-tab fields"
+            }
+            style={{
+              padding: "8px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: distilling ? "var(--bg-elevated)" : "var(--accent-soft)",
+              border: `1px solid ${distilling ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+              color: distilling ? "var(--text-muted)" : "var(--accent-hover)",
+              borderRadius: 6,
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: distilling ? "not-allowed" : "pointer",
+              transition: "background 0.2s",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span>{distilling ? "⏳" : "✨"}</span>
+            {distilling ? "Distilling…" : "Distill from chat + docs"}
+          </button>
           <button
             type="button"
             onClick={handleAdvance}
@@ -576,8 +799,8 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
             }
             style={{
               padding: "8px 16px",
-              background: allDone ? "#6366F1" : "#E5E7EB",
-              color: allDone ? "#FFFFFF" : "#9CA3AF",
+              background: allDone ? "var(--accent)" : "var(--border-subtle)",
+              color: allDone ? "var(--bg-panel)" : "var(--text-muted)",
               border: "none",
               borderRadius: 6,
               fontWeight: 700,
@@ -598,7 +821,7 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
           {/* Section 1 — Research Documents */}
           <Section title="1. Research Documents" icon="📎">
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-tertiary)" }}>
               Upload market reports, interview transcripts, competitor screenshots, or any
               supporting research. AI will read them and auto-fill matching fields below. Saved to{" "}
               <code>01_research/uploads/</code>. Supports .txt, .md, .csv, .json and .pdf.
@@ -611,20 +834,20 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               }}
               onClick={() => fileInputRef.current?.click()}
               style={{
-                border: "2px dashed #D1D5DB",
+                border: "2px dashed var(--border-input)",
                 borderRadius: 8,
                 padding: "20px 16px",
                 textAlign: "center",
                 cursor: "pointer",
-                background: uploading ? "#F0FDF4" : "#F9FAFB",
-                color: "#6B7280",
+                background: uploading ? "var(--success-soft)" : "var(--bg-elevated)",
+                color: "var(--text-tertiary)",
                 fontSize: 13,
                 transition: "border-color 0.15s",
               }}
             >
               <div style={{ fontSize: 22, marginBottom: 6 }}>📂</div>
               {uploading ? "Saving…" : "Click or drag files here to upload"}
-              <div style={{ fontSize: 11, marginTop: 4, color: "#9CA3AF" }}>
+              <div style={{ fontSize: 11, marginTop: 4, color: "var(--text-muted)" }}>
                 .txt · .md · .csv · .json · .pdf
               </div>
               <input
@@ -648,11 +871,11 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                     alignItems: "center",
                     gap: 6,
                     padding: "8px 14px",
-                    background: aiFillingDocs ? "#F9FAFB" : "#EEF2FF",
-                    border: `1px solid ${aiFillingDocs ? "#E5E7EB" : "#C7D2FE"}`,
+                    background: aiFillingDocs ? "var(--bg-elevated)" : "var(--accent-soft)",
+                    border: `1px solid ${aiFillingDocs ? "var(--border-subtle)" : "var(--accent-soft)"}`,
                     borderRadius: 6,
                     fontSize: 13,
-                    color: aiFillingDocs ? "#9CA3AF" : "#4F46E5",
+                    color: aiFillingDocs ? "var(--text-muted)" : "var(--accent-hover)",
                     cursor: aiFillingDocs ? "not-allowed" : "pointer",
                     fontWeight: 600,
                   }}
@@ -668,8 +891,8 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                       alignItems: "center",
                       gap: 10,
                       padding: "8px 12px",
-                      background: "#FFFFFF",
-                      border: "1px solid #E5E7EB",
+                      background: "var(--bg-panel)",
+                      border: "1px solid var(--border-subtle)",
                       borderRadius: 6,
                       fontSize: 13,
                     }}
@@ -678,7 +901,7 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                     <span
                       style={{
                         flex: 1,
-                        color: "#111827",
+                        color: "var(--text-primary)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -687,7 +910,7 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                       {doc.name}
                     </span>
                     {doc.sizeKb > 0 && (
-                      <span style={{ fontSize: 11, color: "#9CA3AF" }}>{doc.sizeKb} KB</span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{doc.sizeKb} KB</span>
                     )}
                     <button
                       type="button"
@@ -699,7 +922,7 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                         fontSize: 14,
                         padding: "2px 4px",
                         borderRadius: 4,
-                        color: "#6366F1",
+                        color: "var(--accent)",
                       }}
                       title="Open in file manager"
                     >
@@ -774,7 +997,7 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
 
           {/* Section 3 — Competitor Analysis */}
           <Section title="3. Competitor Analysis" icon="🔍">
-            <p style={{ margin: "0 0 4px", fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--text-tertiary)" }}>
               Add at least 2 direct or indirect competitors. Include their main weakness or where
               they fall short.
             </p>
@@ -795,11 +1018,11 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               style={{
                 alignSelf: "flex-start",
                 padding: "7px 14px",
-                background: "#F3F4F6",
-                border: "1px dashed #D1D5DB",
+                background: "var(--bg-hover)",
+                border: "1px dashed var(--border-input)",
                 borderRadius: 6,
                 fontSize: 13,
-                color: "#374151",
+                color: "var(--text-secondary)",
                 cursor: "pointer",
                 fontWeight: 600,
               }}
@@ -853,7 +1076,7 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
 
           {/* Section 5 — Validation Evidence */}
           <Section title="5. Validation Evidence" icon="✅">
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-tertiary)" }}>
               What evidence have you collected that confirms the problem is real and worth solving?
             </p>
 
@@ -867,10 +1090,10 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                     onClick={() => toggleEvidence(opt.value)}
                     style={{
                       padding: "6px 12px",
-                      border: `2px solid ${selected ? "#6366F1" : "#E5E7EB"}`,
+                      border: `2px solid ${selected ? "var(--accent)" : "var(--border-subtle)"}`,
                       borderRadius: 20,
-                      background: selected ? "#EEF2FF" : "#FFFFFF",
-                      color: selected ? "#4F46E5" : "#6B7280",
+                      background: selected ? "var(--accent-soft)" : "var(--bg-panel)",
+                      color: selected ? "var(--accent-hover)" : "var(--text-tertiary)",
                       fontWeight: selected ? 700 : 500,
                       fontSize: 12,
                       cursor: "pointer",
@@ -913,28 +1136,28 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
             </Field>
 
             <div>
-              <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#374151" }}>
-                Go / No-Go decision <span style={{ color: "#EF4444" }}>*</span>
+              <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>
+                Go / No-Go decision <span style={{ color: "var(--danger)" }}>*</span>
               </p>
               <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
                 <GoNoGoButton
                   active={canvas.goNoGo === "go"}
                   onClick={() => updateCanvas({ goNoGo: "go" })}
-                  color="#059669"
+                  color="var(--success)"
                   label="✅ Go"
                   sublabel="Validated — building this"
                 />
                 <GoNoGoButton
                   active={canvas.goNoGo === "undecided"}
                   onClick={() => updateCanvas({ goNoGo: "undecided" })}
-                  color="#D97706"
+                  color="var(--warning)"
                   label="⏳ Still deciding"
                   sublabel="More research needed"
                 />
                 <GoNoGoButton
                   active={canvas.goNoGo === "no_go"}
                   onClick={() => updateCanvas({ goNoGo: "no_go" })}
-                  color="#DC2626"
+                  color="var(--danger)"
                   label="🛑 No-Go"
                   sublabel="Pivoting or stopping"
                 />
@@ -959,8 +1182,8 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
         <div style={{ width: 240, flexShrink: 0, position: "sticky", top: 0 }}>
           <div
             style={{
-              background: "#FFFFFF",
-              border: "1px solid #E5E7EB",
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: 10,
               padding: 16,
               boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
@@ -970,7 +1193,7 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               style={{
                 fontSize: 12,
                 fontWeight: 700,
-                color: "#374151",
+                color: "var(--text-secondary)",
                 marginBottom: 12,
                 letterSpacing: "0.05em",
                 textTransform: "uppercase",
@@ -983,7 +1206,7 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
             <div
               style={{
                 height: 6,
-                background: "#E5E7EB",
+                background: "var(--border-subtle)",
                 borderRadius: 3,
                 marginBottom: 14,
                 overflow: "hidden",
@@ -993,13 +1216,13 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                 style={{
                   height: "100%",
                   width: `${(doneCount / 6) * 100}%`,
-                  background: allDone ? "#059669" : "#6366F1",
+                  background: allDone ? "var(--success)" : "var(--accent)",
                   borderRadius: 3,
                   transition: "width 0.3s ease",
                 }}
               />
             </div>
-            <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 14, textAlign: "right" }}>
+            <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginBottom: 14, textAlign: "right" }}>
               {doneCount} / 6 complete
             </div>
 
@@ -1012,7 +1235,7 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               />
             ))}
 
-            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid #E5E7EB" }}>
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border-subtle)" }}>
               <button
                 type="button"
                 onClick={handleAdvance}
@@ -1020,8 +1243,8 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                 style={{
                   width: "100%",
                   padding: "9px 12px",
-                  background: allDone ? "#6366F1" : "#E5E7EB",
-                  color: allDone ? "#FFFFFF" : "#9CA3AF",
+                  background: allDone ? "var(--accent)" : "var(--border-subtle)",
+                  color: allDone ? "var(--bg-panel)" : "var(--text-muted)",
                   border: "none",
                   borderRadius: 6,
                   fontWeight: 700,
@@ -1038,7 +1261,7 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               </button>
               {allDone && (
                 <p
-                  style={{ margin: "8px 0 0", fontSize: 11, color: "#059669", textAlign: "center" }}
+                  style={{ margin: "8px 0 0", fontSize: 11, color: "var(--success)", textAlign: "center" }}
                 >
                   Research complete! Moves you to VALIDATED.
                 </p>
@@ -1047,6 +1270,43 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
           </div>
         </div>
       </div>
+      {advanceModal !== null && (
+        <AdvanceConfirmModal
+          blockers={advanceModal.blockers}
+          warnings={advanceModal.warnings}
+          currentStage={venture.stage}
+          nextStage="VALIDATED"
+          onAdvance={commitAdvance}
+          onClose={() => {
+            setAdvanceModal(null);
+            setAdvancing(false);
+          }}
+        />
+      )}
+      {distillDraft !== null && (
+        <DistillDiffModal
+          current={{
+            marketSummary: canvas.marketSummary,
+            tamEstimate: canvas.tamEstimate,
+            samEstimate: canvas.samEstimate,
+            keyMarketGap: canvas.keyMarketGap,
+            differentiator: canvas.differentiator,
+            topProblems: canvas.topProblems,
+            customerQuotes: canvas.customerQuotes,
+            evidenceNotes: canvas.evidenceNotes,
+            researchSummary: canvas.researchSummary,
+            goNoGoReason: canvas.goNoGoReason,
+            competitors: canvas.competitors.map((c) => ({
+              name: c.name,
+              weakness: c.weakness,
+            })),
+          }}
+          proposed={distillDraft as Record<string, unknown>}
+          fields={RESEARCH_DISTILL_FIELDS}
+          onApply={handleApplyDistill}
+          onClose={() => setDistillDraft(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1069,17 +1329,17 @@ function CompetitorRow({
   return (
     <div
       style={{
-        border: "1px solid #E5E7EB",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 8,
         padding: "12px 14px",
-        background: "#F9FAFB",
+        background: "var(--bg-elevated)",
         display: "flex",
         flexDirection: "column",
         gap: 8,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "#6B7280", minWidth: 70 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-tertiary)", minWidth: 70 }}>
           Competitor {index}
         </span>
         <input
@@ -1096,7 +1356,7 @@ function CompetitorRow({
             background: "none",
             border: "none",
             cursor: "pointer",
-            color: "#9CA3AF",
+            color: "var(--text-muted)",
             fontSize: 16,
             padding: "2px 6px",
             borderRadius: 4,
@@ -1142,10 +1402,10 @@ function GoNoGoButton({
       style={{
         flex: 1,
         padding: "10px 8px",
-        border: `2px solid ${active ? color : "#E5E7EB"}`,
+        border: `2px solid ${active ? color : "var(--border-subtle)"}`,
         borderRadius: 8,
-        background: active ? `${color}14` : "#FFFFFF",
-        color: active ? color : "#6B7280",
+        background: active ? `${color}14` : "var(--bg-panel)",
+        color: active ? color : "var(--text-tertiary)",
         cursor: "pointer",
         transition: "all 0.15s",
         textAlign: "center",
@@ -1169,8 +1429,8 @@ function Section({
   return (
     <div
       style={{
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 10,
         overflow: "hidden",
       }}
@@ -1178,15 +1438,15 @@ function Section({
       <div
         style={{
           padding: "14px 18px",
-          borderBottom: "1px solid #F3F4F6",
-          background: "#F9FAFB",
+          borderBottom: "1px solid var(--bg-hover)",
+          background: "var(--bg-elevated)",
           display: "flex",
           alignItems: "center",
           gap: 8,
         }}
       >
         <span style={{ fontSize: 16 }}>{icon}</span>
-        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>{title}</h4>
+        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{title}</h4>
       </div>
       <div style={{ padding: "18px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
         {children}
@@ -1210,11 +1470,11 @@ function Field({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 5, ...styleProp }}>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
+      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>
         {label}
-        {required && <span style={{ color: "#EF4444", marginLeft: 4 }}>*</span>}
+        {required && <span style={{ color: "var(--danger)", marginLeft: 4 }}>*</span>}
       </span>
-      {hint && <span style={{ fontSize: 11, color: "#9CA3AF", marginTop: -2 }}>{hint}</span>}
+      {hint && <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -2 }}>{hint}</span>}
       {children}
     </label>
   );
@@ -1241,8 +1501,8 @@ function Textarea({
         fontSize: 13,
         padding: "9px 11px",
         borderRadius: 6,
-        border: "1px solid #D1D5DB",
-        background: "#FFFFFF",
+        border: "1px solid var(--border-input)",
+        background: "var(--bg-panel)",
         resize: "vertical",
         fontFamily: "inherit",
         lineHeight: 1.5,
@@ -1258,7 +1518,7 @@ function CharCount({ value, min }: { value: string; min: number }) {
   const len = value.trim().length;
   const ok = len >= min;
   return (
-    <span style={{ fontSize: 11, color: ok ? "#059669" : "#9CA3AF", marginTop: -2 }}>
+    <span style={{ fontSize: 11, color: ok ? "var(--success)" : "var(--text-muted)", marginTop: -2 }}>
       {len} / {min} chars {ok ? "✓" : ""}
     </span>
   );
@@ -1275,8 +1535,8 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
           width: 18,
           height: 18,
           borderRadius: "50%",
-          background: done ? "#059669" : "#E5E7EB",
-          border: done ? "none" : "2px solid #D1D5DB",
+          background: done ? "var(--success)" : "var(--border-subtle)",
+          border: done ? "none" : "2px solid var(--border-input)",
           flexShrink: 0,
           display: "flex",
           alignItems: "center",
@@ -1298,10 +1558,10 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
         )}
       </div>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "#111827" : "#6B7280" }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "var(--text-primary)" : "var(--text-tertiary)" }}>
           {label}
         </div>
-        {!done && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>{hint}</div>}
+        {!done && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{hint}</div>}
       </div>
     </div>
   );
@@ -1309,9 +1569,9 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
 
 function SaveIndicator({ status }: { status: "saved" | "saving" | "unsaved" }) {
   const config = {
-    saved: { color: "#059669", text: "Saved" },
-    saving: { color: "#6366F1", text: "Saving…" },
-    unsaved: { color: "#D97706", text: "Unsaved" },
+    saved: { color: "var(--success)", text: "Saved" },
+    saving: { color: "var(--accent)", text: "Saving…" },
+    unsaved: { color: "var(--warning)", text: "Unsaved" },
   }[status];
   return <span style={{ fontSize: 11, color: config.color, fontWeight: 600 }}>{config.text}</span>;
 }
@@ -1324,8 +1584,8 @@ const inputStyle: React.CSSProperties = {
   fontSize: 13,
   padding: "7px 10px",
   borderRadius: 6,
-  border: "1px solid #D1D5DB",
-  background: "#FFFFFF",
+  border: "1px solid var(--border-input)",
+  background: "var(--bg-panel)",
   fontFamily: "inherit",
   outline: "none",
   width: "100%",

@@ -104,9 +104,9 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
           alignItems: "center",
           justifyContent: "space-between",
           padding: "10px 28px",
-          borderBottom: "1px solid #F3F4F6",
+          borderBottom: "1px solid var(--bg-hover)",
           fontSize: 12,
-          color: "#6B7280",
+          color: "var(--text-tertiary)",
         }}
       >
         <span>
@@ -120,9 +120,9 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
           disabled={scanning}
           style={{
             background: "none",
-            border: "1px solid #D1D5DB",
+            border: "1px solid var(--border-input)",
             borderRadius: 6,
-            color: "#374151",
+            color: "var(--text-secondary)",
             fontSize: 12,
             padding: "4px 10px",
             cursor: scanning ? "not-allowed" : "pointer",
@@ -137,9 +137,9 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
           style={{
             margin: "8px 28px 0",
             padding: "8px 12px",
-            background: "#FEF2F2",
-            color: "#991B1B",
-            border: "1px solid #FECACA",
+            background: "var(--danger-soft)",
+            color: "var(--danger)",
+            border: "1px solid var(--danger-border)",
             borderRadius: 6,
             fontSize: 12,
           }}
@@ -154,13 +154,13 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
           style={{
             width: 320,
             flexShrink: 0,
-            borderRight: "1px solid #F3F4F6",
+            borderRight: "1px solid var(--bg-hover)",
             overflowY: "auto",
             padding: "8px 0",
           }}
         >
           {artifacts.length === 0 && !scanning && (
-            <div style={{ padding: "16px 20px", color: "#9CA3AF", fontSize: 13 }}>
+            <div style={{ padding: "16px 20px", color: "var(--text-muted)", fontSize: 13 }}>
               Nothing on disk yet. Run the pipeline from the Overview tab to produce artifacts here.
             </div>
           )}
@@ -172,7 +172,7 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
                   fontSize: 11,
                   textTransform: "uppercase",
                   letterSpacing: 0.6,
-                  color: "#6B7280",
+                  color: "var(--text-tertiary)",
                   fontWeight: 700,
                 }}
               >
@@ -190,12 +190,12 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
                       width: "100%",
                       textAlign: "left",
                       padding: "8px 20px",
-                      background: active ? "#EEF2FF" : "transparent",
+                      background: active ? "var(--accent-soft)" : "transparent",
                       border: "none",
-                      borderLeft: active ? "3px solid #6366F1" : "3px solid transparent",
+                      borderLeft: active ? "3px solid var(--accent)" : "3px solid transparent",
                       cursor: "pointer",
                       fontSize: 13,
-                      color: active ? "#3730A3" : "#111827",
+                      color: active ? "var(--accent-hover)" : "var(--text-primary)",
                     }}
                   >
                     <div
@@ -211,7 +211,7 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
                     <div
                       style={{
                         fontSize: 11,
-                        color: "#9CA3AF",
+                        color: "var(--text-muted)",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -224,7 +224,7 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
                     <div
                       style={{
                         fontSize: 11,
-                        color: "#9CA3AF",
+                        color: "var(--text-muted)",
                         marginTop: 2,
                       }}
                     >
@@ -246,7 +246,7 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
             <div
               style={{
                 padding: 28,
-                color: "#9CA3AF",
+                color: "var(--text-muted)",
                 fontSize: 13,
               }}
             >
@@ -305,11 +305,11 @@ function PreviewPane({ artifact }: { artifact: ScannedArtifact }) {
   return (
     <div style={{ padding: 28 }}>
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>{artifact.filename}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>{artifact.filename}</div>
         <div
           style={{
             fontSize: 11,
-            color: "#9CA3AF",
+            color: "var(--text-muted)",
             fontFamily: "ui-monospace, monospace",
             marginTop: 4,
             wordBreak: "break-all",
@@ -317,19 +317,19 @@ function PreviewPane({ artifact }: { artifact: ScannedArtifact }) {
         >
           {artifact.relativePath}
         </div>
-        <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
           {artifact.type} · {formatBytes(artifact.sizeBytes)}
         </div>
       </div>
 
       {oversize && (
-        <div style={{ color: "#92400E", fontSize: 13 }}>
+        <div style={{ color: "var(--warning)", fontSize: 13 }}>
           File is larger than {Math.round(PREVIEW_MAX_BYTES / 1024)}KB — preview skipped. Open in
           Finder to view.
         </div>
       )}
 
-      {error && <div style={{ color: "#991B1B", fontSize: 13 }}>{error}</div>}
+      {error && <div style={{ color: "var(--danger)", fontSize: 13 }}>{error}</div>}
 
       {!oversize && content !== null && !error && (
         <PreviewBody artifact={artifact} content={content} />
@@ -353,7 +353,7 @@ function PreviewBody({
         style={{
           fontSize: 14,
           lineHeight: 1.6,
-          color: "#1F2937",
+          color: "var(--text-primary)",
         }}
         dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
       />
@@ -374,8 +374,8 @@ function PreviewBody({
     return (
       <div
         style={{
-          background: "#F9FAFB",
-          border: "1px solid #E5E7EB",
+          background: "var(--bg-elevated)",
+          border: "1px solid var(--border-subtle)",
           borderRadius: 6,
           padding: 16,
           maxWidth: "100%",
@@ -406,8 +406,8 @@ function CodeBlock({ content }: { content: string }) {
       style={{
         margin: 0,
         padding: 16,
-        background: "#0B1020",
-        color: "#E5E7EB",
+        background: "var(--text-primary)",
+        color: "var(--border-subtle)",
         borderRadius: 6,
         overflow: "auto",
         fontSize: 12,

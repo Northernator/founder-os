@@ -44,6 +44,9 @@ export function createTauriTelemetrySink(): TelemetrySink {
         // unset (rusqlite treats that as a binding error).
         const ventureId = event.ventureId ?? null;
         if (event.event === "prompt_master.optimize") {
+          // provider/model are added by migration 0010 — pre-migration
+          // sinks would silently drop them. Coerce undefined → null so
+          // rusqlite gets a real bind value (see ventureId comment).
           await invoke<void>("pm_event_log", {
             event: shortenEvent(event.event),
             context: event.context,
@@ -52,10 +55,13 @@ export function createTauriTelemetrySink(): TelemetrySink {
             transport: event.transport,
             latencyMs: event.latencyMs,
             ventureId,
+            provider: event.provider ?? null,
+            model: event.model ?? null,
           });
         } else {
-          // Fallback events carry no transport / latency / tokens —
-          // pass null/zero so the SQL row is still well-typed.
+          // Fallback events carry no transport / latency / tokens /
+          // provider / model — pass null/zero so the SQL row is still
+          // well-typed.
           await invoke<void>("pm_event_log", {
             event: shortenEvent(event.event),
             context: event.context,
@@ -64,6 +70,8 @@ export function createTauriTelemetrySink(): TelemetrySink {
             transport: null,
             latencyMs: null,
             ventureId,
+            provider: null,
+            model: null,
           });
         }
       } catch (err) {

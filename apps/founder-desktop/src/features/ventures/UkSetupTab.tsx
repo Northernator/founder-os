@@ -126,7 +126,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
   }, [canvas, canvasPath]);
 
   if (loading || !canvas || !manifest) {
-    return <div style={{ padding: 28, color: "#6B7280" }}>Loading UK Setup canvas…</div>;
+    return <div style={{ padding: 28, color: "var(--text-tertiary)" }}>Loading UK Setup canvas…</div>;
   }
 
   const rules = deriveUkSetupRules(canvas, {
@@ -229,8 +229,8 @@ export function UkSetupTab({ venture, manifest }: Props) {
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827" }}>UK Setup</h2>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#6B7280" }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>UK Setup</h2>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-tertiary)" }}>
               Entity → registrations → banking → insurance → IP. Saved to{" "}
               <code>04_uk_business/uk-setup.json</code>.
             </p>
@@ -240,7 +240,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
 
         {/* 1. Entity type ──────────────────────────────────────── */}
         <Section title="1. Entity Type" icon="🏛️">
-          <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
             How will you operate? Manifest set this to <strong>{manifest.entityType}</strong>; you
             can revise here.
           </p>
@@ -255,9 +255,9 @@ export function UkSetupTab({ venture, manifest }: Props) {
                   style={{
                     padding: "6px 14px",
                     fontSize: 12,
-                    background: active ? "#6366F1" : "#FFFFFF",
-                    color: active ? "#FFFFFF" : "#374151",
-                    border: `1px solid ${active ? "#4338CA" : "#D1D5DB"}`,
+                    background: active ? "var(--accent)" : "var(--bg-panel)",
+                    color: active ? "var(--bg-panel)" : "var(--text-secondary)",
+                    border: `1px solid ${active ? "var(--accent)" : "var(--border-input)"}`,
                     borderRadius: 4,
                     cursor: "pointer",
                     fontWeight: 600,
@@ -290,13 +290,13 @@ export function UkSetupTab({ venture, manifest }: Props) {
                   title="Open the Companies House public search with this name"
                   style={{
                     padding: "0 14px",
-                    border: "1px solid #D1D5DB",
+                    border: "1px solid var(--border-input)",
                     borderRadius: 4,
-                    background: canvas.company.name.trim().length === 0 ? "#F3F4F6" : "#FFFFFF",
+                    background: canvas.company.name.trim().length === 0 ? "var(--bg-hover)" : "var(--bg-panel)",
                     cursor: canvas.company.name.trim().length === 0 ? "not-allowed" : "pointer",
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#374151",
+                    color: "var(--text-secondary)",
                     whiteSpace: "nowrap",
                   }}
                 >
@@ -313,7 +313,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
                   style={{
                     marginTop: 4,
                     fontSize: 11,
-                    color: "#6B7280",
+                    color: "var(--text-tertiary)",
                   }}
                 >
                   Searched Companies House {formatLastChecked(canvas.company.nameLastCheckedAt)}
@@ -438,9 +438,9 @@ export function UkSetupTab({ venture, manifest }: Props) {
                   style={{
                     padding: "5px 12px",
                     fontSize: 11,
-                    background: active ? statusColours(s).bg : "#FFFFFF",
-                    color: active ? statusColours(s).fg : "#6B7280",
-                    border: `1px solid ${active ? statusColours(s).fg : "#E5E7EB"}`,
+                    background: active ? statusColours(s).bg : "var(--bg-panel)",
+                    color: active ? statusColours(s).fg : "var(--text-tertiary)",
+                    border: `1px solid ${active ? statusColours(s).fg : "var(--border-subtle)"}`,
                     borderRadius: 4,
                     cursor: "pointer",
                     fontWeight: 600,
@@ -542,8 +542,8 @@ export function UkSetupTab({ venture, manifest }: Props) {
       <aside
         style={{
           padding: 16,
-          background: "#F9FAFB",
-          border: "1px solid #E5E7EB",
+          background: "var(--bg-elevated)",
+          border: "1px solid var(--border-subtle)",
           borderRadius: 8,
           alignSelf: "start",
           position: "sticky",
@@ -558,12 +558,12 @@ export function UkSetupTab({ venture, manifest }: Props) {
             marginBottom: 12,
           }}
         >
-          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>Must-haves</h3>
+          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>Must-haves</h3>
           <span
             style={{
               fontSize: 12,
               fontWeight: 600,
-              color: passCount === rules.length ? "#059669" : "#6B7280",
+              color: passCount === rules.length ? "var(--success)" : "var(--text-tertiary)",
             }}
           >
             {passCount} / {rules.length}
@@ -576,7 +576,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
                 style={{
                   fontSize: 12,
                   marginTop: 1,
-                  color: rule.pass ? "#059669" : "#9CA3AF",
+                  color: rule.pass ? "var(--success)" : "var(--text-muted)",
                 }}
               >
                 {rule.pass ? "✅" : "○"}
@@ -586,12 +586,12 @@ export function UkSetupTab({ venture, manifest }: Props) {
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: rule.pass ? "#111827" : "#374151",
+                    color: rule.pass ? "var(--text-primary)" : "var(--text-secondary)",
                   }}
                 >
                   {rule.label}
                 </div>
-                <div style={{ fontSize: 11, color: "#6B7280" }}>{rule.description}</div>
+                <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{rule.description}</div>
               </div>
             </div>
           ))}
@@ -605,11 +605,11 @@ export function UkSetupTab({ venture, manifest }: Props) {
             style={{
               marginTop: 14,
               padding: 10,
-              background: "#ECFDF5",
-              border: "1px solid #A7F3D0",
+              background: "var(--success-soft)",
+              border: "1px solid var(--success-soft)",
               borderRadius: 6,
               fontSize: 12,
-              color: "#065F46",
+              color: "var(--success)",
               fontWeight: 600,
             }}
           >
@@ -638,15 +638,15 @@ function Section({
     <section
       style={{
         padding: 16,
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 8,
         display: "flex",
         flexDirection: "column",
         gap: 10,
       }}
     >
-      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
+      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
         <span style={{ marginRight: 6 }}>{icon}</span>
         {title}
       </h3>
@@ -664,7 +664,7 @@ function Field({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 11, color: "#6B7280", fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 600 }}>{label}</span>
       {children}
     </label>
   );
@@ -697,8 +697,8 @@ function Checkbox({
         style={{ marginTop: 3 }}
       />
       <div>
-        <div style={{ fontSize: 13, color: "#111827", fontWeight: 500 }}>{label}</div>
-        {hint && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>{hint}</div>}
+        <div style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 500 }}>{label}</div>
+        {hint && <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>{hint}</div>}
       </div>
     </label>
   );
@@ -706,9 +706,9 @@ function Checkbox({
 
 function SaveIndicator({ status }: { status: "saved" | "saving" | "unsaved" }) {
   const cfg = {
-    saved: { color: "#059669", text: "Saved" },
-    saving: { color: "#6366F1", text: "Saving…" },
-    unsaved: { color: "#D97706", text: "Unsaved" },
+    saved: { color: "var(--success)", text: "Saved" },
+    saving: { color: "var(--accent)", text: "Saving…" },
+    unsaved: { color: "var(--warning)", text: "Unsaved" },
   }[status];
   return <span style={{ fontSize: 11, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
 }
@@ -719,11 +719,11 @@ function statusColours(s: "not_started" | "applied" | "active"): {
 } {
   switch (s) {
     case "not_started":
-      return { bg: "#F3F4F6", fg: "#6B7280" };
+      return { bg: "var(--bg-hover)", fg: "var(--text-tertiary)" };
     case "applied":
-      return { bg: "#FEF3C7", fg: "#92400E" };
+      return { bg: "var(--warning-soft)", fg: "var(--warning)" };
     case "active":
-      return { bg: "#ECFDF5", fg: "#065F46" };
+      return { bg: "var(--success-soft)", fg: "var(--success)" };
   }
 }
 
@@ -753,8 +753,8 @@ const inputStyle: React.CSSProperties = {
   fontSize: 13,
   padding: "7px 10px",
   borderRadius: 6,
-  border: "1px solid #D1D5DB",
-  background: "#FFFFFF",
+  border: "1px solid var(--border-input)",
+  background: "var(--bg-panel)",
   fontFamily: "inherit",
   outline: "none",
   width: "100%",
@@ -762,7 +762,7 @@ const inputStyle: React.CSSProperties = {
 };
 
 const fieldsetStyle: React.CSSProperties = {
-  border: "1px solid #E5E7EB",
+  border: "1px solid var(--border-subtle)",
   borderRadius: 6,
   padding: "10px 12px 12px",
   display: "flex",
@@ -774,6 +774,6 @@ const fieldsetStyle: React.CSSProperties = {
 const legendStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 600,
-  color: "#6B7280",
+  color: "var(--text-tertiary)",
   padding: "0 6px",
 };

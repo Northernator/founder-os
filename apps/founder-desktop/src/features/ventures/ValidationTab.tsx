@@ -3,9 +3,21 @@ import { optimize } from "@founder-os/prompt-master";
 import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { type AdvancePreflight, runAdvancePreflight } from "../../lib/advance-gate.js";
+import * as db from "../../lib/db.js";
 import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
 import { pushToast } from "../../lib/toasts.js";
+import {
+  type DistilledValidationFields,
+  distillValidation,
+} from "../../lib/validation-distiller.js";
 import { joinPath } from "../../lib/venture-io.js";
+import { AdvanceConfirmModal } from "./AdvanceConfirmModal.js";
+import {
+  type DistillFieldConfig,
+  DistillDiffModal,
+  distillTextField,
+} from "./DistillDiffModal.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -141,18 +153,35 @@ const EXPERIMENT_TYPES: { value: ExperimentType; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
+const VALIDATION_DISTILL_FIELDS: DistillFieldConfig[] = [
+  distillTextField("icpDescription", "ICP description"),
+  distillTextField("icpRole", "ICP role"),
+  distillTextField("icpPain", "ICP pain"),
+  distillTextField("icpCurrentSolution", "Current solution"),
+  distillTextField("icpTrigger", "Trigger event"),
+  distillTextField("valueProposition", "Value proposition"),
+  distillTextField("whatsIncluded", "What's included (v1)"),
+  distillTextField("whatsExcluded", "What's NOT in v1"),
+  distillTextField("pricePoint", "Price point"),
+  distillTextField("pricingModel", "Pricing model"),
+  distillTextField("priceSensitivityNotes", "Price sensitivity notes"),
+  distillTextField("keyLearnings", "Key learnings"),
+  distillTextField("whatChanged", "What changed"),
+  distillTextField("decisionReason", "Decision reasoning"),
+];
+
 const DECISION_CONFIG: Record<
   ValidationDecision,
   { color: string; label: string; sublabel: string }
 > = {
   validated: {
-    color: "#059669",
+    color: "var(--success)",
     label: "✅ Validated",
     sublabel: "Customers confirmed they'd pay",
   },
-  pivot: { color: "#D97706", label: "🔄 Pivot", sublabel: "Core idea needs adjustment" },
-  invalidated: { color: "#DC2626", label: "🛑 Invalidated", sublabel: "Not worth building as-is" },
-  undecided: { color: "#9CA3AF", label: "⏳ Undecided", sublabel: "Still running experiments" },
+  pivot: { color: "var(--warning)", label: "🔄 Pivot", sublabel: "Core idea needs adjustment" },
+  invalidated: { color: "var(--danger)", label: "🛑 Invalidated", sublabel: "Not worth building as-is" },
+  undecided: { color: "var(--text-muted)", label: "⏳ Undecided", sublabel: "Still running experiments" },
 };
 
 // ---------------------------------------------------------------------------
@@ -216,6 +245,10 @@ export function ValidationTab({
   const [uploadedDocs, setUploadedDocs] = useState<
     { id: string; name: string; savedPath: string; sizeKb: number }[]
   >([]);
+  const [chatMessageCount, setChatMessageCount] = useState(0);
+  const [distilling, setDistilling] = useState(false);
+  const [distillDraft, setDistillDraft] = useState<DistilledValidationFields | null>(null);
+  const [advanceModal, setAdvanceModal] = useState<AdvancePreflight | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -275,6 +308,104 @@ export function ValidationTab({
     },
     [scheduleSave]
   );
+
+  // Load chat message count for the current venture+stage so the
+  // "Distill from chat" button can be greyed out when there's nothing
+  // to distill from.
+  useEffect(() => {
+    let cancelled = false;
+    db.listChatMessages(venture.id, venture.stage)
+      .then((msgs) => {
+        if (!cancelled) setChatMessageCount(msgs.length);
+      })
+      .catch(() => {
+        if (!cancelled) setChatMessageCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.id, venture.stage]);
+
+  const handleDistill = async () => {
+    if (distilling) return;
+    setDistilling(true);
+    try {
+      const draft = await distillValidation({
+        ventureId: venture.id,
+        stage: venture.stage,
+        ventureRootPath: venture.rootPath,
+        currentFields: {
+          icpDescription: canvas.icpDescription,
+          icpRole: canvas.icpRole,
+          icpPain: canvas.icpPain,
+          icpCurrentSolution: canvas.icpCurrentSolution,
+          icpTrigger: canvas.icpTrigger,
+          valueProposition: canvas.valueProposition,
+          whatsIncluded: canvas.whatsIncluded,
+          whatsExcluded: canvas.whatsExcluded,
+          pricePoint: canvas.pricePoint,
+          pricingModel: canvas.pricingModel,
+          priceSensitivityNotes: canvas.priceSensitivityNotes,
+          keyLearnings: canvas.keyLearnings,
+          whatChanged: canvas.whatChanged,
+          decisionReason: canvas.decisionReason,
+        },
+      });
+      if (Object.keys(draft).length === 0) {
+        pushToast({
+          kind: "warn",
+          message: "Nothing to distill yet",
+          detail: "No chat history or text-shaped docs found in the venture folder.",
+          ttlMs: 5000,
+        });
+        return;
+      }
+      setDistillDraft(draft);
+    } catch (err) {
+      pushToast({ kind: "error", message: "Distill failed", detail: errDetail(err) });
+    } finally {
+      setDistilling(false);
+    }
+  };
+
+  const handleApplyDistill = (selected: Record<string, unknown>) => {
+    if (Object.keys(selected).length === 0) {
+      setDistillDraft(null);
+      return;
+    }
+    const patch: Partial<ValidationCanvas> = {};
+    let applied = 0;
+    const assignString = (key: keyof DistilledValidationFields & keyof ValidationCanvas) => {
+      const v = selected[key];
+      if (typeof v === "string") {
+        (patch as Record<string, unknown>)[key] = v;
+        applied++;
+      }
+    };
+    assignString("icpDescription");
+    assignString("icpRole");
+    assignString("icpPain");
+    assignString("icpCurrentSolution");
+    assignString("icpTrigger");
+    assignString("valueProposition");
+    assignString("whatsIncluded");
+    assignString("whatsExcluded");
+    assignString("pricePoint");
+    assignString("pricingModel");
+    assignString("priceSensitivityNotes");
+    assignString("keyLearnings");
+    assignString("whatChanged");
+    assignString("decisionReason");
+    if (applied > 0) {
+      update(patch);
+      pushToast({
+        kind: "success",
+        message: `✨ Applied ${applied} distilled field${applied === 1 ? "" : "s"}`,
+        ttlMs: 4000,
+      });
+    }
+    setDistillDraft(null);
+  };
 
   // Load uploaded docs
   useEffect(() => {
@@ -543,6 +674,13 @@ Omit any field where the document has no relevant info.`;
   const doneCount = Object.values(checks).filter(Boolean).length;
   const allDone = doneCount === 6;
 
+  const commitAdvance = () => {
+    onAdvanceStage("BRAND_READY");
+    pushToast({ kind: "success", message: "Advanced to Brand", ttlMs: 3000 });
+    setAdvanceModal(null);
+    setAdvancing(false);
+  };
+
   const handleAdvance = async () => {
     if (!allDone || advancing) return;
     setAdvancing(true);
@@ -562,7 +700,28 @@ Omit any field where the document has no relevant info.`;
         detail: errDetail(err),
       });
     }
-    onAdvanceStage("BRAND_READY");
+
+    try {
+      const preflight = await runAdvancePreflight({
+        ventureId: venture.id,
+        ventureRoot: venture.rootPath,
+        nextStage: "BRAND_READY",
+        manifest,
+      });
+      if (preflight.blockers.length === 0 && preflight.warnings.length === 0) {
+        commitAdvance();
+        return;
+      }
+      setAdvanceModal(preflight);
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Pre-flight audit failed",
+        detail: errDetail(err),
+      });
+      commitAdvance();
+      return;
+    }
     setAdvancing(false);
   };
 
@@ -581,15 +740,43 @@ Omit any field where the document has no relevant info.`;
         }}
       >
         <div>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>
             Validation Canvas
           </h3>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6B7280" }}>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-tertiary)" }}>
             Test your riskiest assumptions before spending a penny on code. Saves automatically.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <SaveIndicator status={saveStatus} />
+          <button
+            type="button"
+            onClick={handleDistill}
+            disabled={distilling}
+            title={
+              chatMessageCount === 0
+                ? "Distill any uploaded docs into draft Validation-tab fields"
+                : "Distill your chat history + uploaded docs into draft Validation-tab fields"
+            }
+            style={{
+              padding: "8px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: distilling ? "var(--bg-elevated)" : "var(--accent-soft)",
+              border: `1px solid ${distilling ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+              color: distilling ? "var(--text-muted)" : "var(--accent-hover)",
+              borderRadius: 6,
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: distilling ? "not-allowed" : "pointer",
+              transition: "background 0.2s",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span>{distilling ? "⏳" : "✨"}</span>
+            {distilling ? "Distilling…" : "Distill from chat + docs"}
+          </button>
           <button
             type="button"
             onClick={handleAdvance}
@@ -601,8 +788,8 @@ Omit any field where the document has no relevant info.`;
             }
             style={{
               padding: "8px 16px",
-              background: allDone ? "#6366F1" : "#E5E7EB",
-              color: allDone ? "#FFFFFF" : "#9CA3AF",
+              background: allDone ? "var(--accent)" : "var(--border-subtle)",
+              color: allDone ? "var(--bg-panel)" : "var(--text-muted)",
               border: "none",
               borderRadius: 6,
               fontWeight: 700,
@@ -623,7 +810,7 @@ Omit any field where the document has no relevant info.`;
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
           {/* Section 1 — Supporting Documents */}
           <Section title="1. Supporting Documents" icon="📎">
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-tertiary)" }}>
               Upload customer interview notes, survey results, landing page analytics, or any
               validation evidence. AI will read them and auto-fill matching fields below. Saved to{" "}
               <code>02_validation/experiments/</code>. Supports .txt, .md, .csv, .json and .pdf.
@@ -636,20 +823,20 @@ Omit any field where the document has no relevant info.`;
               }}
               onClick={() => fileInputRef.current?.click()}
               style={{
-                border: "2px dashed #D1D5DB",
+                border: "2px dashed var(--border-input)",
                 borderRadius: 8,
                 padding: "20px 16px",
                 textAlign: "center",
                 cursor: "pointer",
-                background: uploading ? "#F0FDF4" : "#F9FAFB",
-                color: "#6B7280",
+                background: uploading ? "var(--success-soft)" : "var(--bg-elevated)",
+                color: "var(--text-tertiary)",
                 fontSize: 13,
                 transition: "border-color 0.15s",
               }}
             >
               <div style={{ fontSize: 22, marginBottom: 6 }}>📂</div>
               {uploading ? "Saving…" : "Click or drag files here to upload"}
-              <div style={{ fontSize: 11, marginTop: 4, color: "#9CA3AF" }}>
+              <div style={{ fontSize: 11, marginTop: 4, color: "var(--text-muted)" }}>
                 .txt · .md · .csv · .json · .pdf
               </div>
               <input
@@ -673,11 +860,11 @@ Omit any field where the document has no relevant info.`;
                     alignItems: "center",
                     gap: 6,
                     padding: "8px 14px",
-                    background: aiFillingDocs ? "#F9FAFB" : "#EEF2FF",
-                    border: `1px solid ${aiFillingDocs ? "#E5E7EB" : "#C7D2FE"}`,
+                    background: aiFillingDocs ? "var(--bg-elevated)" : "var(--accent-soft)",
+                    border: `1px solid ${aiFillingDocs ? "var(--border-subtle)" : "var(--accent-soft)"}`,
                     borderRadius: 6,
                     fontSize: 13,
-                    color: aiFillingDocs ? "#9CA3AF" : "#4F46E5",
+                    color: aiFillingDocs ? "var(--text-muted)" : "var(--accent-hover)",
                     cursor: aiFillingDocs ? "not-allowed" : "pointer",
                     fontWeight: 600,
                   }}
@@ -693,8 +880,8 @@ Omit any field where the document has no relevant info.`;
                       alignItems: "center",
                       gap: 10,
                       padding: "8px 12px",
-                      background: "#FFFFFF",
-                      border: "1px solid #E5E7EB",
+                      background: "var(--bg-panel)",
+                      border: "1px solid var(--border-subtle)",
                       borderRadius: 6,
                       fontSize: 13,
                     }}
@@ -703,7 +890,7 @@ Omit any field where the document has no relevant info.`;
                     <span
                       style={{
                         flex: 1,
-                        color: "#111827",
+                        color: "var(--text-primary)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -712,7 +899,7 @@ Omit any field where the document has no relevant info.`;
                       {doc.name}
                     </span>
                     {doc.sizeKb > 0 && (
-                      <span style={{ fontSize: 11, color: "#9CA3AF" }}>{doc.sizeKb} KB</span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{doc.sizeKb} KB</span>
                     )}
                     <button
                       type="button"
@@ -724,7 +911,7 @@ Omit any field where the document has no relevant info.`;
                         fontSize: 14,
                         padding: "2px 4px",
                         borderRadius: 4,
-                        color: "#6366F1",
+                        color: "var(--accent)",
                       }}
                       title="Open in file manager"
                     >
@@ -738,7 +925,7 @@ Omit any field where the document has no relevant info.`;
 
           {/* Section 2 — ICP */}
           <Section title="2. Ideal Customer Profile (ICP)" icon="🎯">
-            <p style={{ margin: "0 0 4px", fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--text-tertiary)" }}>
               Get ultra-specific. The narrower your ICP now, the easier everything downstream
               becomes.
             </p>
@@ -890,7 +1077,7 @@ Omit any field where the document has no relevant info.`;
 
           {/* Section 5 — Experiments */}
           <Section title="5. Validation Experiments" icon="🧪">
-            <p style={{ margin: "0 0 4px", fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--text-tertiary)" }}>
               Log each experiment you ran or plan to run. Mark at least one as Done to advance.
             </p>
 
@@ -899,10 +1086,10 @@ Omit any field where the document has no relevant info.`;
                 style={{
                   padding: "16px",
                   textAlign: "center",
-                  background: "#F9FAFB",
+                  background: "var(--bg-elevated)",
                   borderRadius: 8,
-                  border: "1px dashed #D1D5DB",
-                  color: "#9CA3AF",
+                  border: "1px dashed var(--border-input)",
+                  color: "var(--text-muted)",
                   fontSize: 13,
                 }}
               >
@@ -926,11 +1113,11 @@ Omit any field where the document has no relevant info.`;
               style={{
                 alignSelf: "flex-start",
                 padding: "7px 14px",
-                background: "#F3F4F6",
-                border: "1px dashed #D1D5DB",
+                background: "var(--bg-hover)",
+                border: "1px dashed var(--border-input)",
                 borderRadius: 6,
                 fontSize: 13,
-                color: "#374151",
+                color: "var(--text-secondary)",
                 cursor: "pointer",
                 fontWeight: 600,
               }}
@@ -968,8 +1155,8 @@ Omit any field where the document has no relevant info.`;
             </Field>
 
             <div>
-              <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "#374151" }}>
-                Validation decision <span style={{ color: "#EF4444" }}>*</span>
+              <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>
+                Validation decision <span style={{ color: "var(--danger)" }}>*</span>
               </p>
               <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
                 {(["validated", "pivot", "invalidated", "undecided"] as ValidationDecision[]).map(
@@ -985,10 +1172,10 @@ Omit any field where the document has no relevant info.`;
                           flex: 1,
                           minWidth: 120,
                           padding: "10px 8px",
-                          border: `2px solid ${active ? cfg.color : "#E5E7EB"}`,
+                          border: `2px solid ${active ? cfg.color : "var(--border-subtle)"}`,
                           borderRadius: 8,
-                          background: active ? `${cfg.color}14` : "#FFFFFF",
-                          color: active ? cfg.color : "#6B7280",
+                          background: active ? `${cfg.color}14` : "var(--bg-panel)",
+                          color: active ? cfg.color : "var(--text-tertiary)",
                           cursor: "pointer",
                           transition: "all 0.15s",
                           textAlign: "center",
@@ -1026,8 +1213,8 @@ Omit any field where the document has no relevant info.`;
         <div style={{ width: 240, flexShrink: 0, position: "sticky", top: 0 }}>
           <div
             style={{
-              background: "#FFFFFF",
-              border: "1px solid #E5E7EB",
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: 10,
               padding: 16,
               boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
@@ -1037,7 +1224,7 @@ Omit any field where the document has no relevant info.`;
               style={{
                 fontSize: 12,
                 fontWeight: 700,
-                color: "#374151",
+                color: "var(--text-secondary)",
                 marginBottom: 12,
                 letterSpacing: "0.05em",
                 textTransform: "uppercase",
@@ -1049,7 +1236,7 @@ Omit any field where the document has no relevant info.`;
             <div
               style={{
                 height: 6,
-                background: "#E5E7EB",
+                background: "var(--border-subtle)",
                 borderRadius: 3,
                 marginBottom: 14,
                 overflow: "hidden",
@@ -1059,13 +1246,13 @@ Omit any field where the document has no relevant info.`;
                 style={{
                   height: "100%",
                   width: `${(doneCount / 6) * 100}%`,
-                  background: allDone ? "#059669" : "#6366F1",
+                  background: allDone ? "var(--success)" : "var(--accent)",
                   borderRadius: 3,
                   transition: "width 0.3s ease",
                 }}
               />
             </div>
-            <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 14, textAlign: "right" }}>
+            <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginBottom: 14, textAlign: "right" }}>
               {doneCount} / 6 complete
             </div>
 
@@ -1078,7 +1265,7 @@ Omit any field where the document has no relevant info.`;
               />
             ))}
 
-            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid #E5E7EB" }}>
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border-subtle)" }}>
               <button
                 type="button"
                 onClick={handleAdvance}
@@ -1086,8 +1273,8 @@ Omit any field where the document has no relevant info.`;
                 style={{
                   width: "100%",
                   padding: "9px 12px",
-                  background: allDone ? "#6366F1" : "#E5E7EB",
-                  color: allDone ? "#FFFFFF" : "#9CA3AF",
+                  background: allDone ? "var(--accent)" : "var(--border-subtle)",
+                  color: allDone ? "var(--bg-panel)" : "var(--text-muted)",
                   border: "none",
                   borderRadius: 6,
                   fontWeight: 700,
@@ -1104,7 +1291,7 @@ Omit any field where the document has no relevant info.`;
               </button>
               {allDone && (
                 <p
-                  style={{ margin: "8px 0 0", fontSize: 11, color: "#059669", textAlign: "center" }}
+                  style={{ margin: "8px 0 0", fontSize: 11, color: "var(--success)", textAlign: "center" }}
                 >
                   Validated! Moves you to BRAND_READY.
                 </p>
@@ -1113,6 +1300,43 @@ Omit any field where the document has no relevant info.`;
           </div>
         </div>
       </div>
+      {advanceModal !== null && (
+        <AdvanceConfirmModal
+          blockers={advanceModal.blockers}
+          warnings={advanceModal.warnings}
+          currentStage={venture.stage}
+          nextStage="BRAND_READY"
+          onAdvance={commitAdvance}
+          onClose={() => {
+            setAdvanceModal(null);
+            setAdvancing(false);
+          }}
+        />
+      )}
+      {distillDraft !== null && (
+        <DistillDiffModal
+          current={{
+            icpDescription: canvas.icpDescription,
+            icpRole: canvas.icpRole,
+            icpPain: canvas.icpPain,
+            icpCurrentSolution: canvas.icpCurrentSolution,
+            icpTrigger: canvas.icpTrigger,
+            valueProposition: canvas.valueProposition,
+            whatsIncluded: canvas.whatsIncluded,
+            whatsExcluded: canvas.whatsExcluded,
+            pricePoint: canvas.pricePoint,
+            pricingModel: canvas.pricingModel,
+            priceSensitivityNotes: canvas.priceSensitivityNotes,
+            keyLearnings: canvas.keyLearnings,
+            whatChanged: canvas.whatChanged,
+            decisionReason: canvas.decisionReason,
+          }}
+          proposed={distillDraft as Record<string, unknown>}
+          fields={VALIDATION_DISTILL_FIELDS}
+          onApply={handleApplyDistill}
+          onClose={() => setDistillDraft(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1122,9 +1346,9 @@ Omit any field where the document has no relevant info.`;
 // ---------------------------------------------------------------------------
 
 const STATUS_COLORS: Record<ExperimentStatus, string> = {
-  planned: "#6B7280",
-  running: "#D97706",
-  done: "#059669",
+  planned: "var(--text-tertiary)",
+  running: "var(--warning)",
+  done: "var(--success)",
 };
 
 function ExperimentRow({
@@ -1141,10 +1365,10 @@ function ExperimentRow({
   return (
     <div
       style={{
-        border: `1px solid ${experiment.status === "done" ? "#D1FAE5" : "#E5E7EB"}`,
+        border: `1px solid ${experiment.status === "done" ? "var(--success-soft)" : "var(--border-subtle)"}`,
         borderRadius: 8,
         padding: "14px 14px",
-        background: experiment.status === "done" ? "#F0FDF4" : "#F9FAFB",
+        background: experiment.status === "done" ? "var(--success-soft)" : "var(--bg-elevated)",
         display: "flex",
         flexDirection: "column",
         gap: 10,
@@ -1152,7 +1376,7 @@ function ExperimentRow({
     >
       {/* Row header */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", minWidth: 80 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", minWidth: 80 }}>
           Experiment {index}
         </span>
 
@@ -1177,7 +1401,7 @@ function ExperimentRow({
             padding: "4px 8px",
             borderRadius: 12,
             border: `1px solid ${STATUS_COLORS[experiment.status]}`,
-            background: "#FFFFFF",
+            background: "var(--bg-panel)",
             color: STATUS_COLORS[experiment.status],
             fontWeight: 700,
             cursor: "pointer",
@@ -1196,7 +1420,7 @@ function ExperimentRow({
             background: "none",
             border: "none",
             cursor: "pointer",
-            color: "#9CA3AF",
+            color: "var(--text-muted)",
             fontSize: 16,
             padding: "2px 4px",
             borderRadius: 4,
@@ -1234,8 +1458,8 @@ function ExperimentRow({
             fontSize: 13,
             padding: "8px 10px",
             borderRadius: 6,
-            border: "1px solid #A7F3D0",
-            background: "#FFFFFF",
+            border: "1px solid var(--success-soft)",
+            background: "var(--bg-panel)",
             resize: "vertical",
             fontFamily: "inherit",
             lineHeight: 1.5,
@@ -1261,8 +1485,8 @@ function Section({
   return (
     <div
       style={{
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 10,
         overflow: "hidden",
       }}
@@ -1270,15 +1494,15 @@ function Section({
       <div
         style={{
           padding: "14px 18px",
-          borderBottom: "1px solid #F3F4F6",
-          background: "#F9FAFB",
+          borderBottom: "1px solid var(--bg-hover)",
+          background: "var(--bg-elevated)",
           display: "flex",
           alignItems: "center",
           gap: 8,
         }}
       >
         <span style={{ fontSize: 16 }}>{icon}</span>
-        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>{title}</h4>
+        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{title}</h4>
       </div>
       <div style={{ padding: "18px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
         {children}
@@ -1302,11 +1526,11 @@ function Field({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 5, ...styleProp }}>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
+      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>
         {label}
-        {required && <span style={{ color: "#EF4444", marginLeft: 4 }}>*</span>}
+        {required && <span style={{ color: "var(--danger)", marginLeft: 4 }}>*</span>}
       </span>
-      {hint && <span style={{ fontSize: 11, color: "#9CA3AF", marginTop: -2 }}>{hint}</span>}
+      {hint && <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -2 }}>{hint}</span>}
       {children}
     </label>
   );
@@ -1333,8 +1557,8 @@ function Textarea({
         fontSize: 13,
         padding: "9px 11px",
         borderRadius: 6,
-        border: "1px solid #D1D5DB",
-        background: "#FFFFFF",
+        border: "1px solid var(--border-input)",
+        background: "var(--bg-panel)",
         resize: "vertical",
         fontFamily: "inherit",
         lineHeight: 1.5,
@@ -1350,7 +1574,7 @@ function CharCount({ value, min }: { value: string; min: number }) {
   const len = value.trim().length;
   const ok = len >= min;
   return (
-    <span style={{ fontSize: 11, color: ok ? "#059669" : "#9CA3AF", marginTop: -2 }}>
+    <span style={{ fontSize: 11, color: ok ? "var(--success)" : "var(--text-muted)", marginTop: -2 }}>
       {len} / {min} chars {ok ? "✓" : ""}
     </span>
   );
@@ -1367,8 +1591,8 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
           width: 18,
           height: 18,
           borderRadius: "50%",
-          background: done ? "#059669" : "#E5E7EB",
-          border: done ? "none" : "2px solid #D1D5DB",
+          background: done ? "var(--success)" : "var(--border-subtle)",
+          border: done ? "none" : "2px solid var(--border-input)",
           flexShrink: 0,
           display: "flex",
           alignItems: "center",
@@ -1390,10 +1614,10 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
         )}
       </div>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "#111827" : "#6B7280" }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "var(--text-primary)" : "var(--text-tertiary)" }}>
           {label}
         </div>
-        {!done && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>{hint}</div>}
+        {!done && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{hint}</div>}
       </div>
     </div>
   );
@@ -1401,9 +1625,9 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
 
 function SaveIndicator({ status }: { status: "saved" | "saving" | "unsaved" }) {
   const cfg = {
-    saved: { color: "#059669", text: "Saved" },
-    saving: { color: "#6366F1", text: "Saving…" },
-    unsaved: { color: "#D97706", text: "Unsaved" },
+    saved: { color: "var(--success)", text: "Saved" },
+    saving: { color: "var(--accent)", text: "Saving…" },
+    unsaved: { color: "var(--warning)", text: "Unsaved" },
   }[status];
   return <span style={{ fontSize: 11, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
 }
@@ -1416,8 +1640,8 @@ const inputStyle: React.CSSProperties = {
   fontSize: 13,
   padding: "7px 10px",
   borderRadius: 6,
-  border: "1px solid #D1D5DB",
-  background: "#FFFFFF",
+  border: "1px solid var(--border-input)",
+  background: "var(--bg-panel)",
   fontFamily: "inherit",
   outline: "none",
   width: "100%",

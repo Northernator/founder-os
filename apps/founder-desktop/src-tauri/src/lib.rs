@@ -2,6 +2,7 @@ use serde::Serialize;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 mod brand_checks;
+mod brand_names;
 mod brand_pack;
 mod cache;
 mod cli_agent;
@@ -9,6 +10,7 @@ mod editor;
 mod handoff_watcher;
 mod llm;
 mod pdf;
+mod pricing;
 mod secrets;
 
 // ──────────────────────────────────────────────
@@ -76,6 +78,22 @@ fn write_file(path: String, content: String) -> Result<(), String> {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     std::fs::write(&resolved, content).map_err(|e| e.to_string())
+}
+
+/// Copy a file from src to dst (creates parent directories of dst as
+/// needed). Used by the Brand chat panel to materialize uploaded
+/// reference images into 03_brand/refs/ so the chat keeps working
+/// after the user moves or deletes the original picked file.
+#[tauri::command]
+fn copy_file(src: String, dst: String) -> Result<(), String> {
+    let src_resolved = expand_tilde(&src);
+    let dst_resolved = expand_tilde(&dst);
+    if let Some(parent) = std::path::Path::new(&dst_resolved).parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::copy(&src_resolved, &dst_resolved)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// List files in a directory.
@@ -330,6 +348,18 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0009-prompt-master-event-venture.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 10,
+            description: "prompt_master_event_model",
+            sql: include_str!("../migrations/0010-prompt-master-event-model.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 11,
+            description: "brand_name_candidates",
+            sql: include_str!("../migrations/0011-brand-name-candidates.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -358,10 +388,16 @@ pub fn run() {
         // cache. Opened on the first cache command (the app_config_dir
         // isn't resolvable until Tauri has finished setup).
         .manage(cache::CacheState::default())
+        // Same lazy-connection pattern for the brand-name triage table.
+        // Separate connection from CacheState so neither feature can
+        // starve the other on the lock; SQLite handles intra-process
+        // concurrency on the same DB file via WAL.
+        .manage(brand_names::BrandNamesState::default())
         .invoke_handler(tauri::generate_handler![
             pick_venture_folder,
             read_file,
             write_file,
+            copy_file,
             list_dir,
             create_venture_dirs,
             open_path,
@@ -390,6 +426,10 @@ pub fn run() {
             cache::pm_cache_inspect,
             cache::pm_event_log,
             cache::pm_event_stats,
+            brand_names::brand_name_upsert,
+            brand_names::brand_name_update_info,
+            brand_names::brand_name_set_status,
+            brand_names::brand_name_list,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

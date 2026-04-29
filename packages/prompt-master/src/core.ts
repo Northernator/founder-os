@@ -44,6 +44,10 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
       fallbackUsed: false,
       trace: { hash, latencyMs: Date.now() - start, transport: "cache" },
     };
+    // Cache hits don't carry provider/model — the row was populated by
+    // some prior live call and we don't track which model it ran on.
+    // The Rust pricing aggregation maps undefined to the unknown-model
+    // bucket via FALLBACK_PRICING.
     await emit({
       event: "prompt_master.optimize",
       context,
@@ -52,6 +56,8 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
       latencyMs: result.trace.latencyMs,
       transport: "cache",
       ventureId,
+      provider: undefined,
+      model: undefined,
     });
     return result;
   }
@@ -59,7 +65,7 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
   // 2. Transport dispatch
   const transport = getTransport();
   try {
-    const { optimized } = await transport.optimize(input);
+    const { optimized, provider, model } = await transport.optimize(input);
     const tokensSaved = Math.max(0, estimateTokens(input.prompt) - estimateTokens(optimized));
 
     // Cache only if the transport actually did something. Caching the null
@@ -97,6 +103,8 @@ export async function optimize(input: OptimizeInput): Promise<OptimizeResult> {
         latencyMs: result.trace.latencyMs,
         transport: transport.name,
         ventureId,
+        provider,
+        model,
       });
     }
     return result;

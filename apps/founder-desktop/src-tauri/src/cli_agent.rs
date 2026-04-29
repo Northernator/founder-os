@@ -67,12 +67,25 @@ use crate::llm::CancelRegistry;
 ///   PATH (and PATHEXT on Windows) ourselves.
 /// * `login_args` — literal argv for the vendor's sign-in subcommand.
 /// * `stream_args` — argv template for a non-interactive prompt run.
-///   Exactly one element must be the literal string `"{PROMPT}"` — it's
-///   replaced with the user's prompt at spawn time, never shell-escaped.
+///   When `prompt_via_stdin` is false, exactly one element must be the
+///   literal `"{PROMPT}"` — it's replaced with the user's prompt at
+///   spawn time, never shell-escaped. When `prompt_via_stdin` is true,
+///   the placeholder must be absent — the prompt is piped to the child's
+///   stdin instead, so it can exceed the OS argv limit.
+/// * `prompt_via_stdin` — pipe the user prompt through stdin instead of
+///   substituting it into argv. Required for Claude on Windows: with
+///   long chat histories the argv size hits CMD_LIMIT (8191 chars) and
+///   `CreateProcessW` fails with `ERROR_FILENAME_EXCED_RANGE` (206),
+///   which we used to misreport as "Is the CLI installed and signed in?".
+///   `E2BIG` (7) is the equivalent failure on Linux/macOS. The vendor
+///   CLI must support reading the prompt from stdin in this mode
+///   (`claude -p` does — it's the same pattern the prompt-master
+///   `claude-cli` transport and the builder-extension build runner use).
 struct CliConfig {
     binary: &'static str,
     login_args: &'static [&'static str],
     stream_args: &'static [&'static str],
+    prompt_via_stdin: bool,
 }
 
 /// Map a provider id from TS to its CLI config. Returns `None` for
@@ -81,16 +94,20 @@ struct CliConfig {
 /// commands with agent ids from the subscription-supporting set.
 fn agent_config(agent: &str) -> Option<CliConfig> {
     match agent {
-        // Anthropic Claude Code. `claude -p "<prompt>"` is print mode:
-        // non-interactive, writes the reply to stdout, exits. `claude
-        // login` kicks off OAuth against console.anthropic.com in the
-        // user's default browser; the CLI polls until the token lands
-        // in `~/.claude/.credentials.json`, then prints a success line
-        // and exits. Works off the user's Claude Pro subscription.
+        // Anthropic Claude Code. `claude -p` is print mode: non-interactive,
+        // writes the reply to stdout, exits. With no positional prompt
+        // argument the CLI reads the prompt from stdin, which is how we
+        // ship it — argv-substituted prompts hit Windows' 8191-char
+        // CMD_LIMIT once chat history accumulates. `claude login` kicks
+        // off OAuth against console.anthropic.com in the user's default
+        // browser; the CLI polls until the token lands in
+        // `~/.claude/.credentials.json`, then prints a success line and
+        // exits. Works off the user's Claude Pro subscription.
         "anthropic" => Some(CliConfig {
             binary: "claude",
             login_args: &["login"],
-            stream_args: &["-p", "{PROMPT}"],
+            stream_args: &["-p"],
+            prompt_via_stdin: true,
         }),
         // OpenAI Codex. `codex exec "<prompt>"` is the non-interactive
         // subcommand; `codex login` drives the browser OAuth flow and
@@ -100,16 +117,37 @@ fn agent_config(agent: &str) -> Option<CliConfig> {
             binary: "codex",
             login_args: &["login"],
             stream_args: &["exec", "{PROMPT}"],
+            prompt_via_stdin: false,
         }),
         // Google Gemini. `gemini auth` covers recent builds; older ones
-        // punt to `gcloud auth application-default login`. If this call
-        // fails on the user's machine they can still `gcloud` manually —
-        // the inference call (`gemini -p`) picks up whichever credential
-        // the CLI finds first.
+        // punt to `gcloud auth application-default login`. The inference
+        // call uses `gemini -p <prompt>` (gemini-cli requires a value
+        // following -p; stdin-only doesn't satisfy it). On Windows the
+        // .cmd shim spawn would normally hit Rust 1.78+ CVE-2024-24576
+        // mitigation; spawn_argv_compat below routes us through raw_arg
+        // for .cmd/.bat targets so prompt content can survive in argv.
         "gemini" => Some(CliConfig {
             binary: "gemini",
+            // `gemini auth` opens the OAuth flow; --skip-trust isn't
+            // needed for the auth path since auth doesn't read project
+            // files.
             login_args: &["auth"],
-            stream_args: &["-p", "{PROMPT}"],
+            // Two protections in one config:
+            //
+            // (1) `--skip-trust` bypasses gemini-cli's workspace-trust
+            //     gate that otherwise refuses to run in an "untrusted"
+            //     directory in headless mode.
+            //
+            // (2) The prompt rides on stdin instead of argv. gemini-cli
+            //     requires `-p` to have a value, so we pass a single
+            //     space as a placeholder; per gemini's docs that
+            //     placeholder is appended to whatever's on stdin, so
+            //     a trailing space at the end of the real prompt is
+            //     the only side effect. Routing via stdin avoids
+            //     Windows cmd.exe mangling multi-line / 1-2 KB prompts
+            //     during `%*` substitution in the .cmd shim.
+            stream_args: &["--skip-trust", "-p", " "],
+            prompt_via_stdin: true,
         }),
         _ => None,
     }
@@ -146,36 +184,41 @@ fn resolve_binary(name: &str) -> Option<PathBuf> {
         .filter(|s| !s.is_empty())
         .collect();
 
-    // 1. PATH walk with PATHEXT fallback — the standard case.
+    // 1. PATH walk -- try PATHEXT extensions FIRST, bare name as a
+    // fallback. npm-style installers drop both `gemini` (sh shim,
+    // not executable on Windows) and `gemini.cmd` (the real entry
+    // point) into %APPDATA%\npm; the old order picked the sh shim
+    // and CreateProcessW failed. Reordering means we always prefer
+    // a Windows-runnable extension when the user passes a bare name.
     if let Some(path) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&path) {
-            let base = dir.join(name);
-            // Honour a fully-named binary (user passed `claude.cmd` directly).
-            if base.is_file() {
-                return Some(base);
-            }
             for ext in &exts {
                 let candidate = dir.join(format!("{name}.{ext}"));
                 if candidate.is_file() {
                     return Some(candidate);
                 }
             }
+            // Bare-name fallback (covers "claude.cmd" passed directly,
+            // or rare extension-less compiled binaries).
+            let base = dir.join(name);
+            if base.is_file() {
+                return Some(base);
+            }
         }
     }
 
     // 2. Well-known vendor install dirs that some installers forget to
-    // add to PATH. Keep this list short — only add a dir if we've
-    // observed real installers dropping there without PATH updates.
+    // add to PATH. Same PATHEXT-first ordering as the PATH walk above.
     for fallback_dir in well_known_install_dirs() {
-        let base = fallback_dir.join(name);
-        if base.is_file() {
-            return Some(base);
-        }
         for ext in &exts {
             let candidate = fallback_dir.join(format!("{name}.{ext}"));
             if candidate.is_file() {
                 return Some(candidate);
             }
+        }
+        let base = fallback_dir.join(name);
+        if base.is_file() {
+            return Some(base);
         }
     }
 
@@ -224,6 +267,27 @@ fn well_known_install_dirs() -> Vec<PathBuf> {
             if let Ok(appdata) = std::env::var("APPDATA") {
                 dirs.push(PathBuf::from(format!("{appdata}\\npm")));
             }
+            // pnpm global -- default lives in %LOCALAPPDATA%\pnpm; PNPM_HOME
+            // overrides if the user set a custom prefix. Both checked so
+            // either configuration resolves the binary.
+            if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+                dirs.push(PathBuf::from(format!("{local_appdata}\\pnpm")));
+            }
+            if let Ok(pnpm_home) = std::env::var("PNPM_HOME") {
+                dirs.push(PathBuf::from(pnpm_home));
+            }
+            // Volta toolchain manager: shims live in
+            // %LOCALAPPDATA%\Volta\bin (system install) or
+            // %USERPROFILE%\.volta\bin (user install). VOLTA_HOME wins.
+            if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+                dirs.push(PathBuf::from(format!("{local_appdata}\\Volta\\bin")));
+            }
+            dirs.push(PathBuf::from(format!("{home}\\.volta\\bin")));
+            if let Ok(volta_home) = std::env::var("VOLTA_HOME") {
+                dirs.push(PathBuf::from(format!("{volta_home}\\bin")));
+            }
+            // bun global bin -- some users install gemini-cli via bun.
+            dirs.push(PathBuf::from(format!("{home}\\.bun\\bin")));
         }
     }
     dirs
@@ -237,6 +301,77 @@ fn make_command(binary: &str) -> Command {
     } else {
         Command::new(binary)
     }
+}
+
+/// True when the resolved binary path looks like a Windows batch file
+/// (.cmd or .bat). Rust 1.78+ refuses to spawn these via `Command::arg`
+/// when args contain CVE-2024-24576 metacharacters (newlines, quotes,
+/// `&`, `|`, etc.). The fix is `raw_arg` -- we keep this helper +
+/// `apply_args_compat` so every spawn site can opt in uniformly.
+#[cfg(windows)]
+fn is_batch_path(binary: &str) -> bool {
+    let resolved = resolve_binary(binary).unwrap_or_else(|| std::path::PathBuf::from(binary));
+    resolved
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.eq_ignore_ascii_case("cmd") || s.eq_ignore_ascii_case("bat"))
+        .unwrap_or(false)
+}
+
+/// Quote a single argument for the Windows command line using
+/// msvcrt-compatible rules: wrap in `"..."`, escape embedded quotes
+/// with backslashes, double trailing backslashes so they don't escape
+/// the closing quote. This is what `Command::arg` does internally;
+/// we replicate it for `raw_arg` callers that need to bypass the
+/// BatBadBut mitigation while still passing args correctly.
+#[cfg(windows)]
+fn quote_for_windows_cmdline(arg: &str) -> String {
+    let mut out = String::with_capacity(arg.len() + 4);
+    out.push('"');
+    let mut backslashes: usize = 0;
+    for c in arg.chars() {
+        if c == '\\' {
+            backslashes += 1;
+        } else if c == '"' {
+            // Double the preceding backslashes, then escape the quote.
+            for _ in 0..backslashes * 2 + 1 {
+                out.push('\\');
+            }
+            out.push('"');
+            backslashes = 0;
+        } else {
+            for _ in 0..backslashes {
+                out.push('\\');
+            }
+            backslashes = 0;
+            out.push(c);
+        }
+    }
+    // Trailing backslashes must be doubled so they don't escape the
+    // closing quote we're about to emit.
+    for _ in 0..backslashes * 2 {
+        out.push('\\');
+    }
+    out.push('"');
+    out
+}
+
+/// Apply args to a `Command`, taking the `.cmd`/`.bat` path on Windows
+/// when needed. Callers should use this instead of `cmd.args(args)`
+/// directly so the BatBadBut bypass is consistent everywhere.
+fn apply_args_compat(cmd: &mut Command, binary: &str, args: &[String]) {
+    #[cfg(windows)]
+    {
+        if is_batch_path(binary) {
+            use std::os::windows::process::CommandExt;
+            for arg in args {
+                cmd.raw_arg(quote_for_windows_cmdline(arg));
+            }
+            return;
+        }
+    }
+    let _ = binary; // unused on non-Windows
+    cmd.args(args);
 }
 
 // ──────────────────────────────────────────────
@@ -307,6 +442,10 @@ fn signed_in_guess(agent: &str) -> bool {
         "anthropic" => &[".claude/.credentials.json", ".claude/credentials.json"],
         "openai" => &[".codex/auth.json", ".codex/session.json"],
         "gemini" => &[
+            // Modern gemini-cli OAuth flow writes these.
+            ".gemini/oauth_creds.json",
+            ".gemini/google_accounts.json",
+            // Older / vendored layouts kept for back-compat.
             ".gemini/credentials.json",
             ".config/gcloud/application_default_credentials.json",
         ],
@@ -404,8 +543,10 @@ async fn run_login(
     config: &CliConfig,
     request_id: &str,
 ) -> Result<bool, String> {
-    let mut child = make_command(config.binary)
-        .args(config.login_args)
+    let mut command = make_command(config.binary);
+    let login_args: Vec<String> = config.login_args.iter().map(|s| (*s).to_string()).collect();
+    apply_args_compat(&mut command, config.binary, &login_args);
+    let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -499,6 +640,63 @@ struct ErrorEvent {
     message: String,
 }
 
+/// Translate a `Command::spawn` failure into a user-facing message that
+/// reflects the actual OS-level cause instead of the generic "Is the CLI
+/// installed and signed in?" we used to show for everything.
+///
+/// Three distinguishable cases:
+///
+/// * Argv too long — `ERROR_FILENAME_EXCED_RANGE` (206) on Windows when
+///   the full command line exceeds `CMD_LIMIT` (8191 chars), `E2BIG` (7)
+///   on Linux/macOS when it exceeds `ARG_MAX`. This is the long-context
+///   chat bug: idea-canvas + history accumulates past the limit and
+///   `CreateProcessW` rejects the spawn before the CLI ever runs. The
+///   message points at the real fix (shorter prompt or new chat) instead
+///   of sending the user to re-check `claude login`.
+/// * Binary not found — `ENOENT`/`NotFound`. The classic "CLI not
+///   installed" case; we keep the install/sign-in hint here since that's
+///   actually what's wrong.
+/// * Anything else — surface the raw OS message verbatim (permissions,
+///   exec format, etc.) so we don't paper over surprises.
+fn spawn_error_message(
+    config: &CliConfig,
+    args: &[String],
+    prompt_len: usize,
+    err: &std::io::Error,
+) -> String {
+    // Windows: 206 = ERROR_FILENAME_EXCED_RANGE.
+    // Unix:    7   = E2BIG (argument list too long).
+    // Both surface here because Rust's `Command::spawn` returns the raw
+    // CreateProcessW / execve errno without translating to ErrorKind.
+    let os = err.raw_os_error();
+    let argv_too_long = matches!(os, Some(206) | Some(7))
+        || err.kind() == std::io::ErrorKind::ArgumentListTooLong;
+
+    if argv_too_long {
+        // Estimate the argv size so the user has a concrete number to
+        // reason about. Joining args with spaces approximates what the
+        // OS sees once `CreateProcessW` re-quotes them.
+        let argv_len: usize = args.iter().map(|a| a.len() + 1).sum();
+        return format!(
+            "Prompt too long for the command line ({argv_len} chars in argv, {prompt_len} chars in prompt). The OS rejected the spawn before {} could run. Try shortening the conversation or starting a fresh chat.",
+            config.binary,
+        );
+    }
+
+    if err.kind() == std::io::ErrorKind::NotFound {
+        return format!(
+            "Could not find `{}` on PATH. Is the CLI installed and signed in?",
+            config.binary,
+        );
+    }
+
+    format!(
+        "failed to spawn `{} {}`: {err}",
+        config.binary,
+        args.join(" "),
+    )
+}
+
 /// Run the configured CLI with the user's prompt in non-interactive mode,
 /// streaming stdout back over `llm-delta`. Emits `llm-done` on clean
 /// exit, `llm-cancel` on user abort, `llm-error` on failure — same
@@ -551,14 +749,16 @@ async fn run_stream(
     request_id: &str,
     cancel: Arc<(AtomicBool, Notify)>,
 ) -> Result<(), String> {
-    // Substitute the prompt placeholder. We use argv (not a shell line)
-    // so the prompt passes through as a single argument, newlines and
-    // special chars intact.
+    // Build argv. In stdin mode the prompt is piped to the child after
+    // spawn — never substituted into argv — so it can exceed the OS
+    // command-line limit (Windows CMD_LIMIT 8191 chars / Linux ARG_MAX).
+    // In argv mode the prompt replaces the literal `{PROMPT}` placeholder
+    // as a single argument, newlines and special chars intact.
     let args: Vec<String> = config
         .stream_args
         .iter()
         .map(|s| {
-            if *s == "{PROMPT}" {
+            if *s == "{PROMPT}" && !config.prompt_via_stdin {
                 prompt.to_string()
             } else {
                 (*s).to_string()
@@ -566,19 +766,38 @@ async fn run_stream(
         })
         .collect();
 
-    let mut child = make_command(config.binary)
-        .args(&args)
-        .stdin(Stdio::null())
+    let stdin_cfg = if config.prompt_via_stdin {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    };
+
+    let mut command = make_command(config.binary);
+    apply_args_compat(&mut command, config.binary, &args);
+    let mut child = command
+        .stdin(stdin_cfg)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| {
-            format!(
-                "failed to spawn `{} {}`: {e}. Is the CLI installed and signed in?",
-                config.binary,
-                args.join(" ")
-            )
-        })?;
+        .map_err(|e| spawn_error_message(&config, &args, prompt.len(), &e))?;
+
+    if config.prompt_via_stdin {
+        if let Some(mut stdin) = child.stdin.take() {
+            use tokio::io::AsyncWriteExt;
+            // Write-then-shutdown signals EOF so the CLI knows the prompt
+            // is complete and can start generating. Errors here typically
+            // mean the child died before reading — surface them so we
+            // don't hang waiting for stdout that will never come.
+            stdin
+                .write_all(prompt.as_bytes())
+                .await
+                .map_err(|e| format!("failed to write prompt to {} stdin: {e}", config.binary))?;
+            stdin
+                .shutdown()
+                .await
+                .map_err(|e| format!("failed to close {} stdin: {e}", config.binary))?;
+        }
+    }
 
     let (cancel_flag, cancel_notify) = &*cancel;
     let mut accumulated = String::new();

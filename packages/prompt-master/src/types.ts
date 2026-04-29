@@ -16,6 +16,11 @@ export type PromptContext =
   | "handoff"
   | "wireframe"
   | "research"
+  | "research-distill"
+  | "validation-distill"
+  | "brand-distill"
+  | "spec-distill"
+  | "screens-distill"
   | "audit"
   | "system"
   | "venture-chat"
@@ -77,8 +82,15 @@ export interface OptimizeResult {
  * Pluggable transport interface. The default null transport returns input
  * unchanged. Callers wire in a real transport (Anthropic API + skill, local
  * binary, HTTP service) at app startup via `setTransport()`.
+ *
+ * `provider` / `model` on the result are optional — they tell the
+ * telemetry layer which backend ran the optimisation so per-model dollar
+ * savings can be computed downstream. Transports that don't know (or
+ * pass through to a fixed upstream) can omit them; events without a
+ * model fall back to the unknown-pricing bucket. The fields are
+ * additive: existing transports keep compiling.
  */
 export interface PromptMasterTransport {
   readonly name: string;
-  optimize(input: OptimizeInput): Promise<{ optimized: string }>;
+  optimize(input: OptimizeInput): Promise<{ optimized: string; provider?: string; model?: string }>;
 }

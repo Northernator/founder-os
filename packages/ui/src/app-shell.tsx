@@ -17,12 +17,15 @@ export function AppShell({ sidebar, children, sidebarWidth = 240 }: AppShellProp
       }}
     >
       <aside
+        data-fos-panel
+        className="fos-panel"
         style={{
           width: sidebarWidth,
           minWidth: sidebarWidth,
-          borderRight: "1px solid #E5E7EB",
+          borderRight: "1px solid var(--border-subtle)",
           overflowY: "auto",
-          background: "#FAFAFA",
+          background: "var(--bg-sidebar)",
+          color: "var(--text-primary)",
         }}
       >
         {sidebar}
@@ -31,7 +34,8 @@ export function AppShell({ sidebar, children, sidebarWidth = 240 }: AppShellProp
         style={{
           flex: 1,
           overflowY: "auto",
-          background: "#FFFFFF",
+          background: "var(--bg-app)",
+          color: "var(--text-primary)",
         }}
       >
         {children}

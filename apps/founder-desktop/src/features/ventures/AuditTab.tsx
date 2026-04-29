@@ -56,10 +56,10 @@ type Props = {
 type Severity = "low" | "medium" | "high" | "critical";
 
 const SEVERITY_META: Record<Severity, { label: string; bg: string; fg: string; border: string }> = {
-  critical: { label: "Critical", bg: "#FEE2E2", fg: "#7F1D1D", border: "#FCA5A5" },
-  high: { label: "High", bg: "#FEF3C7", fg: "#92400E", border: "#FCD34D" },
-  medium: { label: "Medium", bg: "#E0E7FF", fg: "#3730A3", border: "#A5B4FC" },
-  low: { label: "Low", bg: "#F3F4F6", fg: "#374151", border: "#D1D5DB" },
+  critical: { label: "Critical", bg: "var(--danger-soft)", fg: "var(--danger)", border: "var(--danger-border)" },
+  high: { label: "High", bg: "var(--warning-soft)", fg: "var(--warning)", border: "var(--warning-soft)" },
+  medium: { label: "Medium", bg: "var(--accent-soft)", fg: "var(--accent-hover)", border: "var(--accent)" },
+  low: { label: "Low", bg: "var(--bg-hover)", fg: "var(--text-secondary)", border: "var(--border-input)" },
 };
 
 function severityRank(s: string): number {
@@ -1144,12 +1144,12 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
       <div
         style={{
           padding: "12px 28px",
-          borderBottom: "1px solid #F3F4F6",
+          borderBottom: "1px solid var(--bg-hover)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           fontSize: 12,
-          color: "#6B7280",
+          color: "var(--text-tertiary)",
           gap: 12,
         }}
       >
@@ -1171,7 +1171,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                color: exportStatus.kind === "success" ? "#059669" : "#B91C1C",
+                color: exportStatus.kind === "success" ? "var(--success)" : "var(--danger)",
               }}
               role="status"
             >
@@ -1194,8 +1194,8 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
               title={`${exportButtonTitle}\n(Ctrl+E to toggle)`}
               style={{
                 background: "none",
-                border: "1px solid #D1D5DB",
-                color: canExportCurrentScope ? "#374151" : "#9CA3AF",
+                border: "1px solid var(--border-input)",
+                color: canExportCurrentScope ? "var(--text-secondary)" : "var(--text-muted)",
                 fontSize: 12,
                 fontWeight: 600,
                 padding: "4px 10px",
@@ -1213,8 +1213,8 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                   right: 0,
                   top: "calc(100% + 4px)",
                   minWidth: 220,
-                  background: "#FFFFFF",
-                  border: "1px solid #E5E7EB",
+                  background: "var(--bg-panel)",
+                  border: "1px solid var(--border-subtle)",
                   borderRadius: 6,
                   boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
                   zIndex: 10,
@@ -1233,7 +1233,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                     gap: 4,
                     padding: "4px 6px",
                     fontSize: 11,
-                    color: "#6B7280",
+                    color: "var(--text-tertiary)",
                   }}
                 >
                   <span style={{ fontWeight: 600, marginRight: 4 }}>Scope:</span>
@@ -1267,9 +1267,9 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                         disabled={opt.disabled}
                         title={opt.title}
                         style={{
-                          background: active ? "#EEF2FF" : "transparent",
-                          border: active ? "1px solid #C7D2FE" : "1px solid transparent",
-                          color: opt.disabled ? "#9CA3AF" : active ? "#3730A3" : "#374151",
+                          background: active ? "var(--accent-soft)" : "transparent",
+                          border: active ? "1px solid var(--accent-soft)" : "1px solid transparent",
+                          color: opt.disabled ? "var(--text-muted)" : active ? "var(--accent-hover)" : "var(--text-secondary)",
                           fontSize: 11,
                           fontWeight: active ? 600 : 500,
                           padding: "3px 8px",
@@ -1286,7 +1286,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                 <div
                   style={{
                     height: 1,
-                    background: "#F3F4F6",
+                    background: "var(--bg-hover)",
                     margin: "4px 0",
                   }}
                 />
@@ -1334,19 +1334,19 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                         textAlign: "left",
                         background: "none",
                         border: "none",
-                        color: disabled ? "#9CA3AF" : "#111827",
+                        color: disabled ? "var(--text-muted)" : "var(--text-primary)",
                         fontSize: 12,
                         fontWeight: 500,
                         padding: "6px 10px",
                         borderRadius: 4,
                         cursor: disabled ? "not-allowed" : "pointer",
                         // Subtle divider between "Copy" and "Save" groups.
-                        borderTop: idx === 2 ? "1px solid #F3F4F6" : "none",
+                        borderTop: idx === 2 ? "1px solid var(--bg-hover)" : "none",
                         marginTop: idx === 2 ? 4 : 0,
                         paddingTop: idx === 2 ? 10 : 6,
                       }}
                       onMouseEnter={(e) => {
-                        if (!disabled) e.currentTarget.style.background = "#F5F3FF";
+                        if (!disabled) e.currentTarget.style.background = "var(--accent-soft)";
                       }}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
@@ -1364,7 +1364,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
             style={{
               background: "none",
               border: "none",
-              color: "#6366F1",
+              color: "var(--accent)",
               fontSize: 12,
               cursor: loading ? "not-allowed" : "pointer",
               fontWeight: 600,
@@ -1381,9 +1381,9 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
           style={{
             margin: "12px 28px 0",
             padding: "8px 12px",
-            background: "#FEF2F2",
-            color: "#991B1B",
-            border: "1px solid #FECACA",
+            background: "var(--danger-soft)",
+            color: "var(--danger)",
+            border: "1px solid var(--danger-border)",
             borderRadius: 6,
             fontSize: 12,
           }}
@@ -1397,7 +1397,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
         <div
           style={{
             width: 280,
-            borderRight: "1px solid #F3F4F6",
+            borderRight: "1px solid var(--bg-hover)",
             overflow: "auto",
           }}
         >
@@ -1406,7 +1406,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
               style={{
                 padding: 24,
                 fontSize: 13,
-                color: "#9CA3AF",
+                color: "var(--text-muted)",
                 textAlign: "center",
               }}
             >
@@ -1441,17 +1441,17 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                   textAlign: "left",
                   padding: "10px 16px",
                   border: "none",
-                  borderLeft: isSelected ? "3px solid #6366F1" : "3px solid transparent",
-                  background: isSelected ? "#F5F3FF" : "transparent",
+                  borderLeft: isSelected ? "3px solid var(--accent)" : "3px solid transparent",
+                  background: isSelected ? "var(--accent-soft)" : "transparent",
                   cursor: "pointer",
-                  borderBottom: "1px solid #F9FAFB",
+                  borderBottom: "1px solid var(--bg-elevated)",
                 }}
               >
                 <div
                   style={{
                     fontSize: 12,
                     fontFamily: "ui-monospace, monospace",
-                    color: "#111827",
+                    color: "var(--text-primary)",
                     fontWeight: 600,
                   }}
                 >
@@ -1461,7 +1461,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                   style={{
                     marginTop: 2,
                     fontSize: 11,
-                    color: "#6B7280",
+                    color: "var(--text-tertiary)",
                     display: "flex",
                     justifyContent: "space-between",
                   }}
@@ -1474,12 +1474,12 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                       // benign user action, not a fault.
                       color:
                         run.status === "succeeded"
-                          ? "#059669"
+                          ? "var(--success)"
                           : run.status === "failed"
-                            ? "#DC2626"
+                            ? "var(--danger)"
                             : run.status === "cancelled"
-                              ? "#64748B"
-                              : "#6B7280",
+                              ? "var(--text-tertiary)"
+                              : "var(--text-tertiary)",
                       fontWeight: 600,
                     }}
                   >
@@ -1520,7 +1520,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                     style={{
                       marginTop: 6,
                       fontSize: 11,
-                      color: "#059669",
+                      color: "var(--success)",
                       fontWeight: 600,
                     }}
                   >
@@ -1535,7 +1535,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
         {/* Findings pane */}
         <div style={{ flex: 1, overflow: "auto", padding: 20 }}>
           {!selectedRunId && (
-            <div style={{ color: "#9CA3AF", fontSize: 13 }}>
+            <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
               Select a run to see its audit findings.
             </div>
           )}
@@ -1543,10 +1543,10 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
             <div
               style={{
                 padding: 24,
-                background: "#ECFDF5",
-                border: "1px solid #A7F3D0",
+                background: "var(--success-soft)",
+                border: "1px solid var(--success-soft)",
                 borderRadius: 8,
-                color: "#065F46",
+                color: "var(--success)",
                 fontSize: 14,
               }}
             >
@@ -1567,8 +1567,8 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
               style={{
                 marginBottom: 12,
                 padding: "10px 14px",
-                background: "#F8FAFC",
-                border: "1px solid #E2E8F0",
+                background: "var(--bg-elevated)",
+                border: "1px solid var(--border-subtle)",
                 borderRadius: 8,
                 display: "flex",
                 flexDirection: "column",
@@ -1583,7 +1583,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                     alignItems: "flex-start",
                     gap: 8,
                     fontSize: 12,
-                    color: "#475569",
+                    color: "var(--text-secondary)",
                   }}
                 >
                   <span
@@ -1592,8 +1592,8 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                       fontWeight: 700,
                       padding: "2px 6px",
                       borderRadius: 4,
-                      background: "#E2E8F0",
-                      color: "#475569",
+                      background: "var(--border-subtle)",
+                      color: "var(--text-secondary)",
                       textTransform: "uppercase",
                       letterSpacing: 0.4,
                       whiteSpace: "nowrap",
@@ -1602,7 +1602,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                     info
                   </span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, color: "#334155" }}>{f.title}</div>
+                    <div style={{ fontWeight: 600, color: "var(--text-secondary)" }}>{f.title}</div>
                     <div style={{ marginTop: 2, lineHeight: 1.4 }}>{f.message}</div>
                   </div>
                 </div>
@@ -1625,7 +1625,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                   marginBottom: 10,
                   borderRadius: 8,
                   border: `1px solid ${meta.border}`,
-                  background: "#FFFFFF",
+                  background: "var(--bg-panel)",
                 }}
               >
                 <div
@@ -1654,7 +1654,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                     style={{
                       fontSize: 11,
                       fontFamily: "ui-monospace, monospace",
-                      color: "#9CA3AF",
+                      color: "var(--text-muted)",
                     }}
                   >
                     {f.ruleId}
@@ -1666,9 +1666,9 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                         onClick={() => void openInEditor(f)}
                         title={`Open ${f.filePath} in your code editor`}
                         style={{
-                          background: "#FFFFFF",
-                          border: "1px solid #D1D5DB",
-                          color: "#374151",
+                          background: "var(--bg-panel)",
+                          border: "1px solid var(--border-input)",
+                          color: "var(--text-secondary)",
                           fontSize: 11,
                           fontWeight: 600,
                           padding: "4px 10px",
@@ -1684,9 +1684,9 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                       onClick={() => void askAiToFix(f)}
                       disabled={isBusy}
                       style={{
-                        background: isBusy ? "#E5E7EB" : "#6366F1",
+                        background: isBusy ? "var(--border-subtle)" : "var(--accent)",
                         border: "none",
-                        color: isBusy ? "#6B7280" : "#FFFFFF",
+                        color: isBusy ? "var(--text-tertiary)" : "var(--bg-panel)",
                         fontSize: 11,
                         fontWeight: 600,
                         padding: "4px 10px",
@@ -1726,9 +1726,9 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                             : "Stop the AI from generating more output"
                         }
                         style={{
-                          background: "#FFFFFF",
-                          border: `1px solid ${isStopping ? "#FCA5A5" : "#DC2626"}`,
-                          color: isStopping ? "#9CA3AF" : "#B91C1C",
+                          background: "var(--bg-panel)",
+                          border: `1px solid ${isStopping ? "var(--danger-border)" : "var(--danger)"}`,
+                          color: isStopping ? "var(--text-muted)" : "var(--danger)",
                           fontSize: 11,
                           fontWeight: 600,
                           padding: "4px 10px",
@@ -1746,8 +1746,8 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                         onClick={() => dismissFix(f.id)}
                         style={{
                           background: "none",
-                          border: "1px solid #D1D5DB",
-                          color: "#6B7280",
+                          border: "1px solid var(--border-input)",
+                          color: "var(--text-tertiary)",
                           fontSize: 11,
                           fontWeight: 600,
                           padding: "4px 10px",
@@ -1764,20 +1764,20 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                   style={{
                     fontSize: 14,
                     fontWeight: 700,
-                    color: "#111827",
+                    color: "var(--text-primary)",
                     marginBottom: 4,
                   }}
                 >
                   {f.title}
                 </div>
-                <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.5 }}>{f.message}</div>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>{f.message}</div>
                 {f.filePath && (
                   <div
                     style={{
                       marginTop: 8,
                       fontSize: 11,
                       fontFamily: "ui-monospace, monospace",
-                      color: "#6B7280",
+                      color: "var(--text-tertiary)",
                       wordBreak: "break-all",
                     }}
                     title={f.filePath}
@@ -1791,11 +1791,11 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                     style={{
                       marginTop: 8,
                       padding: "6px 10px",
-                      background: "#FEF2F2",
-                      border: "1px solid #FECACA",
+                      background: "var(--danger-soft)",
+                      border: "1px solid var(--danger-border)",
                       borderRadius: 6,
                       fontSize: 11,
-                      color: "#991B1B",
+                      color: "var(--danger)",
                     }}
                   >
                     Couldn't open in editor: {openErrors[f.id]}
@@ -1810,16 +1810,16 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                       borderRadius: 6,
                       background:
                         fix.status === "error"
-                          ? "#FEF2F2"
+                          ? "var(--danger-soft)"
                           : fix.status === "cancelled"
-                            ? "#FFFBEB"
-                            : "#F9FAFB",
+                            ? "var(--warning-soft)"
+                            : "var(--bg-elevated)",
                       border: `1px solid ${
                         fix.status === "error"
-                          ? "#FECACA"
+                          ? "var(--danger-border)"
                           : fix.status === "cancelled"
-                            ? "#FDE68A"
-                            : "#E5E7EB"
+                            ? "var(--warning-soft)"
+                            : "var(--border-subtle)"
                       }`,
                     }}
                   >
@@ -1839,10 +1839,10 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                           letterSpacing: 0.4,
                           color:
                             fix.status === "error"
-                              ? "#991B1B"
+                              ? "var(--danger)"
                               : fix.status === "cancelled"
-                                ? "#92400E"
-                                : "#6366F1",
+                                ? "var(--warning)"
+                                : "var(--accent)",
                         }}
                       >
                         {fix.status === "error"
@@ -1864,7 +1864,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                           style={{
                             background: "none",
                             border: "none",
-                            color: "#6366F1",
+                            color: "var(--accent)",
                             fontSize: 11,
                             fontWeight: 600,
                             cursor: "pointer",
@@ -1876,11 +1876,11 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                       )}
                     </div>
                     {fix.status === "error" ? (
-                      <div style={{ fontSize: 12, color: "#991B1B" }}>
+                      <div style={{ fontSize: 12, color: "var(--danger)" }}>
                         {fix.error || "Unknown error"}
                       </div>
                     ) : fix.status === "loading" && !fix.text ? (
-                      <div style={{ fontSize: 12, color: "#6B7280" }}>
+                      <div style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
                         Reading file and picking a provider…
                       </div>
                     ) : fix.status === "done" || fix.status === "cancelled" ? (
@@ -1895,7 +1895,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                         style={{
                           fontSize: 13,
                           lineHeight: 1.55,
-                          color: "#111827",
+                          color: "var(--text-primary)",
                         }}
                         dangerouslySetInnerHTML={{
                           __html: renderMarkdown(fix.text),
@@ -1911,18 +1911,18 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                           fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
                           fontSize: 12,
                           lineHeight: 1.55,
-                          color: "#111827",
+                          color: "var(--text-primary)",
                           whiteSpace: "pre-wrap",
                           wordBreak: "break-word",
                         }}
                       >
                         {fix.text}
-                        {fix.status === "streaming" && <span style={{ color: "#6366F1" }}>▍</span>}
+                        {fix.status === "streaming" && <span style={{ color: "var(--accent)" }}>▍</span>}
                         {fix.status === "stopping" && (
                           // Faded cursor while we wait for the cancel event —
                           // signals that the stream is winding down without
                           // implying active generation.
-                          <span style={{ color: "#D1D5DB" }}>▍</span>
+                          <span style={{ color: "var(--border-input)" }}>▍</span>
                         )}
                       </pre>
                     )}

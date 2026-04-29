@@ -621,10 +621,10 @@ Omit any field where the document has no relevant info.`;
         }}
       >
         <div>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>
             Idea Canvas
           </h3>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6B7280" }}>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-tertiary)" }}>
             Work through these questions to get from idea to research-ready. Saves automatically.
           </p>
         </div>
@@ -641,8 +641,8 @@ Omit any field where the document has no relevant info.`;
             }
             style={{
               padding: "8px 16px",
-              background: allDone ? "#6366F1" : "#E5E7EB",
-              color: allDone ? "#FFFFFF" : "#9CA3AF",
+              background: allDone ? "var(--accent)" : "var(--border-subtle)",
+              color: allDone ? "var(--bg-panel)" : "var(--text-muted)",
               border: "none",
               borderRadius: 6,
               fontWeight: 700,
@@ -663,7 +663,7 @@ Omit any field where the document has no relevant info.`;
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
           {/* Section 1 — Supporting Documents */}
           <Section title="1. Supporting Documents" icon="📎">
-            <p style={{ margin: "0 0 8px", fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-tertiary)" }}>
               Upload any documents you've already prepared — notes, research, business plans, ideas.
               AI will read them and auto-fill matching fields below. Saved to{" "}
               <code>01_research/uploads/</code>. Supports .txt, .md, .csv, .json and .pdf.
@@ -676,20 +676,20 @@ Omit any field where the document has no relevant info.`;
               }}
               onClick={() => fileInputRef.current?.click()}
               style={{
-                border: "2px dashed #D1D5DB",
+                border: "2px dashed var(--border-input)",
                 borderRadius: 8,
                 padding: "20px 16px",
                 textAlign: "center",
                 cursor: "pointer",
-                background: uploading ? "#F0FDF4" : "#F9FAFB",
-                color: "#6B7280",
+                background: uploading ? "var(--success-soft)" : "var(--bg-elevated)",
+                color: "var(--text-tertiary)",
                 fontSize: 13,
                 transition: "border-color 0.15s",
               }}
             >
               <div style={{ fontSize: 22, marginBottom: 6 }}>📂</div>
               {uploading ? "Saving…" : "Click or drag files here to upload"}
-              <div style={{ fontSize: 11, marginTop: 4, color: "#9CA3AF" }}>
+              <div style={{ fontSize: 11, marginTop: 4, color: "var(--text-muted)" }}>
                 .txt · .md · .csv · .json · .pdf
               </div>
               <input
@@ -713,11 +713,11 @@ Omit any field where the document has no relevant info.`;
                     alignItems: "center",
                     gap: 6,
                     padding: "8px 14px",
-                    background: aiFillingDocs ? "#F9FAFB" : "#EEF2FF",
-                    border: `1px solid ${aiFillingDocs ? "#E5E7EB" : "#C7D2FE"}`,
+                    background: aiFillingDocs ? "var(--bg-elevated)" : "var(--accent-soft)",
+                    border: `1px solid ${aiFillingDocs ? "var(--border-subtle)" : "var(--accent-soft)"}`,
                     borderRadius: 6,
                     fontSize: 13,
-                    color: aiFillingDocs ? "#9CA3AF" : "#4F46E5",
+                    color: aiFillingDocs ? "var(--text-muted)" : "var(--accent-hover)",
                     cursor: aiFillingDocs ? "not-allowed" : "pointer",
                     fontWeight: 600,
                   }}
@@ -733,8 +733,8 @@ Omit any field where the document has no relevant info.`;
                       alignItems: "center",
                       gap: 10,
                       padding: "8px 12px",
-                      background: "#FFFFFF",
-                      border: "1px solid #E5E7EB",
+                      background: "var(--bg-panel)",
+                      border: "1px solid var(--border-subtle)",
                       borderRadius: 6,
                       fontSize: 13,
                     }}
@@ -743,7 +743,7 @@ Omit any field where the document has no relevant info.`;
                     <span
                       style={{
                         flex: 1,
-                        color: "#111827",
+                        color: "var(--text-primary)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -752,12 +752,12 @@ Omit any field where the document has no relevant info.`;
                       {doc.name}
                     </span>
                     {doc.sizeKb > 0 && (
-                      <span style={{ fontSize: 11, color: "#9CA3AF" }}>{doc.sizeKb} KB</span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{doc.sizeKb} KB</span>
                     )}
                     <button
                       type="button"
                       onClick={() => invoke("open_path", { path: doc.savedPath }).catch(() => {})}
-                      style={{ ...iconBtnStyle, color: "#6366F1" }}
+                      style={{ ...iconBtnStyle, color: "var(--accent)" }}
                       title="Open in file manager"
                     >
                       ↗
@@ -870,7 +870,7 @@ Omit any field where the document has no relevant info.`;
 
           {/* Section 4 — Business Setup */}
           <Section title="4. Business Setup" icon="🏢">
-            <p style={{ margin: "0 0 12px", fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--text-tertiary)" }}>
               These shape compliance requirements later (UK setup, ICO, insurance). You can change
               them any time.
             </p>
@@ -891,7 +891,7 @@ Omit any field where the document has no relevant info.`;
                 }}
                 style={{
                   ...selectStyle,
-                  borderColor: entityType === "undecided" ? "#FCD34D" : "#D1D5DB",
+                  borderColor: entityType === "undecided" ? "var(--warning-soft)" : "var(--border-input)",
                 }}
               >
                 {ENTITY_OPTIONS.map((o) => (
@@ -901,7 +901,7 @@ Omit any field where the document has no relevant info.`;
                 ))}
               </select>
               {entityType === "undecided" && (
-                <span style={{ fontSize: 11, color: "#D97706", marginTop: 4 }}>
+                <span style={{ fontSize: 11, color: "var(--warning)", marginTop: 4 }}>
                   Required for the checklist — choose even provisionally
                 </span>
               )}
@@ -970,7 +970,7 @@ Omit any field where the document has no relevant info.`;
 
           {/* Section 5 — Validation */}
           <Section title="5. Validation So Far" icon="✅">
-            <p style={{ margin: "0 0 12px", fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--text-tertiary)" }}>
               Tick anything you've done. At least one is needed to advance.
             </p>
 
@@ -982,7 +982,7 @@ Omit any field where the document has no relevant info.`;
               {canvas.talkedToCustomers && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <label style={{ fontSize: 12, color: "#374151", whiteSpace: "nowrap" }}>
+                    <label style={{ fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
                       How many?
                     </label>
                     <input
@@ -1027,7 +1027,7 @@ Omit any field where the document has no relevant info.`;
             >
               {canvas.hasEarlySignups && (
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <label style={{ fontSize: 12, color: "#374151", whiteSpace: "nowrap" }}>
+                  <label style={{ fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
                     How many?
                   </label>
                   <input
@@ -1060,21 +1060,21 @@ Omit any field where the document has no relevant info.`;
 
           {/* Section 6 — Blockers */}
           <Section title="6. Blockers" icon="🚧">
-            <p style={{ margin: "0 0 12px", fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--text-tertiary)" }}>
               Being honest about blockers now prevents wasted effort later.
             </p>
             <div style={{ display: "flex", gap: 12, marginBottom: 8 }}>
               <ChoiceButton
                 active={canvas.hasBlockers === false}
                 onClick={() => updateCanvas({ hasBlockers: false, blockerDetails: "" })}
-                color="#059669"
+                color="var(--success)"
               >
                 No blockers right now
               </ChoiceButton>
               <ChoiceButton
                 active={canvas.hasBlockers === true}
                 onClick={() => updateCanvas({ hasBlockers: true })}
-                color="#D97706"
+                color="var(--warning)"
               >
                 Yes, I have blockers
               </ChoiceButton>
@@ -1094,8 +1094,8 @@ Omit any field where the document has no relevant info.`;
         <div style={{ width: 240, flexShrink: 0, position: "sticky", top: 0 }}>
           <div
             style={{
-              background: "#FFFFFF",
-              border: "1px solid #E5E7EB",
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: 10,
               padding: 16,
               boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
@@ -1105,7 +1105,7 @@ Omit any field where the document has no relevant info.`;
               style={{
                 fontSize: 12,
                 fontWeight: 700,
-                color: "#374151",
+                color: "var(--text-secondary)",
                 marginBottom: 12,
                 letterSpacing: "0.05em",
                 textTransform: "uppercase",
@@ -1118,7 +1118,7 @@ Omit any field where the document has no relevant info.`;
             <div
               style={{
                 height: 6,
-                background: "#E5E7EB",
+                background: "var(--border-subtle)",
                 borderRadius: 3,
                 marginBottom: 14,
                 overflow: "hidden",
@@ -1128,13 +1128,13 @@ Omit any field where the document has no relevant info.`;
                 style={{
                   height: "100%",
                   width: `${(doneCount / 6) * 100}%`,
-                  background: allDone ? "#059669" : "#6366F1",
+                  background: allDone ? "var(--success)" : "var(--accent)",
                   borderRadius: 3,
                   transition: "width 0.3s ease",
                 }}
               />
             </div>
-            <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 14, textAlign: "right" }}>
+            <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginBottom: 14, textAlign: "right" }}>
               {doneCount} / 6 complete
             </div>
 
@@ -1147,7 +1147,7 @@ Omit any field where the document has no relevant info.`;
               />
             ))}
 
-            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid #E5E7EB" }}>
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border-subtle)" }}>
               <button
                 type="button"
                 onClick={handleAdvance}
@@ -1155,8 +1155,8 @@ Omit any field where the document has no relevant info.`;
                 style={{
                   width: "100%",
                   padding: "9px 12px",
-                  background: allDone ? "#6366F1" : "#E5E7EB",
-                  color: allDone ? "#FFFFFF" : "#9CA3AF",
+                  background: allDone ? "var(--accent)" : "var(--border-subtle)",
+                  color: allDone ? "var(--bg-panel)" : "var(--text-muted)",
                   border: "none",
                   borderRadius: 6,
                   fontWeight: 700,
@@ -1173,7 +1173,7 @@ Omit any field where the document has no relevant info.`;
               </button>
               {allDone && (
                 <p
-                  style={{ margin: "8px 0 0", fontSize: 11, color: "#059669", textAlign: "center" }}
+                  style={{ margin: "8px 0 0", fontSize: 11, color: "var(--success)", textAlign: "center" }}
                 >
                   All set! This moves you to the RESEARCHED stage.
                 </p>
@@ -1198,8 +1198,8 @@ function Section({
   return (
     <div
       style={{
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 10,
         overflow: "hidden",
       }}
@@ -1207,15 +1207,15 @@ function Section({
       <div
         style={{
           padding: "14px 18px",
-          borderBottom: "1px solid #F3F4F6",
-          background: "#F9FAFB",
+          borderBottom: "1px solid var(--bg-hover)",
+          background: "var(--bg-elevated)",
           display: "flex",
           alignItems: "center",
           gap: 8,
         }}
       >
         <span style={{ fontSize: 16 }}>{icon}</span>
-        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>{title}</h4>
+        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{title}</h4>
       </div>
       <div style={{ padding: "18px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
         {children}
@@ -1239,11 +1239,11 @@ function Field({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 5, ...styleProp }}>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
+      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>
         {label}
-        {required && <span style={{ color: "#EF4444", marginLeft: 4 }}>*</span>}
+        {required && <span style={{ color: "var(--danger)", marginLeft: 4 }}>*</span>}
       </span>
-      {hint && <span style={{ fontSize: 11, color: "#9CA3AF", marginTop: -2 }}>{hint}</span>}
+      {hint && <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -2 }}>{hint}</span>}
       {children}
     </label>
   );
@@ -1270,8 +1270,8 @@ function Textarea({
         fontSize: 13,
         padding: "9px 11px",
         borderRadius: 6,
-        border: "1px solid #D1D5DB",
-        background: "#FFFFFF",
+        border: "1px solid var(--border-input)",
+        background: "var(--bg-panel)",
         resize: "vertical",
         fontFamily: "inherit",
         lineHeight: 1.5,
@@ -1287,7 +1287,7 @@ function CharCount({ value, min }: { value: string; min: number }) {
   const len = value.trim().length;
   const ok = len >= min;
   return (
-    <span style={{ fontSize: 11, color: ok ? "#059669" : "#9CA3AF", marginTop: -2 }}>
+    <span style={{ fontSize: 11, color: ok ? "var(--success)" : "var(--text-muted)", marginTop: -2 }}>
       {len} / {min} chars {ok ? "✓" : ""}
     </span>
   );
@@ -1319,9 +1319,9 @@ function CheckRow({
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
-          style={{ marginTop: 2, width: 15, height: 15, accentColor: "#6366F1", flexShrink: 0 }}
+          style={{ marginTop: 2, width: 15, height: 15, accentColor: "var(--accent)", flexShrink: 0 }}
         />
-        <span style={{ fontSize: 13, color: "#111827", lineHeight: 1.4 }}>{label}</span>
+        <span style={{ fontSize: 13, color: "var(--text-primary)", lineHeight: 1.4 }}>{label}</span>
       </label>
       {checked && children && (
         <div style={{ marginLeft: 25, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1350,9 +1350,9 @@ function ToggleRow({
         alignItems: "flex-start",
         gap: 10,
         padding: "10px 12px",
-        border: "1px solid #E5E7EB",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 6,
-        background: checked ? "#EEF2FF" : "#F9FAFB",
+        background: checked ? "var(--accent-soft)" : "var(--bg-elevated)",
         cursor: "pointer",
         userSelect: "none",
         transition: "background 0.15s",
@@ -1362,11 +1362,11 @@ function ToggleRow({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        style={{ marginTop: 2, width: 15, height: 15, accentColor: "#6366F1", flexShrink: 0 }}
+        style={{ marginTop: 2, width: 15, height: 15, accentColor: "var(--accent)", flexShrink: 0 }}
       />
       <div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{label}</div>
-        {hint && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{hint}</div>}
+        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{label}</div>
+        {hint && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{hint}</div>}
       </div>
     </label>
   );
@@ -1389,10 +1389,10 @@ function ChoiceButton({
       onClick={onClick}
       style={{
         padding: "8px 14px",
-        border: `2px solid ${active ? color : "#E5E7EB"}`,
+        border: `2px solid ${active ? color : "var(--border-subtle)"}`,
         borderRadius: 6,
-        background: active ? `${color}14` : "#FFFFFF",
-        color: active ? color : "#6B7280",
+        background: active ? `${color}14` : "var(--bg-panel)",
+        color: active ? color : "var(--text-tertiary)",
         fontWeight: active ? 700 : 500,
         fontSize: 13,
         cursor: "pointer",
@@ -1428,8 +1428,8 @@ function ChecklistItem({
           width: 18,
           height: 18,
           borderRadius: "50%",
-          background: done ? "#059669" : "#E5E7EB",
-          border: done ? "none" : "2px solid #D1D5DB",
+          background: done ? "var(--success)" : "var(--border-subtle)",
+          border: done ? "none" : "2px solid var(--border-input)",
           flexShrink: 0,
           display: "flex",
           alignItems: "center",
@@ -1451,10 +1451,10 @@ function ChecklistItem({
         )}
       </div>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "#111827" : "#6B7280" }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "var(--text-primary)" : "var(--text-tertiary)" }}>
           {label}
         </div>
-        {!done && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>{hint}</div>}
+        {!done && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{hint}</div>}
       </div>
     </div>
   );
@@ -1462,9 +1462,9 @@ function ChecklistItem({
 
 function SaveIndicator({ status }: { status: "saved" | "saving" | "unsaved" }) {
   const config = {
-    saved: { color: "#059669", text: "Saved" },
-    saving: { color: "#6366F1", text: "Saving…" },
-    unsaved: { color: "#D97706", text: "Unsaved" },
+    saved: { color: "var(--success)", text: "Saved" },
+    saving: { color: "var(--accent)", text: "Saving…" },
+    unsaved: { color: "var(--warning)", text: "Unsaved" },
   }[status];
   return <span style={{ fontSize: 11, color: config.color, fontWeight: 600 }}>{config.text}</span>;
 }
@@ -1477,8 +1477,8 @@ const inputStyle: React.CSSProperties = {
   fontSize: 13,
   padding: "7px 10px",
   borderRadius: 6,
-  border: "1px solid #D1D5DB",
-  background: "#FFFFFF",
+  border: "1px solid var(--border-input)",
+  background: "var(--bg-panel)",
   fontFamily: "inherit",
   outline: "none",
 };

@@ -64,21 +64,39 @@ import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  type BrandAssetSpec,
   type BrandGenBrief,
-  FULL_PACK_SPECS,
-  type LogoArchetype,
   type LogoCandidate,
   type PackAssetResult,
   extractPaletteFromSvg,
-  generateFullPack,
-  generateLogoCandidates,
 } from "../../lib/brand-gen.js";
+import { type AdvancePreflight, runAdvancePreflight } from "../../lib/advance-gate.js";
+import { type DistilledBrandFields, distillBrand } from "../../lib/brand-distiller.js";
+import {
+  type BrandNameCandidate,
+  type BrandNameStatus,
+  brandNameList,
+  brandNameSetStatus,
+  brandNameUpdateInfo,
+  brandNameUpsert,
+} from "../../lib/brand-names.js";
+import {
+  type PalettePreset,
+  type PresetCategory,
+  PRESET_BY_ID,
+  PRESET_GROUPS,
+} from "../../lib/palette-presets.js";
 import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
 import { pushToast } from "../../lib/toasts.js";
 import { useAbortableTask } from "../../lib/use-abortable-task.js";
 import { joinPath } from "../../lib/venture-io.js";
-import { ProviderPickerDialog } from "./ProviderPickerDialog.js";
+import { AdvanceConfirmModal } from "./AdvanceConfirmModal.js";
+import {
+  type DistillFieldConfig,
+  DistillDiffModal,
+  distillTextField,
+} from "./DistillDiffModal.js";
+import { NameTriageList } from "./NameTriageList.js";
+import { BrandChatPanel } from "./BrandChatPanel.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -116,57 +134,13 @@ const DEFAULT_PALETTE: ColorPalette = {
   textMuted: "#6B7280",
 };
 
-/** Preset palettes — keyed by "mood" for one-click apply. */
-const PRESET_PALETTES: Record<string, { label: string; palette: ColorPalette }> = {
-  bold: {
-    label: "Bold",
-    palette: {
-      primary: "#FF3B30",
-      secondary: "#FF6B35",
-      accent: "#FFD60A",
-      background: "#FFFFFF",
-      surface: "#F5F5F5",
-      text: "#1C1C1E",
-      textMuted: "#6C6C70",
-    },
-  },
-  minimal: {
-    label: "Minimal",
-    palette: {
-      primary: "#000000",
-      secondary: "#333333",
-      accent: "#0066CC",
-      background: "#FFFFFF",
-      surface: "#F2F2F7",
-      text: "#1C1C1E",
-      textMuted: "#8E8E93",
-    },
-  },
-  playful: {
-    label: "Playful",
-    palette: {
-      primary: "#5E5CE6",
-      secondary: "#FF6EAB",
-      accent: "#30D158",
-      background: "#FFFFFF",
-      surface: "#F2F2F7",
-      text: "#1C1C1E",
-      textMuted: "#8E8E93",
-    },
-  },
-  technical: {
-    label: "Technical",
-    palette: {
-      primary: "#0A84FF",
-      secondary: "#30D158",
-      accent: "#FF9F0A",
-      background: "#000000",
-      surface: "#1C1C1E",
-      text: "#FFFFFF",
-      textMuted: "#8E8E93",
-    },
-  },
-};
+/**
+ * Preset palettes are now sourced from `../../lib/palette-presets.ts` —
+ * 992 palettes from `nice-color-palettes` (mattdesl, ColourLovers-curated)
+ * auto-bucketed into categories, plus the original 4 hand-picked presets
+ * kept under "Featured". See that module for the mapping + categorisation
+ * heuristics.
+ */
 
 const DEFAULT_TYPOGRAPHY: Typography = {
   headingFont: "Inter",
@@ -219,6 +193,57 @@ function defaultCanvas(manifest: VentureManifest | null): BrandCanvas {
     updatedAt: new Date().toISOString(),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Distill field config (text-shaped subset of BrandCanvas)
+// ---------------------------------------------------------------------------
+
+function renderStringList(value: unknown): React.ReactNode {
+  if (!Array.isArray(value) || value.length === 0) {
+    return <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>(empty)</span>;
+  }
+  return (
+    <ul style={{ margin: 0, paddingLeft: 18 }}>
+      {(value as unknown[]).map((entry, i) => (
+        <li key={`brand-list-${i}`} style={{ marginBottom: 4 }}>
+          {typeof entry === "string" ? entry : JSON.stringify(entry)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function stringListEquals(current: unknown, proposed: unknown): boolean {
+  const a = (Array.isArray(current) ? current : []) as unknown[];
+  const b = (Array.isArray(proposed) ? proposed : []) as unknown[];
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ai = typeof a[i] === "string" ? (a[i] as string).trim() : "";
+    const bi = typeof b[i] === "string" ? (b[i] as string).trim() : "";
+    if (ai !== bi) return false;
+  }
+  return true;
+}
+
+const BRAND_DISTILL_FIELDS: DistillFieldConfig[] = [
+  distillTextField("tagline", "Tagline"),
+  distillTextField("mission", "Mission"),
+  distillTextField("targetAudience", "Target audience"),
+  distillTextField("toneOfVoice", "Tone of voice"),
+  {
+    key: "competitors",
+    label: "Competitors",
+    render: renderStringList,
+    equals: stringListEquals,
+  },
+  {
+    key: "differentiators",
+    label: "Differentiators",
+    render: renderStringList,
+    equals: stringListEquals,
+  },
+  distillTextField("notes", "Designer notes"),
+];
 
 // ---------------------------------------------------------------------------
 // Path helpers
@@ -404,6 +429,23 @@ export function BrandTab({
   const [aiSeedHints, setAiSeedHints] = useState("");
   const [checking, setChecking] = useState<Record<string, boolean>>({});
 
+  // ── Persistent name-candidate triage list ───────────────────────────
+  // SQLite-backed mirror of every generated name with a status
+  // ('new' | 'possible' | 'fail'). The on-disk JSON scan above is still
+  // the source of truth for the chosen-name + per-candidate research
+  // payload (domains/trademark) — this list adds the cross-regen
+  // triage history the JSON file used to lose every time the user
+  // clicked "Generate names".
+  const [triageCandidates, setTriageCandidates] = useState<BrandNameCandidate[]>([]);
+
+  // Per-row check loading flags. Keyed by candidate name; each value is
+  // a set of in-flight check kinds ('domain' | 'social' | 'trademark').
+  // The triage row reads this map to show spinners on the relevant
+  // chips while a sweep is running.
+  const [triageChecking, setTriageChecking] = useState<
+    Record<string, Set<"domain" | "social" | "trademark">>
+  >({});
+
   // ── Derived artifact presence ───────────────────────────────────────
   const [hasBrief, setHasBrief] = useState(false);
   const [hasLogo, setHasLogo] = useState(false);
@@ -427,56 +469,56 @@ export function BrandTab({
   const regenTask = useAbortableTask();
   const [advancing, setAdvancing] = useState(false);
 
+  // ── Distill from chat + docs ────────────────────────────────────────
+  const [distilling, setDistilling] = useState(false);
+  const [distillDraft, setDistillDraft] = useState<DistilledBrandFields | null>(null);
+  const [advanceModal, setAdvanceModal] = useState<AdvancePreflight | null>(null);
+
   // ── Section open/closed (all open by default on first render) ───────
   const [openSections, setOpenSections] = useState({
     name: true,
     direction: true,
+    aiChat: true,
     logo: true,
-    aiCandidates: true,
-    fullPack: true,
     pack: true,
   });
 
-  // ── AI logo candidates + lock + full pack state ─────────────────────
+  // ── Palette preset dropdown (categorised swatch picker) ─────────────
+  const [presetMenuOpen, setPresetMenuOpen] = useState(false);
+  const [activePresetCategory, setActivePresetCategory] = useState<PresetCategory>(
+    PRESET_GROUPS[0]?.key ?? "featured",
+  );
+  const presetMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close on outside click + Escape — standard popover plumbing.
+  useEffect(() => {
+    if (!presetMenuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (!presetMenuRef.current) return;
+      if (!presetMenuRef.current.contains(e.target as Node)) setPresetMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPresetMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [presetMenuOpen]);
+
+  const activeGroup =
+    PRESET_GROUPS.find((g) => g.key === activePresetCategory) ?? PRESET_GROUPS[0];
+
+  // ── Brand-pack state used by the chat panel and existing handlers ──
   //
-  // The new brand-pack flow lives in three stages driven by this state:
-  //   1. `logoCandidates` holds the 4 AI-generated SVG candidates.
-  //      While a generation is in flight, `generatingCandidates` flips on
-  //      and the SubscribeDialog-style picker opens via `pickerOpen`.
-  //   2. `chosenLogoSvg` captures the user's pick. On pick we also
-  //      extract unique colours via `extractPaletteFromSvg` and splice
-  //      them into `canvas.palette` so the lock gate has matching brand
-  //      colours for pack generation.
-  //   3. `brandLocked` gates the "Generate full pack" button. Both the
-  //      chosen logo and the palette must be reviewed before we start
-  //      rolling email headers / social banners / guide MD.
-  const [logoCandidates, setLogoCandidates] = useState<(LogoCandidate & { error?: string })[]>([]);
-  const [generatingCandidates, setGeneratingCandidates] = useState(false);
-  const [candidateError, setCandidateError] = useState<string | null>(null);
+  // BrandChatPanel is the sole entry point for AI-driven concepts and
+  // pack generation now. `chosenLogoSvg` stores whatever logo /lock
+  // picked (or earlier flows wrote); `brandLocked` gates the
+  // "Advance to UK Setup" must-haves checklist on the right.
   const [chosenLogoSvg, setChosenLogoSvg] = useState<string>("");
-  const [chosenLogoArchetype, setChosenLogoArchetype] = useState<LogoArchetype | null>(null);
   const [brandLocked, setBrandLocked] = useState(false);
-
-  // Full-pack generation progress — one entry per FULL_PACK_SPECS asset.
-  // Status transitions: idle → running → done | error. Content on `done`
-  // is the asset body (SVG/HTML/MD); on error `error` holds the message.
-  type PackEntryStatus = "idle" | "running" | "done" | "error";
-  type PackEntry = {
-    spec: BrandAssetSpec;
-    status: PackEntryStatus;
-    content?: string;
-    error?: string;
-  };
-  const [packEntries, setPackEntries] = useState<PackEntry[]>([]);
-  const [generatingPack, setGeneratingPack] = useState(false);
-  const [packError, setPackError] = useState<string | null>(null);
-  const [packZipPath, setPackZipPath] = useState<string | null>(null);
-
-  // Provider picker — used for BOTH logo-candidate generation and
-  // full-pack generation. `pickerIntent` records which action to fire
-  // on confirm so one dialog serves both flows.
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerIntent, setPickerIntent] = useState<"logo-candidates" | "full-pack" | null>(null);
 
   const chosenCandidate = useMemo(
     () => scan.candidates.find((c) => c.id === scan.chosenCandidateId) ?? null,
@@ -524,6 +566,17 @@ export function BrandTab({
         if (!cancelled) setScan(createEmptyNamingScan(venture.id));
       });
 
+    // Triage list — SQLite-backed, persists across regen runs.
+    // Failures here are non-fatal: brand-names.ts already toasts, so
+    // we just let the UI render an empty list and the user can retry.
+    brandNameList(venture.id)
+      .then((rows) => {
+        if (!cancelled) setTriageCandidates(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setTriageCandidates([]);
+      });
+
     // Artifacts presence (don't gate the tab render on these; they fill in)
     refreshArtifacts(venture.rootPath);
 
@@ -535,6 +588,419 @@ export function BrandTab({
     // default only applies on fresh canvas load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venture.id, venture.rootPath]);
+
+  // ── Scan persistence (no debounce — fire-and-forget) ────────────────
+  // Hoisted above the triage handlers (which call updateScan) because
+  // TypeScript's block-scoping treats forward references to `const`
+  // useCallback bindings as use-before-declaration errors.
+  const saveScan = useCallback(
+    async (next: NamingScan) => {
+      try {
+        await invoke("write_file", {
+          path: namingScanPath(venture.rootPath),
+          content: JSON.stringify({ ...next, updatedAt: new Date().toISOString() }, null, 2) + "\n",
+        });
+      } catch (err) {
+        pushToast({
+          kind: "warn",
+          message: "Couldn't save name scan",
+          detail: errDetail(err),
+        });
+      }
+    },
+    [venture.rootPath]
+  );
+
+  const updateScan = useCallback(
+    (updater: (prev: NamingScan) => NamingScan) => {
+      setScan((prev) => {
+        const next = updater(prev);
+        saveScan(next);
+        return next;
+      });
+    },
+    [saveScan]
+  );
+
+  const updateCandidate = (id: string, patch: Partial<NamingCandidate>) => {
+    updateScan((prev) => ({
+      ...prev,
+      candidates: prev.candidates.map((c) =>
+        c.id === id ? { ...c, ...patch, updatedAt: new Date().toISOString() } : c
+      ),
+    }));
+  };
+
+  const refreshTriage = useCallback(async () => {
+    try {
+      const rows = await brandNameList(venture.id);
+      setTriageCandidates(rows);
+    } catch {
+      // Toast already surfaced by brand-names.ts. Leaving the existing
+      // list in place is safer than blanking it on a transient error.
+    }
+  }, [venture.id]);
+
+  const handleTriageMark = useCallback(
+    async (name: string, status: BrandNameStatus) => {
+      // Optimistic local update so the row jumps sections immediately.
+      // We still refresh from the DB after the round-trip so the
+      // ordering (decided_at-based) lines up with what gets persisted.
+      const now = new Date().toISOString();
+      setTriageCandidates((prev) =>
+        prev.map((c) =>
+          c.name === name
+            ? {
+                ...c,
+                status,
+                decidedAt: status === "new" ? undefined : now,
+              }
+            : c
+        )
+      );
+      try {
+        await brandNameSetStatus({ ventureId: venture.id, name, status });
+      } catch {
+        // Revert by re-pulling — the persisted state didn't change.
+      }
+      await refreshTriage();
+    },
+    [venture.id, refreshTriage]
+  );
+
+  // ── Triage row check loading flag helpers ──────────────────────────
+  // Tiny wrappers over the per-row Set<kind> map so the check handlers
+  // don't repeat the add/delete-immutably pattern. The set is keyed by
+  // candidate name (matches brand_name_candidates.name).
+  const beginTriageCheck = useCallback(
+    (name: string, kind: "domain" | "social" | "trademark") => {
+      setTriageChecking((prev) => {
+        const set = new Set(prev[name] ?? []);
+        set.add(kind);
+        return { ...prev, [name]: set };
+      });
+    },
+    []
+  );
+  const endTriageCheck = useCallback(
+    (name: string, kind: "domain" | "social" | "trademark") => {
+      setTriageChecking((prev) => {
+        const set = new Set(prev[name] ?? []);
+        set.delete(kind);
+        const next = { ...prev };
+        if (set.size === 0) delete next[name];
+        else next[name] = set;
+        return next;
+      });
+    },
+    []
+  );
+
+  // Look up an existing scan candidate by name (case-insensitive) or
+  // synthesise a fresh one. Triage checks need a NamingCandidate to
+  // mutate — and the UI may be acting on a row that pre-dates the
+  // current scan (e.g. window-restart, partial save). Returns the
+  // candidate plus a flag telling the caller whether scan needs to
+  // gain it; we let the caller commit so the checks can be batched
+  // into a single updateScan write.
+  const findOrSeedScanCandidate = useCallback(
+    (name: string): { candidate: NamingCandidate; isNew: boolean } => {
+      const existing = scan.candidates.find(
+        (c) => c.name.toLowerCase() === name.toLowerCase()
+      );
+      if (existing) return { candidate: existing, isNew: false };
+      // Pull rationale/style from the triage row if we have it so the
+      // synthesised candidate matches what the user already saw.
+      const triageRow = triageCandidates.find(
+        (c) => c.name.toLowerCase() === name.toLowerCase()
+      );
+      const rationale =
+        typeof triageRow?.info.rationale === "string"
+          ? (triageRow.info.rationale as string)
+          : "";
+      const style =
+        typeof triageRow?.info.style === "string"
+          ? (triageRow.info.style as string)
+          : undefined;
+      return {
+        candidate: createEmptyCandidate({ name, rationale, style }),
+        isNew: true,
+      };
+    },
+    [scan.candidates, triageCandidates]
+  );
+
+  // Apply a freshly-checked NamingCandidate to BOTH the scan
+  // (source of truth for chosenCandidateId + on-disk JSON) and the
+  // SQLite triage info_json (source of truth for the cross-regen
+  // research history). Both writes happen here so callers don't need
+  // to keep them in sync.
+  const commitCheckedCandidate = useCallback(
+    async (updated: NamingCandidate, isNew: boolean) => {
+      updateScan((prev) => {
+        const exists = prev.candidates.some((c) => c.id === updated.id);
+        if (exists) {
+          return {
+            ...prev,
+            candidates: prev.candidates.map((c) => (c.id === updated.id ? updated : c)),
+          };
+        }
+        if (isNew) {
+          return { ...prev, candidates: [...prev.candidates, updated] };
+        }
+        return prev;
+      });
+      try {
+        await brandNameUpdateInfo({
+          ventureId: venture.id,
+          name: updated.name,
+          info: updated as unknown as Record<string, unknown>,
+        });
+      } catch {
+        // Toast surfaced upstream; scan still has the data so the
+        // research isn't lost.
+      }
+      await refreshTriage();
+    },
+    [updateScan, venture.id, refreshTriage]
+  );
+
+  // ── Domain / social / trademark sweeps ─────────────────────────────
+  // Pure helpers extracted from the legacy `checkCandidate` so each
+  // triage button can run only the sweep it needs. Each helper returns
+  // the partial result map; the caller merges into a NamingCandidate.
+
+  const sweepDomains = useCallback(
+    async (
+      name: string
+    ): Promise<Record<string, AvailabilityCheck>> => {
+      const lower = name.toLowerCase();
+      const results: Record<string, AvailabilityCheck> = {};
+      const promises = DEFAULT_DOMAIN_TLDS.map(async (tld) => {
+        const domain = `${lower}${tld}`;
+        try {
+          const r = await invoke<{ status: AvailabilityStatus; detail: string }>(
+            "check_domain",
+            { domain }
+          );
+          results[domain] = { ...r, checkedAt: new Date().toISOString() };
+        } catch (err) {
+          results[domain] = {
+            status: "error",
+            detail: errDetail(err),
+            checkedAt: new Date().toISOString(),
+          };
+        }
+      });
+      await Promise.all(promises);
+      return results;
+    },
+    []
+  );
+
+  const sweepSocials = useCallback(
+    async (
+      name: string
+    ): Promise<Record<SocialPlatform, AvailabilityCheck>> => {
+      const handle = slugify(name).replace(/-/g, "");
+      const results: Partial<Record<SocialPlatform, AvailabilityCheck>> = {};
+      // Stagger 400ms per platform to dodge shared-IP 429s on Meta
+      // properties — same throttling the legacy checkCandidate used.
+      await Promise.all(
+        SOCIAL_PLATFORMS.map(
+          (platform, i) =>
+            new Promise<void>((resolve) => {
+              setTimeout(async () => {
+                try {
+                  const r = await invoke<{
+                    status: AvailabilityStatus;
+                    detail: string;
+                  }>("check_social_handle", { platform, handle });
+                  results[platform] = { ...r, checkedAt: new Date().toISOString() };
+                } catch (err) {
+                  results[platform] = {
+                    status: "error",
+                    detail: errDetail(err),
+                    checkedAt: new Date().toISOString(),
+                  };
+                }
+                resolve();
+              }, i * 400);
+            })
+        )
+      );
+      return results as Record<SocialPlatform, AvailabilityCheck>;
+    },
+    []
+  );
+
+  // ── Triage check handlers (one per button on the row) ──────────────
+  const handleTriageCheckDomain = useCallback(
+    async (name: string) => {
+      if (triageChecking[name]?.has("domain")) return;
+      beginTriageCheck(name, "domain");
+      try {
+        const { candidate, isNew } = findOrSeedScanCandidate(name);
+        const domainResults = await sweepDomains(candidate.name);
+        const updated: NamingCandidate = {
+          ...candidate,
+          domainStatus: { ...candidate.domainStatus, ...domainResults },
+          updatedAt: new Date().toISOString(),
+        };
+        await commitCheckedCandidate(updated, isNew);
+      } finally {
+        endTriageCheck(name, "domain");
+      }
+    },
+    [
+      triageChecking,
+      beginTriageCheck,
+      endTriageCheck,
+      findOrSeedScanCandidate,
+      sweepDomains,
+      commitCheckedCandidate,
+    ]
+  );
+
+  const handleTriageCheckSocials = useCallback(
+    async (name: string) => {
+      if (triageChecking[name]?.has("social")) return;
+      beginTriageCheck(name, "social");
+      try {
+        const { candidate, isNew } = findOrSeedScanCandidate(name);
+        const socialResults = await sweepSocials(candidate.name);
+        const updated: NamingCandidate = {
+          ...candidate,
+          socialStatus: { ...candidate.socialStatus, ...socialResults },
+          updatedAt: new Date().toISOString(),
+        };
+        await commitCheckedCandidate(updated, isNew);
+      } finally {
+        endTriageCheck(name, "social");
+      }
+    },
+    [
+      triageChecking,
+      beginTriageCheck,
+      endTriageCheck,
+      findOrSeedScanCandidate,
+      sweepSocials,
+      commitCheckedCandidate,
+    ]
+  );
+
+  // The trademark "check" is a launcher — opens the IPO/USPTO/WIPO
+  // search page in the browser and stamps a 'restricted' verdict so
+  // the founder remembers to flip it after reviewing. Same flow as
+  // the legacy openTrademarkSearch; we just persist into both stores.
+  const handleTriageCheckTrademark = useCallback(
+    async (name: string, jurisdiction: TrademarkJurisdiction = "uk") => {
+      if (triageChecking[name]?.has("trademark")) return;
+      beginTriageCheck(name, "trademark");
+      try {
+        const { candidate, isNew } = findOrSeedScanCandidate(name);
+        const url = trademarkSearchUrl(candidate.name, jurisdiction);
+        const officeLabel = TRADEMARK_JURISDICTION_LABELS[jurisdiction];
+        try {
+          await invoke("open_url", { url });
+        } catch (err) {
+          pushToast({
+            kind: "error",
+            message: "Couldn't open trademark search",
+            detail: errDetail(err),
+          });
+          return;
+        }
+        const updated: NamingCandidate = {
+          ...candidate,
+          trademarkStatus: {
+            ...candidate.trademarkStatus,
+            [jurisdiction]: {
+              status: "restricted",
+              detail: `${officeLabel} search opened — flip status after reviewing`,
+              checkedAt: new Date().toISOString(),
+            },
+          },
+          updatedAt: new Date().toISOString(),
+        };
+        await commitCheckedCandidate(updated, isNew);
+      } finally {
+        endTriageCheck(name, "trademark");
+      }
+    },
+    [
+      triageChecking,
+      beginTriageCheck,
+      endTriageCheck,
+      findOrSeedScanCandidate,
+      commitCheckedCandidate,
+    ]
+  );
+
+  // Run all three sweeps concurrently. Each writes through
+  // commitCheckedCandidate independently, which is safe because they
+  // touch disjoint slots on the candidate (domainStatus / socialStatus
+  // / trademarkStatus). Last writer wins on `updatedAt` — close enough
+  // since the three calls finish within a few seconds of each other.
+  const handleTriageCheckAll = useCallback(
+    (name: string) => {
+      void handleTriageCheckDomain(name);
+      void handleTriageCheckSocials(name);
+      void handleTriageCheckTrademark(name);
+    },
+    [handleTriageCheckDomain, handleTriageCheckSocials, handleTriageCheckTrademark]
+  );
+
+  // Set the venture's chosen name. The triage table identifies rows by
+  // name; the scan's chosen pointer is by id. We bridge by ensuring a
+  // scan candidate exists for the picked name (synthesising one when
+  // missing), then setting chosenCandidateId on it. The on-disk JSON
+  // is the durable store for the chosen pointer — triage SQLite is
+  // intentionally agnostic about which row is "the" pick.
+  const handleTriagePick = useCallback(
+    async (name: string) => {
+      const existing = scan.candidates.find(
+        (c) => c.name.toLowerCase() === name.toLowerCase()
+      );
+      if (existing) {
+        updateScan((prev) => ({ ...prev, chosenCandidateId: existing.id }));
+        pushToast({
+          kind: "success",
+          message: `Venture name set: ${existing.name}`,
+          ttlMs: 3000,
+        });
+        return;
+      }
+      // Synthesise + commit so the next render has a valid scan row to
+      // anchor chosenCandidateId on. We keep `name` as-cased from the
+      // triage row so the user sees their preferred capitalisation.
+      const triageRow = triageCandidates.find(
+        (c) => c.name.toLowerCase() === name.toLowerCase()
+      );
+      const seeded = createEmptyCandidate({
+        name: triageRow?.name ?? name,
+        rationale:
+          typeof triageRow?.info.rationale === "string"
+            ? (triageRow.info.rationale as string)
+            : "",
+        style:
+          typeof triageRow?.info.style === "string"
+            ? (triageRow.info.style as string)
+            : undefined,
+      });
+      updateScan((prev) => ({
+        ...prev,
+        candidates: [...prev.candidates, seeded],
+        chosenCandidateId: seeded.id,
+      }));
+      pushToast({
+        kind: "success",
+        message: `Venture name set: ${seeded.name}`,
+        ttlMs: 3000,
+      });
+    },
+    [scan.candidates, triageCandidates, updateScan]
+  );
 
   const refreshArtifacts = useCallback(async (rootPath: string) => {
     try {
@@ -608,43 +1074,82 @@ export function BrandTab({
     updateCanvas({ typography: { ...canvas.typography, ...patch } });
   };
 
-  // ── Scan persistence (no debounce — fire-and-forget) ────────────────
-  const saveScan = useCallback(
-    async (next: NamingScan) => {
-      try {
-        await invoke("write_file", {
-          path: namingScanPath(venture.rootPath),
-          content: JSON.stringify({ ...next, updatedAt: new Date().toISOString() }, null, 2) + "\n",
-        });
-      } catch (err) {
+  // ── Distill from chat + docs ────────────────────────────────────────
+  const handleDistill = async () => {
+    if (distilling) return;
+    setDistilling(true);
+    try {
+      const draft = await distillBrand({
+        ventureId: venture.id,
+        stage: venture.stage,
+        ventureRootPath: venture.rootPath,
+        currentFields: {
+          tagline: canvas.tagline,
+          mission: canvas.mission,
+          targetAudience: canvas.targetAudience,
+          toneOfVoice: canvas.toneOfVoice,
+          notes: canvas.notes,
+          competitors: canvas.competitors,
+          differentiators: canvas.differentiators,
+        },
+      });
+      if (Object.keys(draft).length === 0) {
         pushToast({
           kind: "warn",
-          message: "Couldn't save name scan",
-          detail: errDetail(err),
+          message: "Nothing to distill yet",
+          detail: "No chat history or text-shaped docs found in the venture folder.",
+          ttlMs: 5000,
         });
+        return;
       }
-    },
-    [venture.rootPath]
-  );
+      setDistillDraft(draft);
+    } catch (err) {
+      pushToast({ kind: "error", message: "Distill failed", detail: errDetail(err) });
+    } finally {
+      setDistilling(false);
+    }
+  };
 
-  const updateScan = useCallback(
-    (updater: (prev: NamingScan) => NamingScan) => {
-      setScan((prev) => {
-        const next = updater(prev);
-        saveScan(next);
-        return next;
+  const handleApplyDistill = (selected: Record<string, unknown>) => {
+    if (Object.keys(selected).length === 0) {
+      setDistillDraft(null);
+      return;
+    }
+    const patch: Partial<BrandCanvas> = {};
+    let applied = 0;
+    const assignString = (key: keyof DistilledBrandFields & keyof BrandCanvas) => {
+      const v = selected[key];
+      if (typeof v === "string") {
+        (patch as Record<string, unknown>)[key] = v;
+        applied++;
+      }
+    };
+    assignString("tagline");
+    assignString("mission");
+    assignString("targetAudience");
+    assignString("toneOfVoice");
+    assignString("notes");
+    if (Array.isArray(selected.competitors)) {
+      patch.competitors = (selected.competitors as unknown[]).filter(
+        (e): e is string => typeof e === "string"
+      );
+      applied++;
+    }
+    if (Array.isArray(selected.differentiators)) {
+      patch.differentiators = (selected.differentiators as unknown[]).filter(
+        (e): e is string => typeof e === "string"
+      );
+      applied++;
+    }
+    if (applied > 0) {
+      updateCanvas(patch);
+      pushToast({
+        kind: "success",
+        message: `✨ Applied ${applied} distilled field${applied === 1 ? "" : "s"}`,
+        ttlMs: 4000,
       });
-    },
-    [saveScan]
-  );
-
-  const updateCandidate = (id: string, patch: Partial<NamingCandidate>) => {
-    updateScan((prev) => ({
-      ...prev,
-      candidates: prev.candidates.map((c) =>
-        c.id === id ? { ...c, ...patch, updatedAt: new Date().toISOString() } : c
-      ),
-    }));
+    }
+    setDistillDraft(null);
   };
 
   // ── Section: NAMING — AI generate ───────────────────────────────────
@@ -730,13 +1235,18 @@ Rules:
         return;
       }
 
-      // Merge — dedup by lowercase name.
+      // Merge — dedup by lowercase name. Also mirror every NEW
+      // candidate into the SQLite triage table so we don't lose names
+      // across regenerations. INSERT OR IGNORE on the Rust side means
+      // a name that's already been triaged ('possible' / 'fail') keeps
+      // its decided status — re-suggesting a known name is a no-op,
+      // not a status reset.
+      const additions: NamingCandidate[] = [];
       updateScan((prev) => {
         const seen = new Set(prev.candidates.map((c) => c.name.toLowerCase()));
-        const added: NamingCandidate[] = [];
         for (const rc of parsed) {
           if (seen.has(rc.name.toLowerCase())) continue;
-          added.push(
+          additions.push(
             createEmptyCandidate({
               name: rc.name,
               rationale: rc.rationale,
@@ -747,11 +1257,39 @@ Rules:
         }
         pushToast({
           kind: "success",
-          message: `Added ${added.length} new candidate${added.length === 1 ? "" : "s"}`,
+          message: `Added ${additions.length} new candidate${additions.length === 1 ? "" : "s"}`,
           ttlMs: 3500,
         });
-        return { ...prev, candidates: [...prev.candidates, ...added] };
+        return { ...prev, candidates: [...prev.candidates, ...additions] };
       });
+
+      // Upsert every parsed candidate (not only the additions) — names
+      // that already existed in the JSON scan still belong in the
+      // triage table if they happen to be missing there. Errors are
+      // surfaced as toasts inside brand-names.ts; we keep going so a
+      // single failure doesn't drop the rest.
+      for (const rc of parsed) {
+        const existing = scan.candidates.find(
+          (c) => c.name.toLowerCase() === rc.name.toLowerCase()
+        );
+        const info =
+          existing ??
+          createEmptyCandidate({
+            name: rc.name,
+            rationale: rc.rationale,
+            style: rc.style,
+          });
+        try {
+          await brandNameUpsert({
+            ventureId: venture.id,
+            name: info.name,
+            info: info as unknown as Record<string, unknown>,
+          });
+        } catch {
+          // Per-candidate failure already toasted; keep going.
+        }
+      }
+      await refreshTriage();
     } catch (err) {
       pushToast({
         kind: "error",
@@ -764,18 +1302,32 @@ Rules:
   };
 
   // ── Add / remove / choose candidate ─────────────────────────────────
-  const addManualCandidate = () => {
+  const addManualCandidate = async () => {
     const name = newCandidateName.trim();
     if (!name) return;
     if (scan.candidates.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
       pushToast({ kind: "warn", message: `"${name}" is already in the scan` });
       return;
     }
+    const fresh = createEmptyCandidate({ name });
     updateScan((prev) => ({
       ...prev,
-      candidates: [...prev.candidates, createEmptyCandidate({ name })],
+      candidates: [...prev.candidates, fresh],
     }));
     setNewCandidateName("");
+    // Mirror into the triage table — manually-added names should
+    // appear in the NEW section just like generated ones.
+    try {
+      await brandNameUpsert({
+        ventureId: venture.id,
+        name: fresh.name,
+        info: fresh as unknown as Record<string, unknown>,
+      });
+      await refreshTriage();
+    } catch {
+      // brand-names.ts already toasted — the JSON-side state is
+      // intact, so the candidate isn't lost; only the triage mirror.
+    }
   };
 
   const removeCandidate = (id: string) => {
@@ -963,10 +1515,11 @@ Rules:
     }
   };
 
-  const applyPreset = (key: string) => {
-    const preset = PRESET_PALETTES[key];
+  const applyPreset = (presetId: string) => {
+    const preset = PRESET_BY_ID.get(presetId);
     if (!preset) return;
     updateCanvas({ palette: { ...preset.palette } });
+    setPresetMenuOpen(false);
     pushToast({
       kind: "info",
       message: `Applied "${preset.label}" palette`,
@@ -1403,16 +1956,6 @@ Rules:
   const checkCount = Object.values(checks).filter(Boolean).length;
   const allChecks = checkCount === 6;
 
-  // ── AI logo + full-pack handlers ───────────────────────────────────
-  //
-  // These three buttons (Generate candidates, Lock brand, Generate pack)
-  // all ultimately call streamChat with a provider chosen by the user
-  // via ProviderPickerDialog. We keep each click handler thin — it sets
-  // pickerIntent + opens the dialog — and the real work happens in
-  // `handlePickerConfirm` which dispatches on intent. This avoids
-  // duplicating the "open picker, wait for choice, then run" pattern
-  // across three buttons.
-
   /** Compose the minimal brief slice the AI generators need. The full
    *  BrandBrief has 20+ fields; generators only consume 10-ish. */
   const composeBrief = (): BrandGenBrief => ({
@@ -1429,62 +1972,6 @@ Rules:
     },
   });
 
-  const handleGenerateCandidatesClick = () => {
-    setCandidateError(null);
-    if (!chosenName) {
-      setCandidateError(
-        "Choose a name candidate first — generators use the chosen name as the brand name."
-      );
-      return;
-    }
-    setPickerIntent("logo-candidates");
-    setPickerOpen(true);
-  };
-
-  const handleGeneratePackClick = () => {
-    setPackError(null);
-    if (!brandLocked) {
-      setPackError("Lock your logo + palette first.");
-      return;
-    }
-    setPickerIntent("full-pack");
-    setPickerOpen(true);
-  };
-
-  const runLogoCandidates = async (providerId: LlmProviderId) => {
-    setGeneratingCandidates(true);
-    setCandidateError(null);
-    setLogoCandidates([]);
-    try {
-      const brief = composeBrief();
-      // Stream candidates as they complete so the grid fills in
-      // progressively — users don't wait for all 4 to finish before
-      // seeing anything.
-      await generateLogoCandidates({
-        brief,
-        provider: providerId,
-        ventureId: venture.id,
-        onArchetypeDone: (candidate) => {
-          setLogoCandidates((prev) => {
-            // Stable slot order: replace-or-append by archetype id.
-            const idx = prev.findIndex((c) => c.archetype === candidate.archetype);
-            if (idx >= 0) {
-              const next = [...prev];
-              next[idx] = candidate;
-              return next;
-            }
-            return [...prev, candidate];
-          });
-        },
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setCandidateError(`Logo generation failed: ${msg}`);
-    } finally {
-      setGeneratingCandidates(false);
-    }
-  };
-
   /** User picked one of the 4 AI candidates. Stash the SVG, extract
    *  unique fill/stroke colours, and splice them into the palette so
    *  the Direction section's ColorPalette editor shows a matched set.
@@ -1494,7 +1981,6 @@ Rules:
   const handleUseCandidate = (candidate: LogoCandidate) => {
     if (!candidate.svg) return;
     setChosenLogoSvg(candidate.svg);
-    setChosenLogoArchetype(candidate.archetype);
     setBrandLocked(false); // picking a new logo re-opens the lock gate
 
     const extracted = extractPaletteFromSvg(candidate.svg);
@@ -1541,65 +2027,37 @@ Rules:
     });
   };
 
-  const handleLockBrand = () => {
-    if (!chosenLogoSvg) {
-      setCandidateError("Pick a logo first.");
-      return;
-    }
-    setBrandLocked(true);
-    pushToast({
-      kind: "success",
-      message: "Brand locked",
-      detail: "Logo + palette committed. Ready to generate the full pack.",
-    });
-  };
+  /**
+   * Chat-panel /export handler. Operates on results that /pack
+   * already streamed into the chat panel -- the chat does the
+   * generation itself and only needs the host to do the file IO +
+   * path resolution. Same destination layout the legacy pack flow
+   * used (now removed) so artifacts produced here continue to land in
+   * the same place: 03_brand/exports/<spec.relPath> +
+   * exports/logo/logo.svg.
+   */
+  const handleChatPackExport = useCallback(
+    async (
+      results: PackAssetResult[]
+    ): Promise<{ written: number; failed: number; targetDir: string }> => {
+      const lockedLogo = chosenLogoSvg;
+      const exportsDir = joinPath(
+        joinPath(venture.rootPath, "03_brand"),
+        "exports"
+      );
+      try {
+        await invoke("mkdir_p", { path: exportsDir });
+      } catch (err) {
+        console.warn("[brand] /export: mkdir_p exportsDir failed", err);
+      }
 
-  const runFullPack = async (providerId: LlmProviderId) => {
-    setGeneratingPack(true);
-    setPackError(null);
-    setPackZipPath(null);
-    // Seed the progress list so all 6 cards render immediately in idle
-    // state and flip to running/done/error as generators settle.
-    setPackEntries(FULL_PACK_SPECS.map((spec) => ({ spec, status: "idle" })));
-    try {
-      const brief = composeBrief();
-      const results = await generateFullPack({
-        brief,
-        provider: providerId,
-        lockedLogoSvg: chosenLogoSvg,
-        ventureId: venture.id,
-        onAssetStart: (spec) => {
-          setPackEntries((prev) =>
-            prev.map((e) => (e.spec.key === spec.key ? { ...e, status: "running" } : e))
-          );
-        },
-        onAssetDone: (r: PackAssetResult) => {
-          setPackEntries((prev) =>
-            prev.map((e) =>
-              e.spec.key === r.spec.key
-                ? {
-                    ...e,
-                    status: r.error ? "error" : "done",
-                    content: r.content,
-                    error: r.error,
-                  }
-                : e
-            )
-          );
-        },
-      });
-
-      // Persist every successful asset to disk. We write even if some
-      // errored so the user doesn't lose the ones that worked.
-      // joinPath is binary so we nest it for deeper paths.
-      const exportsDir = joinPath(joinPath(venture.rootPath, "03_brand"), "exports");
-      await invoke("mkdir_p", { path: exportsDir });
+      let written = 0;
+      let failed = 0;
       for (const r of results) {
-        if (r.error || !r.content) continue;
-        // r.spec.relPath already contains forward-slash subpath
-        // (e.g. "social/linkedin-banner.svg"). Split into dir + file,
-        // normalize separators for Windows, recreate the directory
-        // under exportsDir, then write the file.
+        if (r.error || !r.content) {
+          failed++;
+          continue;
+        }
         const parts = r.spec.relPath.split("/").filter(Boolean);
         let dirForWrite = exportsDir;
         for (let i = 0; i < parts.length - 1; i++) {
@@ -1609,69 +2067,37 @@ Rules:
         try {
           await invoke("mkdir_p", { path: dirForWrite });
           await invoke("write_file", { path: filePath, content: r.content });
+          written++;
         } catch (err) {
-          console.warn("[brand] failed to persist asset", r.spec.key, err);
+          console.warn("[brand] /export: write failed", r.spec.key, err);
+          failed++;
         }
       }
 
-      // Also persist the locked logo as the canonical pack logo.
-      try {
-        const logoDir = joinPath(exportsDir, "logo");
-        await invoke("mkdir_p", { path: logoDir });
-        await invoke("write_file", {
-          path: joinPath(logoDir, "logo.svg"),
-          content: chosenLogoSvg,
-        });
-      } catch (err) {
-        console.warn("[brand] failed to persist locked logo", err);
+      // Mirror the existing flow: also write the locked logo to
+      // exports/logo/logo.svg so the export folder is self-contained.
+      if (lockedLogo) {
+        try {
+          const logoDir = joinPath(exportsDir, "logo");
+          await invoke("mkdir_p", { path: logoDir });
+          await invoke("write_file", {
+            path: joinPath(logoDir, "logo.svg"),
+            content: lockedLogo,
+          });
+        } catch (err) {
+          console.warn("[brand] /export: locked logo write failed", err);
+        }
       }
+      return { written, failed, targetDir: exportsDir };
+    },
+    [venture.rootPath, chosenLogoSvg]
+  );
 
-      const failed = results.filter((r) => r.error).length;
-      if (failed === 0) {
-        pushToast({
-          kind: "success",
-          message: "Brand pack generated",
-          detail: `All ${results.length} assets ready under 03_brand/exports/.`,
-        });
-      } else {
-        setPackError(`${failed} of ${results.length} assets failed. Hit Retry on the red cards.`);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setPackError(`Pack generation failed: ${msg}`);
-    } finally {
-      setGeneratingPack(false);
-    }
-  };
-
-  const handlePickerConfirm = async (providerId: LlmProviderId) => {
-    const intent = pickerIntent;
-    setPickerOpen(false);
-    setPickerIntent(null);
-    if (intent === "logo-candidates") {
-      await runLogoCandidates(providerId);
-    } else if (intent === "full-pack") {
-      await runFullPack(providerId);
-    }
-  };
-
-  const handleDownloadPack = async () => {
-    try {
-      const zipPath = await invoke<string>("brand_zip_pack", {
-        venturePath: venture.rootPath,
-      });
-      setPackZipPath(zipPath);
-      pushToast({
-        kind: "success",
-        message: "Brand pack ZIP ready",
-        detail: zipPath,
-      });
-      // Reveal in the OS file manager so the user can drag it out.
-      invoke("open_path", { path: zipPath }).catch(() => {});
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setPackError(`ZIP export failed: ${msg}`);
-    }
+  const commitAdvance = () => {
+    onAdvanceStage("BRAND_READY");
+    pushToast({ kind: "success", message: "Advanced to Brand Ready", ttlMs: 3000 });
+    setAdvanceModal(null);
+    setAdvancing(false);
   };
 
   const handleAdvance = async () => {
@@ -1693,7 +2119,28 @@ Rules:
         detail: errDetail(err),
       });
     }
-    onAdvanceStage("BRAND_READY");
+
+    try {
+      const preflight = await runAdvancePreflight({
+        ventureId: venture.id,
+        ventureRoot: venture.rootPath,
+        nextStage: "BRAND_READY",
+        manifest,
+      });
+      if (preflight.blockers.length === 0 && preflight.warnings.length === 0) {
+        commitAdvance();
+        return;
+      }
+      setAdvanceModal(preflight);
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Pre-flight audit failed",
+        detail: errDetail(err),
+      });
+      commitAdvance();
+      return;
+    }
     setAdvancing(false);
   };
 
@@ -1713,16 +2160,40 @@ Rules:
         }}
       >
         <div>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>
             Brand Workshop
           </h3>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6B7280" }}>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-tertiary)" }}>
             Name → direction → logo → pack. Save as you go; everything lands under{" "}
             <code>03_brand/</code>.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <SaveIndicator status={saveStatus} />
+          <button
+            type="button"
+            onClick={handleDistill}
+            disabled={distilling}
+            title="Distill your chat history + uploaded docs into draft Brand-tab fields"
+            style={{
+              padding: "8px 14px",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: distilling ? "var(--bg-elevated)" : "var(--accent-soft)",
+              border: `1px solid ${distilling ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+              color: distilling ? "var(--text-muted)" : "var(--accent-hover)",
+              borderRadius: 6,
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: distilling ? "not-allowed" : "pointer",
+              transition: "background 0.2s",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span>{distilling ? "⏳" : "✨"}</span>
+            {distilling ? "Distilling…" : "Distill from chat + docs"}
+          </button>
           <button
             type="button"
             onClick={handleAdvance}
@@ -1734,8 +2205,8 @@ Rules:
             }
             style={{
               padding: "8px 16px",
-              background: allChecks ? "#6366F1" : "#E5E7EB",
-              color: allChecks ? "#FFFFFF" : "#9CA3AF",
+              background: allChecks ? "var(--accent)" : "var(--border-subtle)",
+              color: allChecks ? "var(--bg-panel)" : "var(--text-muted)",
               border: "none",
               borderRadius: 6,
               fontWeight: 700,
@@ -1760,7 +2231,7 @@ Rules:
             open={openSections.name}
             onToggle={() => setOpenSections((s) => ({ ...s, name: !s.name }))}
           >
-            <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
               Generate candidates, check domains / trademarks / socials, pick a winner. Saved to{" "}
               <code>03_brand/names/name-candidates.json</code>.
             </p>
@@ -1772,7 +2243,7 @@ Rules:
                 flexDirection: "column",
                 gap: 8,
                 padding: 12,
-                background: "#F9FAFB",
+                background: "var(--bg-elevated)",
                 borderRadius: 8,
               }}
             >
@@ -1794,11 +2265,11 @@ Rules:
                 style={{
                   alignSelf: "flex-start",
                   padding: "8px 14px",
-                  background: aiGenNames ? "#F3F4F6" : "#EEF2FF",
-                  border: `1px solid ${aiGenNames ? "#E5E7EB" : "#C7D2FE"}`,
+                  background: aiGenNames ? "var(--bg-hover)" : "var(--accent-soft)",
+                  border: `1px solid ${aiGenNames ? "var(--border-subtle)" : "var(--accent-soft)"}`,
                   borderRadius: 6,
                   fontSize: 13,
-                  color: aiGenNames ? "#9CA3AF" : "#4F46E5",
+                  color: aiGenNames ? "var(--text-muted)" : "var(--accent-hover)",
                   cursor: aiGenNames ? "not-allowed" : "pointer",
                   fontWeight: 600,
                 }}
@@ -1825,8 +2296,8 @@ Rules:
                 disabled={!newCandidateName.trim()}
                 style={{
                   padding: "7px 14px",
-                  background: newCandidateName.trim() ? "#111827" : "#E5E7EB",
-                  color: newCandidateName.trim() ? "#FFFFFF" : "#9CA3AF",
+                  background: newCandidateName.trim() ? "var(--text-primary)" : "var(--border-subtle)",
+                  color: newCandidateName.trim() ? "var(--bg-panel)" : "var(--text-muted)",
                   border: "none",
                   borderRadius: 6,
                   fontSize: 13,
@@ -1838,39 +2309,25 @@ Rules:
               </button>
             </div>
 
-            {/* Candidates */}
-            {scan.candidates.length === 0 ? (
-              <div
-                style={{
-                  padding: 20,
-                  background: "#F9FAFB",
-                  border: "1px dashed #E5E7EB",
-                  borderRadius: 8,
-                  textAlign: "center",
-                  fontSize: 13,
-                  color: "#9CA3AF",
-                }}
-              >
-                No candidates yet. Generate some or add one manually above.
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {scan.candidates.map((c) => (
-                  <CandidateCard
-                    key={c.id}
-                    candidate={c}
-                    chosen={scan.chosenCandidateId === c.id}
-                    checking={!!checking[c.id]}
-                    onChoose={() => chooseCandidate(c.id)}
-                    onRemove={() => removeCandidate(c.id)}
-                    onCheck={() => checkCandidate(c)}
-                    onOpenTrademark={(j) => openTrademarkSearch(c, j)}
-                    onSetTrademark={(j, s) => setTrademarkVerdict(c, j, s)}
-                    onUpdateNotes={(notes) => updateCandidate(c.id, { notes })}
-                  />
-                ))}
-              </div>
-            )}
+            {/* Triage list — every generated candidate, grouped by
+                possible / new / fail. Backed by SQLite so triage state
+                survives regenerations and window restarts. The check
+                actions reuse the existing scan-side helpers and mirror
+                their results back into info_json so the next session
+                renders populated chips without re-running the APIs. */}
+            <NameTriageList
+              candidates={triageCandidates}
+              onMark={handleTriageMark}
+              onCheck={(name, kind) => {
+                if (kind === "domain") void handleTriageCheckDomain(name);
+                else if (kind === "social") void handleTriageCheckSocials(name);
+                else void handleTriageCheckTrademark(name);
+              }}
+              onCheckAll={handleTriageCheckAll}
+              onPick={(name) => void handleTriagePick(name)}
+              chosenName={chosenName}
+              checking={triageChecking}
+            />
           </Section>
 
           {/* 2 — Direction */}
@@ -1880,7 +2337,7 @@ Rules:
             open={openSections.direction}
             onToggle={() => setOpenSections((s) => ({ ...s, direction: !s.direction }))}
           >
-            <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
               Personality, palette, typography, voice. This powers the brand brief and downstream
               logo / site generation.
             </p>
@@ -1933,9 +2390,9 @@ Rules:
                       onClick={() => togglePersonality(p)}
                       style={{
                         padding: "6px 12px",
-                        background: active ? "#6366F1" : "#FFFFFF",
-                        color: active ? "#FFFFFF" : "#374151",
-                        border: `1px solid ${active ? "#6366F1" : "#D1D5DB"}`,
+                        background: active ? "var(--accent)" : "var(--bg-panel)",
+                        color: active ? "var(--bg-panel)" : "var(--text-secondary)",
+                        border: `1px solid ${active ? "var(--accent)" : "var(--border-input)"}`,
                         borderRadius: 999,
                         fontSize: 12,
                         fontWeight: 600,
@@ -1969,41 +2426,177 @@ Rules:
                   marginBottom: 8,
                 }}
               >
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>Palette</span>
-                <div style={{ display: "flex", gap: 6 }}>
-                  {Object.entries(PRESET_PALETTES).map(([key, p]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => applyPreset(key)}
-                      title={`Apply "${p.label}" preset`}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: "5px 10px",
-                        background: "#FFFFFF",
-                        border: "1px solid #D1D5DB",
-                        borderRadius: 6,
-                        fontSize: 11,
-                        color: "#374151",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                      }}
-                    >
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>Palette</span>
+                <div ref={presetMenuRef} style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    onClick={() => setPresetMenuOpen((v) => !v)}
+                    title="Browse preset palettes"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "5px 10px",
+                      background: presetMenuOpen ? "var(--bg-elevated)" : "var(--bg-panel)",
+                      border: "1px solid var(--border-input)",
+                      borderRadius: 6,
+                      fontSize: 11,
+                      color: "var(--text-secondary)",
+                      cursor: "pointer",
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span style={{ display: "inline-flex", gap: 2 }}>
                       <span
                         style={{
-                          display: "inline-block",
-                          width: 10,
+                          width: 8,
                           height: 10,
-                          borderRadius: 2,
-                          background: p.palette.primary,
+                          borderRadius: 1,
+                          background: canvas.palette.primary,
                           border: "1px solid rgba(0,0,0,0.1)",
                         }}
                       />
-                      {p.label}
-                    </button>
-                  ))}
+                      <span
+                        style={{
+                          width: 8,
+                          height: 10,
+                          borderRadius: 1,
+                          background: canvas.palette.secondary,
+                          border: "1px solid rgba(0,0,0,0.1)",
+                        }}
+                      />
+                      <span
+                        style={{
+                          width: 8,
+                          height: 10,
+                          borderRadius: 1,
+                          background: canvas.palette.accent,
+                          border: "1px solid rgba(0,0,0,0.1)",
+                        }}
+                      />
+                    </span>
+                    Presets
+                    <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+                  </button>
+
+                  {presetMenuOpen ? (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 6px)",
+                        right: 0,
+                        zIndex: 50,
+                        width: 460,
+                        maxHeight: 480,
+                        display: "flex",
+                        flexDirection: "column",
+                        background: "var(--bg-elevated)",
+                        border: "1px solid var(--border-input)",
+                        borderRadius: 8,
+                        boxShadow: "0 12px 32px rgba(0,0,0,0.28)",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {/* Category tabs */}
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 4,
+                          padding: 8,
+                          borderBottom: "1px solid var(--border-input)",
+                          background: "var(--bg-panel)",
+                        }}
+                      >
+                        {PRESET_GROUPS.map((g) => {
+                          const active = g.key === activePresetCategory;
+                          return (
+                            <button
+                              key={g.key}
+                              type="button"
+                              onClick={() => setActivePresetCategory(g.key)}
+                              style={{
+                                padding: "4px 10px",
+                                background: active ? "var(--accent)" : "transparent",
+                                color: active ? "var(--bg-panel)" : "var(--text-secondary)",
+                                border: "1px solid",
+                                borderColor: active ? "var(--accent)" : "var(--border-input)",
+                                borderRadius: 999,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {g.label}
+                              <span
+                                style={{
+                                  marginLeft: 6,
+                                  fontSize: 10,
+                                  opacity: 0.7,
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {g.presets.length}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Swatch grid */}
+                      <div
+                        style={{
+                          flex: 1,
+                          overflowY: "auto",
+                          padding: 8,
+                          display: "grid",
+                          gridTemplateColumns: "repeat(2, 1fr)",
+                          gap: 6,
+                        }}
+                      >
+                        {(activeGroup?.presets ?? []).map((p: PalettePreset) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => applyPreset(p.id)}
+                            title={`${p.label}\n${p.swatch.join(" · ")}`}
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 4,
+                              padding: 6,
+                              background: "var(--bg-panel)",
+                              border: "1px solid var(--border-input)",
+                              borderRadius: 6,
+                              cursor: "pointer",
+                              textAlign: "left",
+                            }}
+                          >
+                            <span style={{ display: "flex", height: 22, borderRadius: 3, overflow: "hidden" }}>
+                              {p.swatch.map((c, i) => (
+                                <span
+                                  key={`${p.id}-${i}`}
+                                  style={{ flex: 1, background: c }}
+                                />
+                              ))}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                color: "var(--text-muted)",
+                                fontWeight: 500,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {p.label}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
               <PaletteEditor palette={canvas.palette} onChange={updatePalette} />
@@ -2042,6 +2635,38 @@ Rules:
             />
           </Section>
 
+          {/* AI Brand Chat -- placed after Direction so the chat has
+              both a chosen name and a filled brief to work from.
+              Section wrapper matches sections 1 + 2 style: collapsible
+              header, short description, content inside the bordered
+              region. The chat panel itself drops its own internal
+              title bar to avoid duplicating the Section header. */}
+          <Section
+            title="AI Brand Chat"
+            icon="🤖"
+            open={openSections.aiChat}
+            onToggle={() =>
+              setOpenSections((s) => ({ ...s, aiChat: !s.aiChat }))
+            }
+          >
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
+              Conversational logo iteration with Gemini. Generate four
+              archetypes in parallel, refine specific ones, lock the
+              winner. Reference images and concept SVGs auto-save under{" "}
+              <code>03_brand/refs/</code> and{" "}
+              <code>03_brand/logo/generated/</code>. Use slash commands —
+              type <code>/help</code> in the chat for the full list.
+            </p>
+            <BrandChatPanel
+              ventureId={venture.id}
+              rootPath={venture.rootPath}
+              getBrief={() => (chosenName ? composeBrief() : null)}
+              getLockedLogoSvg={() => chosenLogoSvg || null}
+              onLockCandidate={handleUseCandidate}
+              onExportPack={handleChatPackExport}
+            />
+          </Section>
+
           {/* 3 — Logo */}
           <Section
             title="3. Logo Pack & Concepts"
@@ -2049,7 +2674,7 @@ Rules:
             open={openSections.logo}
             onToggle={() => setOpenSections((s) => ({ ...s, logo: !s.logo }))}
           >
-            <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-tertiary)" }}>
               Save the brief first, then generate deterministic SVGs + 4 AI concept briefs.
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -2066,7 +2691,7 @@ Rules:
                 onClick={handleGenerateLogoPack}
                 disabled={generatingLogo || !hasBrief}
                 title={!hasBrief ? "Save the brief first" : "Generate SVGs + tokens"}
-                style={primaryButton(generatingLogo || !hasBrief, "#059669")}
+                style={primaryButton(generatingLogo || !hasBrief, "var(--success)")}
               >
                 {generatingLogo
                   ? "Generating…"
@@ -2079,7 +2704,7 @@ Rules:
                 onClick={handleGenerateConcepts}
                 disabled={generatingConcepts || !hasBrief}
                 title={!hasBrief ? "Save the brief first" : "4 AI-written concept briefs"}
-                style={primaryButton(generatingConcepts || !hasBrief, "#8B5CF6")}
+                style={primaryButton(generatingConcepts || !hasBrief, "var(--accent)")}
               >
                 {generatingConcepts ? "Generating…" : "✨ Generate 4 concept briefs"}
               </button>
@@ -2088,7 +2713,7 @@ Rules:
             {/* Concepts list */}
             {concepts.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>
                   Concept briefs ({concepts.length})
                 </span>
                 {concepts.map((name) => {
@@ -2111,14 +2736,14 @@ Rules:
                         alignItems: "center",
                         gap: 10,
                         padding: "7px 12px",
-                        background: "#FFFFFF",
-                        border: "1px solid #E5E7EB",
+                        background: "var(--bg-panel)",
+                        border: "1px solid var(--border-subtle)",
                         borderRadius: 6,
                         fontSize: 13,
                       }}
                     >
                       <span style={{ fontSize: 14 }}>📄</span>
-                      <span style={{ flex: 1, color: "#111827" }}>{name}</span>
+                      <span style={{ flex: 1, color: "var(--text-primary)" }}>{name}</span>
                       {hasSpec && (
                         <button
                           type="button"
@@ -2138,7 +2763,7 @@ Rules:
                           disabled={otherInFlight && !isThisRegenerating}
                           style={{
                             ...iconButtonStyle,
-                            color: isThisRegenerating ? "#DC2626" : "#6B7280",
+                            color: isThisRegenerating ? "var(--danger)" : "var(--text-tertiary)",
                             cursor:
                               otherInFlight && !isThisRegenerating ? "not-allowed" : "pointer",
                             opacity: otherInFlight && !isThisRegenerating ? 0.4 : 1,
@@ -2179,211 +2804,7 @@ Rules:
             {hasLogo && <LogoPreview rootPath={venture.rootPath} />}
           </Section>
 
-          {/*
-             AI logo candidates — the new subscription-CLI-driven flow.
-             Unlike section 3's deterministic wordmark (built from the
-             palette mechanically) and concept briefs (markdown-only),
-             this produces 4 actual SVG logo designs the user can pick
-             from. Provider picker lets them choose Claude / ChatGPT /
-             Gemini per generation.
-          */}
-          <Section
-            title="AI Logo Candidates"
-            icon="🎨"
-            open={openSections.aiCandidates}
-            onToggle={() =>
-              setOpenSections((s) => ({
-                ...s,
-                aiCandidates: !s.aiCandidates,
-              }))
-            }
-          >
-            <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-              Four SVG logo archetypes generated in parallel. Pick one to seed the palette and
-              unlock the full brand pack.
-            </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <button
-                type="button"
-                onClick={handleGenerateCandidatesClick}
-                disabled={generatingCandidates || !chosenName}
-                title={!chosenName ? "Pick a name candidate first" : "Generate 4 logo candidates"}
-                style={primaryButton(generatingCandidates || !chosenName, "#6366F1")}
-              >
-                {generatingCandidates
-                  ? "Generating candidates…"
-                  : logoCandidates.length > 0
-                    ? "Regenerate candidates"
-                    : "✨ Generate 4 logo candidates"}
-              </button>
-              {chosenLogoSvg && !brandLocked && (
-                <button
-                  type="button"
-                  onClick={handleLockBrand}
-                  style={primaryButton(false, "#047857")}
-                >
-                  🔒 Lock logo + palette
-                </button>
-              )}
-              {brandLocked && (
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "6px 10px",
-                    background: "#ECFDF5",
-                    color: "#047857",
-                    border: "1px solid #A7F3D0",
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontWeight: 600,
-                  }}
-                >
-                  🔒 Brand locked — ready for full pack
-                </span>
-              )}
-            </div>
-            {candidateError && (
-              <div
-                role="alert"
-                style={{
-                  padding: "8px 10px",
-                  background: "#FEF2F2",
-                  color: "#991B1B",
-                  border: "1px solid #FECACA",
-                  borderRadius: 6,
-                  fontSize: 12,
-                }}
-              >
-                {candidateError}
-              </div>
-            )}
-            {(generatingCandidates || logoCandidates.length > 0) && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 12,
-                  marginTop: 8,
-                }}
-              >
-                {(logoCandidates.length > 0
-                  ? logoCandidates
-                  : // Placeholder slots so the grid layout appears
-                    // immediately; cards transition as SVGs land.
-                    (
-                      [
-                        "wordmark",
-                        "lettermark",
-                        "icon-wordmark",
-                        "abstract-mark",
-                      ] as LogoArchetype[]
-                    ).map((a) => ({
-                      archetype: a,
-                      svg: "",
-                      description: "",
-                      provider: "anthropic" as LlmProviderId,
-                    }))
-                ).map((candidate) => (
-                  <LogoCandidateCard
-                    key={candidate.archetype}
-                    candidate={candidate as LogoCandidate & { error?: string }}
-                    isChosen={chosenLogoArchetype === candidate.archetype}
-                    isGenerating={generatingCandidates && !candidate.svg}
-                    onUse={() => handleUseCandidate(candidate as LogoCandidate)}
-                  />
-                ))}
-              </div>
-            )}
-          </Section>
 
-          {/*
-             Full brand pack generation — gated by brandLocked. Fires a
-             parallel generator per asset (email header, social banners,
-             brand guide MD) using the locked logo + palette. Progress
-             list updates live; assets land in 03_brand/exports/ and
-             can be zipped for download.
-          */}
-          <Section
-            title="Full Brand Pack"
-            icon="📦"
-            open={openSections.fullPack}
-            onToggle={() => setOpenSections((s) => ({ ...s, fullPack: !s.fullPack }))}
-          >
-            <p style={{ margin: 0, fontSize: 12, color: "#6B7280" }}>
-              Email header, social banners (X, LinkedIn, OG), email signature template, brand guide
-              MD — generated in parallel off your locked logo and palette.
-            </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <button
-                type="button"
-                onClick={handleGeneratePackClick}
-                disabled={generatingPack || !brandLocked}
-                title={!brandLocked ? "Lock a logo first" : "Generate the full brand pack"}
-                style={primaryButton(generatingPack || !brandLocked, "#0EA5E9")}
-              >
-                {generatingPack
-                  ? "Generating pack…"
-                  : packEntries.some((e) => e.status === "done")
-                    ? "Regenerate full pack"
-                    : "✨ Generate full brand pack"}
-              </button>
-              {packEntries.some((e) => e.status === "done") && (
-                <button
-                  type="button"
-                  onClick={handleDownloadPack}
-                  style={primaryButton(false, "#7C3AED")}
-                  title="Zip 03_brand/exports/ into brand-pack.zip"
-                >
-                  📥 Download brand-pack.zip
-                </button>
-              )}
-            </div>
-            {packError && (
-              <div
-                role="alert"
-                style={{
-                  padding: "8px 10px",
-                  background: "#FEF2F2",
-                  color: "#991B1B",
-                  border: "1px solid #FECACA",
-                  borderRadius: 6,
-                  fontSize: 12,
-                }}
-              >
-                {packError}
-              </div>
-            )}
-            {packZipPath && (
-              <div
-                style={{
-                  padding: "8px 10px",
-                  background: "#ECFDF5",
-                  color: "#047857",
-                  border: "1px solid #A7F3D0",
-                  borderRadius: 6,
-                  fontSize: 12,
-                }}
-              >
-                ZIP saved: <code>{packZipPath}</code>
-              </div>
-            )}
-            {packEntries.length > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 6,
-                  marginTop: 8,
-                }}
-              >
-                {packEntries.map((entry) => (
-                  <PackAssetRow key={entry.spec.key} entry={entry} />
-                ))}
-              </div>
-            )}
-          </Section>
 
           {/* 4 — Brand Pack summary */}
           <Section
@@ -2407,8 +2828,8 @@ Rules:
         <div style={{ width: 300, flexShrink: 0, position: "sticky", top: 0 }}>
           <div
             style={{
-              background: "#FFFFFF",
-              border: "1px solid #E5E7EB",
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: 10,
               padding: 16,
             }}
@@ -2421,14 +2842,14 @@ Rules:
                 marginBottom: 12,
               }}
             >
-              <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827" }}>
+              <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
                 Must-haves
               </h4>
               <span
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  color: allChecks ? "#059669" : "#6366F1",
+                  color: allChecks ? "var(--success)" : "var(--accent)",
                 }}
               >
                 {checkCount} / 6
@@ -2467,31 +2888,36 @@ Rules:
           </div>
         </div>
       </div>
-      {/*
-         Provider picker — modal that asks which LLM to use. Reused
-         for both logo-candidate generation and full-pack generation
-         via pickerIntent. Mounted once at the top level so it overlays
-         the scrollable tab content cleanly.
-      */}
-      <ProviderPickerDialog
-        isOpen={pickerOpen}
-        ventureId={venture.id}
-        title={
-          pickerIntent === "full-pack"
-            ? "Which AI should generate the full brand pack?"
-            : "Which AI should generate the logo candidates?"
-        }
-        description={
-          pickerIntent === "full-pack"
-            ? "6 assets in parallel: email header, X / LinkedIn / OG banners, email signature, and a brand guide MD. Pick whichever subscription you'd rather burn today."
-            : "4 logo archetypes generated in parallel: wordmark, lettermark, icon+wordmark, and abstract mark."
-        }
-        onCancel={() => {
-          setPickerOpen(false);
-          setPickerIntent(null);
-        }}
-        onConfirm={(r) => handlePickerConfirm(r.providerId)}
-      />
+      {advanceModal !== null && (
+        <AdvanceConfirmModal
+          blockers={advanceModal.blockers}
+          warnings={advanceModal.warnings}
+          currentStage={venture.stage}
+          nextStage="BRAND_READY"
+          onAdvance={commitAdvance}
+          onClose={() => {
+            setAdvanceModal(null);
+            setAdvancing(false);
+          }}
+        />
+      )}
+      {distillDraft !== null && (
+        <DistillDiffModal
+          current={{
+            tagline: canvas.tagline,
+            mission: canvas.mission,
+            targetAudience: canvas.targetAudience,
+            toneOfVoice: canvas.toneOfVoice,
+            notes: canvas.notes,
+            competitors: canvas.competitors,
+            differentiators: canvas.differentiators,
+          }}
+          proposed={distillDraft as Record<string, unknown>}
+          fields={BRAND_DISTILL_FIELDS}
+          onApply={handleApplyDistill}
+          onClose={() => setDistillDraft(null)}
+        />
+      )}
     </div>
   );
 }
@@ -2499,209 +2925,6 @@ Rules:
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-/**
- * One card in the 2×2 logo-candidate grid. Renders the SVG via a
- * base64 data URL (safer than dangerouslySetInnerHTML — the browser
- * sandbox is doing the parsing) with a skeleton/placeholder while
- * generation is in flight and an error banner if the model returned
- * invalid SVG. "Use this logo" emits up to the parent which handles
- * palette extraction + persistence.
- */
-function LogoCandidateCard({
-  candidate,
-  isChosen,
-  isGenerating,
-  onUse,
-}: {
-  candidate: LogoCandidate & { error?: string };
-  isChosen: boolean;
-  isGenerating: boolean;
-  onUse: () => void;
-}) {
-  const archetypeTitle: Record<LogoArchetype, string> = {
-    wordmark: "Wordmark",
-    lettermark: "Lettermark",
-    "icon-wordmark": "Icon + Wordmark",
-    "abstract-mark": "Abstract Mark",
-  };
-  const dataUrl = candidate.svg
-    ? `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(candidate.svg)))}`
-    : null;
-
-  return (
-    <div
-      style={{
-        border: `2px solid ${isChosen ? "#6366F1" : "#E5E7EB"}`,
-        background: isChosen ? "#EEF2FF" : "#FFFFFF",
-        borderRadius: 10,
-        padding: 12,
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        transition: "border-color 0.12s, background 0.12s",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: 8,
-        }}
-      >
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>
-          {archetypeTitle[candidate.archetype]}
-        </span>
-        {isChosen && (
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              padding: "1px 6px",
-              borderRadius: 3,
-              background: "#6366F1",
-              color: "#FFFFFF",
-              letterSpacing: 0.3,
-            }}
-          >
-            CHOSEN
-          </span>
-        )}
-      </div>
-      <div
-        style={{
-          height: 140,
-          background: "#F9FAFB",
-          border: "1px solid #F3F4F6",
-          borderRadius: 6,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
-        }}
-      >
-        {dataUrl ? (
-          <img
-            src={dataUrl}
-            alt={archetypeTitle[candidate.archetype]}
-            style={{ maxWidth: "90%", maxHeight: "90%" }}
-          />
-        ) : candidate.error ? (
-          <div
-            style={{
-              fontSize: 11,
-              color: "#991B1B",
-              padding: 8,
-              textAlign: "center",
-            }}
-          >
-            {candidate.error}
-          </div>
-        ) : (
-          <div
-            style={{
-              fontSize: 11,
-              color: "#9CA3AF",
-              padding: 8,
-              textAlign: "center",
-            }}
-          >
-            {isGenerating ? "Generating…" : "Pending"}
-          </div>
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={onUse}
-        disabled={!candidate.svg}
-        style={{
-          padding: "7px 10px",
-          fontSize: 12,
-          fontWeight: 600,
-          border: "1px solid #D1D5DB",
-          borderRadius: 6,
-          background: candidate.svg ? "#FFFFFF" : "#F3F4F6",
-          color: candidate.svg ? "#111827" : "#9CA3AF",
-          cursor: candidate.svg ? "pointer" : "not-allowed",
-        }}
-      >
-        {isChosen ? "Chosen ✓" : "Use this logo"}
-      </button>
-    </div>
-  );
-}
-
-/**
- * One row in the full-pack progress list. Shows the asset title, a
- * status dot (idle/running/done/error), and the error message when
- * the generation for this slot failed.
- */
-function PackAssetRow({
-  entry,
-}: {
-  entry: {
-    spec: BrandAssetSpec;
-    status: "idle" | "running" | "done" | "error";
-    content?: string;
-    error?: string;
-  };
-}) {
-  const { spec, status, error } = entry;
-  const colorByStatus: Record<typeof status, { bg: string; fg: string; label: string }> = {
-    idle: { bg: "#F3F4F6", fg: "#6B7280", label: "Pending" },
-    running: { bg: "#EFF6FF", fg: "#1D4ED8", label: "Generating…" },
-    done: { bg: "#ECFDF5", fg: "#047857", label: "Done" },
-    error: { bg: "#FEF2F2", fg: "#B91C1C", label: "Failed" },
-  };
-  const c = colorByStatus[status];
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "8px 12px",
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
-        borderRadius: 6,
-        fontSize: 13,
-      }}
-    >
-      <span style={{ flex: 1, color: "#111827" }}>{spec.title}</span>
-      <span style={{ fontSize: 11, color: "#9CA3AF" }}>
-        <code>{spec.relPath}</code>
-      </span>
-      <span
-        style={{
-          fontSize: 11,
-          fontWeight: 600,
-          padding: "2px 8px",
-          borderRadius: 999,
-          background: c.bg,
-          color: c.fg,
-        }}
-      >
-        {c.label}
-      </span>
-      {error && (
-        <span
-          title={error}
-          style={{
-            fontSize: 11,
-            color: "#B91C1C",
-            maxWidth: 240,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {error}
-        </span>
-      )}
-    </div>
-  );
-}
 
 function Section({
   title,
@@ -2719,8 +2942,8 @@ function Section({
   return (
     <div
       style={{
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-subtle)",
         borderRadius: 10,
         overflow: "hidden",
       }}
@@ -2731,8 +2954,8 @@ function Section({
         style={{
           width: "100%",
           padding: "14px 18px",
-          borderBottom: open ? "1px solid #F3F4F6" : "none",
-          background: "#F9FAFB",
+          borderBottom: open ? "1px solid var(--bg-hover)" : "none",
+          background: "var(--bg-elevated)",
           display: "flex",
           alignItems: "center",
           gap: 8,
@@ -2742,10 +2965,10 @@ function Section({
         }}
       >
         <span style={{ fontSize: 16 }}>{icon}</span>
-        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#111827", flex: 1 }}>
+        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)", flex: 1 }}>
           {title}
         </h4>
-        <span style={{ fontSize: 14, color: "#6B7280" }}>{open ? "▾" : "▸"}</span>
+        <span style={{ fontSize: 14, color: "var(--text-tertiary)" }}>{open ? "▾" : "▸"}</span>
       </button>
       {open && (
         <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -2771,11 +2994,11 @@ function Field({
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 5, ...styleProp }}>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
+      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>
         {label}
-        {required && <span style={{ color: "#EF4444", marginLeft: 4 }}>*</span>}
+        {required && <span style={{ color: "var(--danger)", marginLeft: 4 }}>*</span>}
       </span>
-      {hint && <span style={{ fontSize: 11, color: "#9CA3AF", marginTop: -2 }}>{hint}</span>}
+      {hint && <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -2 }}>{hint}</span>}
       {children}
     </label>
   );
@@ -2802,8 +3025,8 @@ function Textarea({
         fontSize: 13,
         padding: "9px 11px",
         borderRadius: 6,
-        border: "1px solid #D1D5DB",
-        background: "#FFFFFF",
+        border: "1px solid var(--border-input)",
+        background: "var(--bg-panel)",
         resize: "vertical",
         fontFamily: "inherit",
         lineHeight: 1.5,
@@ -2819,7 +3042,7 @@ function CharCount({ value, min }: { value: string; min: number }) {
   const len = value.trim().length;
   const ok = len >= min;
   return (
-    <span style={{ fontSize: 11, color: ok ? "#059669" : "#9CA3AF", marginTop: -2 }}>
+    <span style={{ fontSize: 11, color: ok ? "var(--success)" : "var(--text-muted)", marginTop: -2 }}>
       {len} / {min} chars {ok ? "✓" : ""}
     </span>
   );
@@ -2836,8 +3059,8 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
           width: 18,
           height: 18,
           borderRadius: "50%",
-          background: done ? "#059669" : "#E5E7EB",
-          border: done ? "none" : "2px solid #D1D5DB",
+          background: done ? "var(--success)" : "var(--border-subtle)",
+          border: done ? "none" : "2px solid var(--border-input)",
           flexShrink: 0,
           display: "flex",
           alignItems: "center",
@@ -2858,10 +3081,10 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
         )}
       </div>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "#111827" : "#6B7280" }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "var(--text-primary)" : "var(--text-tertiary)" }}>
           {label}
         </div>
-        {!done && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 1 }}>{hint}</div>}
+        {!done && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{hint}</div>}
       </div>
     </div>
   );
@@ -2869,9 +3092,9 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
 
 function SaveIndicator({ status }: { status: "saved" | "saving" | "unsaved" }) {
   const cfg = {
-    saved: { color: "#059669", text: "Saved" },
-    saving: { color: "#6366F1", text: "Saving…" },
-    unsaved: { color: "#D97706", text: "Unsaved" },
+    saved: { color: "var(--success)", text: "Saved" },
+    saving: { color: "var(--accent)", text: "Saving…" },
+    unsaved: { color: "var(--warning)", text: "Unsaved" },
   }[status];
   return <span style={{ fontSize: 11, color: cfg.color, fontWeight: 600 }}>{cfg.text}</span>;
 }
@@ -2912,22 +3135,22 @@ function CandidateCard({
 }) {
   const confidence = deriveBrandConfidence(candidate);
   const confCfg = {
-    green: { bg: "#ECFDF5", border: "#A7F3D0", color: "#065F46", label: "Green — safe to proceed" },
+    green: { bg: "var(--success-soft)", border: "var(--success-soft)", color: "var(--success)", label: "Green — safe to proceed" },
     amber: {
-      bg: "#FFFBEB",
-      border: "#FDE68A",
-      color: "#92400E",
+      bg: "var(--warning-soft)",
+      border: "var(--warning-soft)",
+      color: "var(--warning)",
       label: "Amber — build but don't brand-lock yet",
     },
-    red: { bg: "#FEF2F2", border: "#FECACA", color: "#991B1B", label: "Red — don't use" },
-    unknown: { bg: "#F9FAFB", border: "#E5E7EB", color: "#6B7280", label: "Unknown — run checks" },
+    red: { bg: "var(--danger-soft)", border: "var(--danger-border)", color: "var(--danger)", label: "Red — don't use" },
+    unknown: { bg: "var(--bg-elevated)", border: "var(--border-subtle)", color: "var(--text-tertiary)", label: "Unknown — run checks" },
   }[confidence];
 
   return (
     <div
       style={{
-        border: `2px solid ${chosen ? "#6366F1" : confCfg.border}`,
-        background: chosen ? "#EEF2FF" : confCfg.bg,
+        border: `2px solid ${chosen ? "var(--accent)" : confCfg.border}`,
+        background: chosen ? "var(--accent-soft)" : confCfg.bg,
         borderRadius: 8,
         padding: 14,
         display: "flex",
@@ -2940,7 +3163,7 @@ function CandidateCard({
           style={{
             fontSize: 16,
             fontWeight: 800,
-            color: "#111827",
+            color: "var(--text-primary)",
             flex: 1,
           }}
         >
@@ -2950,7 +3173,7 @@ function CandidateCard({
           <span
             style={{
               fontSize: 10,
-              color: "#6B7280",
+              color: "var(--text-tertiary)",
               textTransform: "uppercase",
               letterSpacing: 0.5,
             }}
@@ -2965,7 +3188,7 @@ function CandidateCard({
             padding: "2px 8px",
             borderRadius: 999,
             background: confCfg.color,
-            color: "#FFFFFF",
+            color: "var(--bg-panel)",
             fontWeight: 700,
             textTransform: "uppercase",
           }}
@@ -2979,9 +3202,9 @@ function CandidateCard({
           style={{
             padding: "4px 10px",
             fontSize: 11,
-            background: chosen ? "#6366F1" : "#FFFFFF",
-            color: chosen ? "#FFFFFF" : "#6366F1",
-            border: "1px solid #6366F1",
+            background: chosen ? "var(--accent)" : "var(--bg-panel)",
+            color: chosen ? "var(--bg-panel)" : "var(--accent)",
+            border: "1px solid var(--accent)",
             borderRadius: 4,
             fontWeight: 700,
             cursor: "pointer",
@@ -2994,7 +3217,7 @@ function CandidateCard({
         </button>
       </div>
       {candidate.rationale && (
-        <p style={{ margin: 0, fontSize: 12, color: "#374151", lineHeight: 1.5 }}>
+        <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
           {candidate.rationale}
         </p>
       )}
@@ -3007,12 +3230,12 @@ function CandidateCard({
           style={{
             padding: "5px 10px",
             fontSize: 11,
-            background: checking ? "#F3F4F6" : "#FFFFFF",
-            border: "1px solid #D1D5DB",
+            background: checking ? "var(--bg-hover)" : "var(--bg-panel)",
+            border: "1px solid var(--border-input)",
             borderRadius: 4,
             cursor: checking ? "not-allowed" : "pointer",
             fontWeight: 600,
-            color: "#374151",
+            color: "var(--text-secondary)",
           }}
         >
           {checking ? "⏳ Checking…" : "🔎 Check domains + socials"}
@@ -3032,12 +3255,12 @@ function CandidateCard({
             style={{
               padding: "5px 10px",
               fontSize: 11,
-              background: "#FFFFFF",
-              border: "1px solid #D1D5DB",
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border-input)",
               borderRadius: 4,
               cursor: "pointer",
               fontWeight: 600,
-              color: "#374151",
+              color: "var(--text-secondary)",
             }}
           >
             ⚖️ {TRADEMARK_JURISDICTION_LABELS[j]} ↗
@@ -3082,7 +3305,7 @@ function CandidateCard({
               fontSize: 11,
             }}
           >
-            <span style={{ color: "#6B7280", fontWeight: 600, minWidth: 110 }}>
+            <span style={{ color: "var(--text-tertiary)", fontWeight: 600, minWidth: 110 }}>
               Trademark ({TRADEMARK_JURISDICTION_LABELS[jurisdiction]}):
             </span>
             {(["available", "taken", "restricted", "unknown"] as const).map((s) => {
@@ -3095,9 +3318,9 @@ function CandidateCard({
                   style={{
                     padding: "3px 8px",
                     fontSize: 10,
-                    background: active ? statusColors(s).bg : "#FFFFFF",
-                    color: active ? statusColors(s).fg : "#6B7280",
-                    border: `1px solid ${active ? statusColors(s).fg : "#E5E7EB"}`,
+                    background: active ? statusColors(s).bg : "var(--bg-panel)",
+                    color: active ? statusColors(s).fg : "var(--text-tertiary)",
+                    border: `1px solid ${active ? statusColors(s).fg : "var(--border-subtle)"}`,
                     borderRadius: 4,
                     cursor: "pointer",
                     fontWeight: 600,
@@ -3138,7 +3361,7 @@ function StatusStrip({
 }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, flexWrap: "wrap" }}>
-      <span style={{ color: "#6B7280", fontWeight: 600, minWidth: 80 }}>{title}:</span>
+      <span style={{ color: "var(--text-tertiary)", fontWeight: 600, minWidth: 80 }}>{title}:</span>
       {entries.map(({ key, check, href }) => {
         const cfg = statusColors(check.status);
         const body = (
@@ -3185,17 +3408,17 @@ function statusColors(status: AvailabilityStatus): {
 } {
   switch (status) {
     case "available":
-      return { bg: "#ECFDF5", fg: "#065F46", border: "#A7F3D0" };
+      return { bg: "var(--success-soft)", fg: "var(--success)", border: "var(--success-soft)" };
     case "taken":
-      return { bg: "#FEF2F2", fg: "#991B1B", border: "#FECACA" };
+      return { bg: "var(--danger-soft)", fg: "var(--danger)", border: "var(--danger-border)" };
     case "parked":
-      return { bg: "#FEF3C7", fg: "#92400E", border: "#FDE68A" };
+      return { bg: "var(--warning-soft)", fg: "var(--warning)", border: "var(--warning-soft)" };
     case "restricted":
-      return { bg: "#FFFBEB", fg: "#92400E", border: "#FDE68A" };
+      return { bg: "var(--warning-soft)", fg: "var(--warning)", border: "var(--warning-soft)" };
     case "error":
-      return { bg: "#F3F4F6", fg: "#6B7280", border: "#E5E7EB" };
+      return { bg: "var(--bg-hover)", fg: "var(--text-tertiary)", border: "var(--border-subtle)" };
     case "unknown":
-      return { bg: "#F9FAFB", fg: "#6B7280", border: "#E5E7EB" };
+      return { bg: "var(--bg-elevated)", fg: "var(--text-tertiary)", border: "var(--border-subtle)" };
   }
 }
 
@@ -3229,16 +3452,16 @@ function PaletteEditor({
           const valid = isValidHex(value);
           return (
             <div key={key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#374151" }}>{label}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)" }}>{label}</span>
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
                   padding: "4px 6px",
-                  border: `1px solid ${valid ? "#D1D5DB" : "#FECACA"}`,
+                  border: `1px solid ${valid ? "var(--border-input)" : "var(--danger-border)"}`,
                   borderRadius: 6,
-                  background: "#FFFFFF",
+                  background: "var(--bg-panel)",
                 }}
               >
                 <span
@@ -3246,7 +3469,7 @@ function PaletteEditor({
                     width: 22,
                     height: 22,
                     borderRadius: 4,
-                    background: valid ? value : "#FFFFFF",
+                    background: valid ? value : "var(--bg-panel)",
                     border: "1px solid rgba(0,0,0,0.1)",
                     flexShrink: 0,
                   }}
@@ -3263,7 +3486,7 @@ function PaletteEditor({
                     outline: "none",
                     fontFamily: "'SFMono-Regular', Consolas, monospace",
                     background: "transparent",
-                    color: valid ? "#111827" : "#991B1B",
+                    color: valid ? "var(--text-primary)" : "var(--danger)",
                     minWidth: 0,
                   }}
                 />
@@ -3300,8 +3523,8 @@ function ContrastPill({
 }) {
   const pass = ratio >= min;
   const cfg = pass
-    ? { bg: "#ECFDF5", color: "#065F46", border: "#A7F3D0" }
-    : { bg: "#FEF2F2", color: "#991B1B", border: "#FECACA" };
+    ? { bg: "var(--success-soft)", color: "var(--success)", border: "var(--success-soft)" }
+    : { bg: "var(--danger-soft)", color: "var(--danger)", border: "var(--danger-border)" };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span
@@ -3318,7 +3541,7 @@ function ContrastPill({
       >
         {ratio.toFixed(2)}:1 {pass ? "✓" : "✗"}
       </span>
-      <span style={{ color: "#6B7280" }}>
+      <span style={{ color: "var(--text-tertiary)" }}>
         {label}
         {note ? ` · ${note}` : ""}
         {pass ? "" : ` · WCAG AA ≥ ${min}:1`}
@@ -3345,7 +3568,7 @@ function TypographyPreview({
         padding: "18px 20px",
         borderRadius: 8,
         background: palette.background,
-        border: `1px solid ${palette.surface === palette.background ? "#E5E7EB" : palette.surface}`,
+        border: `1px solid ${palette.surface === palette.background ? "var(--border-subtle)" : palette.surface}`,
       }}
     >
       <div
@@ -3418,16 +3641,16 @@ function LogoPreview({ rootPath }: { rootPath: string }) {
         gridTemplateColumns: "1fr 1fr auto",
         gap: 12,
         padding: 12,
-        background: "#F9FAFB",
+        background: "var(--bg-elevated)",
         borderRadius: 8,
       }}
     >
       <div
         style={{
-          background: "#FFFFFF",
+          background: "var(--bg-panel)",
           padding: 14,
           borderRadius: 6,
-          border: "1px solid #E5E7EB",
+          border: "1px solid var(--border-subtle)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -3440,7 +3663,7 @@ function LogoPreview({ rootPath }: { rootPath: string }) {
       </div>
       <div
         style={{
-          background: "#111827",
+          background: "var(--text-primary)",
           padding: 14,
           borderRadius: 6,
           display: "flex",
@@ -3455,10 +3678,10 @@ function LogoPreview({ rootPath }: { rootPath: string }) {
       </div>
       <div
         style={{
-          background: "#FFFFFF",
+          background: "var(--bg-panel)",
           padding: 14,
           borderRadius: 6,
-          border: "1px solid #E5E7EB",
+          border: "1px solid var(--border-subtle)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -3509,18 +3732,18 @@ function PackSummary({
               alignItems: "center",
               gap: 10,
               padding: "7px 12px",
-              background: "#FFFFFF",
-              border: "1px solid #E5E7EB",
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border-subtle)",
               borderRadius: 6,
               fontSize: 13,
             }}
           >
             <span style={{ fontSize: 14 }}>{r.ok ? "✅" : "⬜"}</span>
-            <span style={{ fontWeight: 600, color: "#111827", minWidth: 120 }}>{r.label}</span>
+            <span style={{ fontWeight: 600, color: "var(--text-primary)", minWidth: 120 }}>{r.label}</span>
             <span
               style={{
                 flex: 1,
-                color: "#6B7280",
+                color: "var(--text-tertiary)",
                 fontFamily: "'SFMono-Regular', Consolas, monospace",
                 fontSize: 12,
               }}
@@ -3536,8 +3759,8 @@ function PackSummary({
         style={{
           alignSelf: "flex-start",
           padding: "8px 14px",
-          background: "#111827",
-          color: "#FFFFFF",
+          background: "var(--text-primary)",
+          color: "var(--bg-panel)",
           border: "none",
           borderRadius: 6,
           fontSize: 13,
@@ -3547,7 +3770,7 @@ function PackSummary({
       >
         📂 Open 03_brand/ folder
       </button>
-      <p style={{ margin: 0, fontSize: 11, color: "#9CA3AF" }}>
+      <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)" }}>
         Root: <code>{rootPath}</code>
       </p>
     </div>
@@ -3618,8 +3841,8 @@ const inputStyle: React.CSSProperties = {
   fontSize: 13,
   padding: "7px 10px",
   borderRadius: 6,
-  border: "1px solid #D1D5DB",
-  background: "#FFFFFF",
+  border: "1px solid var(--border-input)",
+  background: "var(--bg-panel)",
   fontFamily: "inherit",
   outline: "none",
   width: "100%",
@@ -3630,18 +3853,18 @@ const iconButtonStyle: React.CSSProperties = {
   background: "none",
   border: "none",
   cursor: "pointer",
-  color: "#6B7280",
+  color: "var(--text-tertiary)",
   fontSize: 14,
   padding: "2px 6px",
   borderRadius: 4,
   lineHeight: 1,
 };
 
-function primaryButton(disabled: boolean, color = "#6366F1"): React.CSSProperties {
+function primaryButton(disabled: boolean, color = "var(--accent)"): React.CSSProperties {
   return {
     padding: "8px 14px",
-    background: disabled ? "#E5E7EB" : color,
-    color: disabled ? "#9CA3AF" : "#FFFFFF",
+    background: disabled ? "var(--border-subtle)" : color,
+    color: disabled ? "var(--text-muted)" : "var(--bg-panel)",
     border: "none",
     borderRadius: 6,
     fontSize: 13,

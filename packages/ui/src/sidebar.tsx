@@ -42,10 +42,10 @@ export function Sidebar({
       <div
         style={{
           padding: "16px",
-          borderBottom: "1px solid #E5E7EB",
+          borderBottom: "1px solid var(--border-subtle)",
           fontWeight: 700,
           fontSize: 15,
-          color: "#111827",
+          color: "var(--text-primary)",
         }}
       >
         Founder OS
@@ -62,16 +62,22 @@ export function Sidebar({
               display: "flex",
               flexDirection: "column",
               padding: "10px 16px",
-              background: v.id === activeVentureId ? "#EEF2FF" : "transparent",
+              background: v.id === activeVentureId ? "var(--bg-selected)" : "transparent",
+              color: "var(--text-primary)",
               border: "none",
               cursor: "pointer",
               textAlign: "left",
-              borderLeft: v.id === activeVentureId ? "3px solid #6366F1" : "3px solid transparent",
+              borderLeft:
+                v.id === activeVentureId
+                  ? "3px solid var(--accent)"
+                  : "3px solid transparent",
               transition: "background 0.15s",
             }}
           >
-            <span style={{ fontWeight: 600, fontSize: 13, color: "#1F2937" }}>{v.name}</span>
-            <span style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>
+            <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-secondary)" }}>
+              {v.name}
+            </span>
+            <span style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
               {STAGE_EMOJI[v.stage] ?? "•"} {v.stage.replace(/_/g, " ")}
             </span>
           </button>
@@ -79,14 +85,14 @@ export function Sidebar({
       </div>
 
       {/* New venture button */}
-      <div style={{ padding: "12px 16px", borderTop: "1px solid #E5E7EB" }}>
+      <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border-subtle)" }}>
         <button
           onClick={onNewVenture}
           style={{
             width: "100%",
             padding: "8px",
-            background: "#6366F1",
-            color: "#FFFFFF",
+            background: "var(--accent)",
+            color: "var(--accent-fg)",
             border: "none",
             borderRadius: 6,
             fontWeight: 600,

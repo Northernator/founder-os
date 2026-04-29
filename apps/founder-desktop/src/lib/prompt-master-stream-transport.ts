@@ -15,7 +15,9 @@
  * use createClaudeCliTransport instead because they don't have access to the
  * Tauri-side llm_stream command.
  */
+import { getProvider } from "@founder-os/llm-providers";
 import type { OptimizeInput, PromptMasterTransport } from "@founder-os/prompt-master";
+import * as db from "./db.js";
 import { pickActiveProvider, streamChat } from "./llm-client.js";
 
 const PROMPT_MASTER_SYSTEM = `You are Prompt Master, a lossless prompt optimizer.
@@ -53,11 +55,30 @@ export function createStreamChatTransport(
 
   return {
     name: "stream-chat",
-    async optimize(input: OptimizeInput): Promise<{ optimized: string }> {
+    async optimize(
+      input: OptimizeInput
+    ): Promise<{ optimized: string; provider?: string; model?: string }> {
       const provider = await pickActiveProvider(opts.ventureId);
       if (!provider) {
         // No usable provider - core dispatcher marks this as fallback.
+        // Skip provider/model — there's no real backend to attribute
+        // these zero-token-saved events to.
         return { optimized: input.prompt };
+      }
+
+      // Resolve which model the call will run under so telemetry can
+      // tag the event for per-model dollar pricing. The user can leave
+      // model unset in Options; fall back to the catalog default for
+      // that provider so we still record a meaningful attribution
+      // instead of NULL → fallback bucket. Best-effort: a DB read
+      // failure here shouldn't break optimization, so we swallow.
+      let model: string | undefined;
+      try {
+        const setting = await db.getLlmSetting(provider);
+        const fromSetting = setting?.model?.trim();
+        model = fromSetting && fromSetting.length > 0 ? fromSetting : getProvider(provider).defaultModel;
+      } catch {
+        model = getProvider(provider).defaultModel;
       }
 
       const maxTokens = opts.maxTokens ?? Math.max(256, Math.ceil(input.prompt.length / 3));
@@ -70,8 +91,14 @@ export function createStreamChatTransport(
       });
 
       const trimmed = text.trim();
-      // Defensive: empty -> identity (core marks fallback).
-      return { optimized: trimmed.length > 0 ? trimmed : input.prompt };
+      // Defensive: empty -> identity (core marks fallback). We still
+      // return provider/model so the optimize emit (when not
+      // passthrough) tags the row.
+      return {
+        optimized: trimmed.length > 0 ? trimmed : input.prompt,
+        provider,
+        model,
+      };
     },
   };
 }

@@ -1,0 +1,250 @@
+/*
+ * Founder OS — theme tokens.
+ *
+ * Four modes selected via :root[data-theme="..."]: light (default),
+ * dark, grey, rainbow. The theme.ts store writes the attribute on
+ * document.documentElement; this file is the only place those tokens
+ * live so palette changes don't require a JS rebuild.
+ *
+ * The light values are extracted from the inline-style hexes already
+ * scattered through src/ (see App.tsx, Sidebar, VentureDashboard,
+ * OptionsTab) so rewiring components to var(--*) is a no-op visually.
+ */
+
+/* @property gives the rainbow gradient an interpolatable angle so the
+   GPU can animate it smoothly. Browsers that don't support @property
+   fall back to a static angle — the conic-gradient still renders;
+   it just won't rotate, which is fine. */
+@property --rainbow-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 0deg;
+}
+
+/* ------------------------------------------------------------------ */
+/* Light (default)                                                     */
+/* ------------------------------------------------------------------ */
+:root,
+:root[data-theme="light"] {
+  --bg-app: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-sidebar: #fafafa;
+  --bg-elevated: #f9fafb;
+  --bg-hover: #f3f4f6;
+  --bg-selected: #eef2ff;
+
+  --border-subtle: #e5e7eb;
+  --border-strong: #6366f1;
+  --border-input: #d1d5db;
+
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-tertiary: #6b7280;
+  --text-muted: #9ca3af;
+  --text-inverse: #ffffff;
+
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-soft: #eef2ff;
+  --accent-fg: #ffffff;
+
+  --success: #059669;
+  --success-soft: #ecfdf5;
+  --success-fg: #ffffff;
+
+  --warning: #b45309;
+  --warning-soft: #fef3c7;
+  --warning-fg: #ffffff;
+
+  --danger: #991b1b;
+  --danger-soft: #fef2f2;
+  --danger-border: #fecaca;
+  --danger-fg: #ffffff;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+/* ------------------------------------------------------------------ */
+/* Dark                                                                */
+/* ------------------------------------------------------------------ */
+:root[data-theme="dark"] {
+  --bg-app: #0f1115;
+  --bg-panel: #161922;
+  --bg-sidebar: #11141b;
+  --bg-elevated: #1d212c;
+  --bg-hover: #232836;
+  --bg-selected: #2a2f4a;
+
+  --border-subtle: #262b36;
+  --border-strong: #818cf8;
+  --border-input: #2e333f;
+
+  --text-primary: #f3f4f6;
+  --text-secondary: #d1d5db;
+  --text-tertiary: #9ca3af;
+  --text-muted: #6b7280;
+  --text-inverse: #111827;
+
+  --accent: #818cf8;
+  --accent-hover: #a5b4fc;
+  --accent-soft: #2a2f4a;
+  --accent-fg: #0f1115;
+
+  --success: #34d399;
+  --success-soft: #052e25;
+  --success-fg: #052e25;
+
+  --warning: #fbbf24;
+  --warning-soft: #3a2a05;
+  --warning-fg: #1a1200;
+
+  --danger: #f87171;
+  --danger-soft: #3a1414;
+  --danger-border: #5b1d1d;
+  --danger-fg: #1a0606;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.6);
+}
+
+/* ------------------------------------------------------------------ */
+/* Grey — neutral, low-contrast, no warm/cool bias                     */
+/* ------------------------------------------------------------------ */
+:root[data-theme="grey"] {
+  --bg-app: #888888;
+  --bg-panel: #9a9a9a;
+  --bg-sidebar: #828282;
+  --bg-elevated: #a4a4a4;
+  --bg-hover: #939393;
+  --bg-selected: #ababab;
+
+  --border-subtle: #757575;
+  --border-strong: #4a4a4a;
+  --border-input: #6e6e6e;
+
+  --text-primary: #1c1c1c;
+  --text-secondary: #2e2e2e;
+  --text-tertiary: #404040;
+  --text-muted: #5a5a5a;
+  --text-inverse: #f0f0f0;
+
+  --accent: #4a4a4a;
+  --accent-hover: #3a3a3a;
+  --accent-soft: #b2b2b2;
+  --accent-fg: #f0f0f0;
+
+  --success: #4d6b50;
+  --success-soft: #b8c5b9;
+  --success-fg: #f0f0f0;
+
+  --warning: #7a6a3a;
+  --warning-soft: #c7bda0;
+  --warning-fg: #f0f0f0;
+
+  --danger: #6b3a3a;
+  --danger-soft: #c5a8a8;
+  --danger-border: #8a5050;
+  --danger-fg: #f0f0f0;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* ------------------------------------------------------------------ */
+/* Rainbow — slowly rotating conic gradient on the app background.     */
+/* Panels stay readable via semi-transparent white + backdrop blur.    */
+/* Text never goes rainbow — contrast wins.                            */
+/* ------------------------------------------------------------------ */
+:root[data-theme="rainbow"] {
+  --bg-app: conic-gradient(
+    from var(--rainbow-angle),
+    #ff6b6b,
+    #ffd93d,
+    #6bcb77,
+    #4d96ff,
+    #b06bff,
+    #ff6bd6,
+    #ff6b6b
+  );
+  --bg-panel: rgba(255, 255, 255, 0.78);
+  --bg-sidebar: rgba(255, 255, 255, 0.65);
+  --bg-elevated: rgba(255, 255, 255, 0.9);
+  --bg-hover: rgba(255, 255, 255, 0.55);
+  --bg-selected: rgba(99, 102, 241, 0.18);
+
+  --border-subtle: rgba(17, 24, 39, 0.12);
+  --border-strong: #4338ca;
+  --border-input: rgba(17, 24, 39, 0.2);
+
+  --text-primary: #111827;
+  --text-secondary: #1f2937;
+  --text-tertiary: #374151;
+  --text-muted: #4b5563;
+  --text-inverse: #ffffff;
+
+  --accent: #4338ca;
+  --accent-hover: #3730a3;
+  --accent-soft: rgba(99, 102, 241, 0.18);
+  --accent-fg: #ffffff;
+
+  --success: #047857;
+  --success-soft: rgba(16, 185, 129, 0.18);
+  --success-fg: #ffffff;
+
+  --warning: #92400e;
+  --warning-soft: rgba(245, 158, 11, 0.18);
+  --warning-fg: #ffffff;
+
+  --danger: #991b1b;
+  --danger-soft: rgba(239, 68, 68, 0.18);
+  --danger-border: rgba(239, 68, 68, 0.45);
+  --danger-fg: #ffffff;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 6px 24px rgba(0, 0, 0, 0.12);
+
+  animation: founder-rainbow-spin 30s linear infinite;
+}
+
+/* The conic gradient lives on --bg-app and the GPU rotates it via
+   --rainbow-angle. ~30s per cycle keeps it ambient, not seizure-y. */
+@keyframes founder-rainbow-spin {
+  to {
+    --rainbow-angle: 360deg;
+  }
+}
+
+/* Easter egg: shift-clicking the toggle in rainbow mode adds the
+   `rainbow-warp` class to <html>; speeds the rotation 10x. */
+:root[data-theme="rainbow"].rainbow-warp {
+  animation: founder-rainbow-spin 3s linear infinite;
+}
+
+/* Respect the user's motion preference. Freezing the angle still
+   gives a colorful gradient — just static. */
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="rainbow"],
+  :root[data-theme="rainbow"].rainbow-warp {
+    animation: none;
+  }
+}
+
+/* The rainbow background needs to actually paint — body/root must
+   inherit it. The default light theme uses a flat color so this
+   is a no-op there, but on rainbow mode the conic-gradient needs
+   a host element. */
+html,
+body {
+  background: var(--bg-app);
+  color: var(--text-primary);
+}
+
+/* When backdrop-filter is supported (Chromium-based Tauri webviews are),
+   panels in rainbow mode get a soft frosted-glass effect. Falls back
+   to plain semi-transparent white otherwise. */
+:root[data-theme="rainbow"] .fos-panel,
+:root[data-theme="rainbow"] [data-fos-panel] {
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
