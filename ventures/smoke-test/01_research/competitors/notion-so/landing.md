@@ -5,7 +5,7 @@ Product
 [Notion Calendar](https://www.notion.com/product/calendar)
 [Notion Mail](https://www.notion.com/product/mail)
 [Notion AIAI tools for work](https://www.notion.com/product/ai)
-[AgentsNewAutomate busywork](https://www.notion.com/product/agents)
+[AgentsAutomate busywork](https://www.notion.com/product/agents)
 [AI Meeting NotesPerfectly written by AI](https://www.notion.com/product/ai-meeting-notes)
 [Enterprise SearchFind answers instantly](https://www.notion.com/product/enterprise-search)
 [Knowledge BaseCentralize your knowledge](https://www.notion.com/product/wikis)
@@ -19,7 +19,7 @@ AI
 ![](https://www.notion.com/_next/image?url=%2Ffront-static%2Fshared%2Fnavigation%2Fai_group.png&w=384&q=75)
 ## AI features
 [Notion AIAI tools for work](https://www.notion.com/product/ai)
-[AgentsNewAutomate busywork](https://www.notion.com/product/agents)
+[AgentsAutomate busywork](https://www.notion.com/product/agents)
 [AI Meeting NotesPerfectly written by AI](https://www.notion.com/product/ai-meeting-notes)
 [Enterprise SearchFind answers instantly](https://www.notion.com/product/enterprise-search)
 ## Explore use cases
@@ -55,7 +55,7 @@ Resources
 [Product tours](https://www.notion.com/product/demos)
 [Help](https://www.notion.com/help)
 [Enterprise](https://www.notion.com/enterprise)[Pricing](https://www.notion.com/pricing)[Request a demo](https://www.notion.com/contact-sales)
-[Get Notion free](https://www.notion.com/signup?from=marketing&pathname=%2F&tid=w_748f3ef8993a4289afcebba272e808c6)[Log in](https://www.notion.com/login?from=marketing&pathname=%2F&tid=w_748f3ef8993a4289afcebba272e808c6)
+[Get Notion free](https://www.notion.com/signup?from=marketing&pathname=%2F&tid=w_79dd31abade249cb99404d600082fcb8)[Log in](https://www.notion.com/login?from=marketing&pathname=%2F&tid=w_79dd31abade249cb99404d600082fcb8)
 ![](https://www.notion.com/front-static/agents/tasks/check.svg)
 ![](https://www.notion.com/_next/image?url=%2Ffront-static%2Fagents%2Fbook.png&w=96&q=75)
 ![](https://www.notion.com/front-static/agents/tasks/gmail.svg)
@@ -74,12 +74,12 @@ Resources
 ![](https://www.notion.com/_next/image?url=%2Ffront-static%2Fagents%2Fsign.png&w=96&q=75)
 # Meet the night shift.
 Notion agents keep work moving 24/7. They capture knowledge, answer questions, and push projects forward—all while you sleep.
-[Get Notion free](https://www.notion.com/signup?from=marketing&pathname=%2F&tid=w_748f3ef8993a4289afcebba272e808c6)[Request a demo](https://www.notion.com/contact-sales)
+[Get Notion free](https://www.notion.com/signup?from=marketing&pathname=%2F&tid=w_79dd31abade249cb99404d600082fcb8)[Request a demo](https://www.notion.com/contact-sales)
 Play
 Trusted by 98% of the Forbes Cloud 100
 [![OpenAI](https://images.ctfassets.net/spoqsaf9291f/4MHGeZRO6fDOLPVyJsLoyQ/73cf5bcef2edb384dc8989ebddd7975e/Company_openai__Colorway_White.svg)](https://www.notion.com/customers/openai)[![Figma](https://images.ctfassets.net/spoqsaf9291f/5JgmuggsW4KO8pYqbKUUeW/9d4781445ff35516224384dc1c4f417c/figma-white.svg)](https://www.notion.com/customers/figma)[![Ramp](https://images.ctfassets.net/spoqsaf9291f/1DEacqNIZ316cGgB4hhZRL/d77ff0228469f25ee2c76af41ef2e6ac/Company_Ramp__Colorway_White.svg)](https://www.notion.com/customers/ramp)[![Cursor](https://images.ctfassets.net/spoqsaf9291f/OJRQbA3XzRNfCfMh3UWf4/76408a06d9d9a1ed52fcd109b264de80/Company_Cursor__Colorway_White.svg)](https://www.notion.com/customers/cursor)[![Vercel](https://images.ctfassets.net/spoqsaf9291f/4Q8UO6GLVXAipkW53CHm33/8ccdeeb5bf1834ead706299d665eac72/Company_Vercel__Colorway_White.svg)](https://www.notion.com/customers/vercel)![Nvidia](https://images.ctfassets.net/spoqsaf9291f/1Y4mbag3O14GsqnVtxgyZn/93c685d16fde556fff58eeeade5b49a7/Company_Nvidia__Colorway_White.svg)![Volvo](https://images.ctfassets.net/spoqsaf9291f/7ciuOUOhooC7cNnVsY107S/094eda50eab266d434b98ae4d02058bc/Company_Volvo__Colorway_White.svg)![L'Oreal](https://images.ctfassets.net/spoqsaf9291f/59zguR94wceWZDPFJKVIW6/a8c6beae3ee7122dccfcb4c01d9fcb81/Loreal-w.svg)![Discord](https://images.ctfassets.net/spoqsaf9291f/7g5fhJqqpJd9yV9NnCgFkY/30ee55c57abecc9a6a71e50cf82fe66a/Company_discord__Colorway_White.svg)![Lovable](https://www.notion.com/_next/image?url=https%3A%2F%2Fimages.ctfassets.net%2Fspoqsaf9291f%2F37SK9lIa1OaS0dMoDX6rCO%2Fe2d6419a56b97b7d9a654d883e5c9da7%2FLovable.png&w=1920&q=75)![1Password](https://images.ctfassets.net/spoqsaf9291f/3KhAgvDae5snPMqs2lBxGn/e710daadbc24f003d47c74c1de8cf4c5/Company_1pass__Colorway_White.svg)![Affirm](https://images.ctfassets.net/spoqsaf9291f/3YKWf2H75kul3Qa0iVrzub/8def6306ad9c776ede00cd9b3480196b/Company_Affirm__Colorway_White.svg)![Riot Games](https://images.ctfassets.net/spoqsaf9291f/5NkNtsLPEfS7aqLZMFQyXg/be877e93ccf9d5397ec3f6f72aa0e359/Company_Riot_Games__Colorway_White.svg)[![Clay](https://images.ctfassets.net/spoqsaf9291f/Nw4dcqUrln5PXqHhHr7JW/1485bf145058b040cb59bafb27738e06/clay-mono.svg)](https://www.notion.com/customers/clay)[![Remote](https://images.ctfassets.net/spoqsaf9291f/QL9eDBH8yor68WZLs2cdZ/7637787e18a52cd3bfcffaaa469dd623/Company_Remote__Colorway_White.svg)](https://www.notion.com/customers/remote)[![Faire](https://images.ctfassets.net/spoqsaf9291f/6HI6Z7JAuvLnNK8mDWdnF8/fd2d3b36fc27b8bbad2042136c7991f2/Company_faire__Colorway_White.svg)](https://www.notion.com/customers/faire)[![Toyota](https://images.ctfassets.net/spoqsaf9291f/6tqMLcpPUToUSnubKnHkuZ/22f1df2d90af8a807f6fb8b39525215e/toyota.svg)](https://www.notion.com/customers/toyota)
 ## Keep work moving 24/7.
-[ Custom AgentsNew Automate repetitive work for your team. → ](https://www.notion.com/product/agents)
+[Custom Agents Automate repetitive work for your team. → ](https://www.notion.com/product/agents)
   * ![](https://www.notion.com/_next/image?url=%2Ffront-static%2Fagents%2Fspeech_bubble.png&w=96&q=75)Q&A agents
 Answers questions instantly using knowledge you already have.
   * ![](https://www.notion.com/_next/image?url=%2Ffront-static%2Fagents%2Fcheckmark.png&w=96&q=75)Task routing agents
@@ -157,7 +157,7 @@ View the video![Read the full story](https://www.notion.com/_next/image?url=http
 ## Try for free.
 ### Get started on Notion
 Your AI workspace with built-in agents.
-[](https://www.notion.com/desktop/mac/download?from=marketing&pathname=%2F&tid=w_748f3ef8993a4289afcebba272e808c6)
+[](https://www.notion.com/desktop/mac/download?from=marketing&pathname=%2F&tid=w_79dd31abade249cb99404d600082fcb8)
 ![A preview image of the notion desktop app](https://www.notion.com/_next/image?url=%2Ffront-static%2Fdownloads%2Fnotion%2Fen-US.png&w=3840&q=75)
 ### Notion Mail
 The AI inbox that thinks like you.

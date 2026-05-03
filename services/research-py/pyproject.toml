@@ -38,7 +38,10 @@ scraping = [
 
 # Phase 2c - orchestration
 agents = [
-  # "pydantic-ai>=0.0.50",
+  # Phase 2c-icp (2026-04-30): pydantic-ai drives the ICP synthesis agent.
+  # Pure-Python; no system deps. pyyaml is for icp.yaml dump.
+  "pydantic-ai>=0.0.50",
+  "pyyaml>=6.0",
   # "knowledge-storm>=1.0",
 ]
 

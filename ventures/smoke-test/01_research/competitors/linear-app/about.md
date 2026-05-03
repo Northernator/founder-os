@@ -7,8 +7,8 @@
     * [Now](https://linear.app/now)
     * [Contact](https://linear.app/contact)
     * [Docs](https://linear.app/docs)
-    * [Open app](https://linear.app/login)
-    * [Log in](https://linear.app/login)
+    * [Open app](https://linear.app/browser-compatibility)
+    * [Log in](https://linear.app/browser-compatibility)
     * [Sign up](https://linear.app/signup)
 
 
@@ -16,8 +16,8 @@
 era of product development
 AI is fundamentally changing how products get built. We are shaping what comes next.
 Elapsed00:00
-Seek to:00:00 / Duration00:00
-Remaining−00:00
+Seek to:00:00 / Duration03:18
+Remaining−03:18
 0.25× 0.5× 0.75× 1× 1.25× 1.5× 1.75× 2×
 ## A new species of  
 product tool
@@ -75,7 +75,6 @@ We are designers and engineers. Problem solvers and storytellers. We are a diver
   * Andreas Eldh
   * Allie Hughes
   * Uros Smolnik
-  * Erin Frey
   * Lauren Grant
   * Mariah Bardo
   * Romain Cascino

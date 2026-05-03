@@ -77,7 +77,7 @@ COPY src ./src
 
 RUN uv venv /app/.venv && \
     . /app/.venv/bin/activate && \
-    uv pip install ".[research,scraping]"
+    uv pip install ".[research,scraping,agents]"
 
 # Install chromium for Playwright. --with-deps adds any libs our explicit
 # apt list missed, then we clean apt - this is the last apt-using step.

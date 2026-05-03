@@ -2,6 +2,78 @@
   "competitor_url": "https://linear.app",
   "competitor_slug": "linear-app",
   "pricing_url": "https://linear.app/pricing",
-  "plans": [],
+  "plans": [
+    {
+      "plan_name": "Free",
+      "billing_period": "free",
+      "price_monthly": 0.0,
+      "price_annual": null,
+      "currency": "USD",
+      "included_features": [
+        "Unlimited members",
+        "2 teams",
+        "250 issues",
+        "Agent platform",
+        "Linear Agent (beta)"
+      ],
+      "cta_text": "Get started",
+      "target_segment": "Free"
+    },
+    {
+      "plan_name": "Basic",
+      "billing_period": "annual",
+      "price_monthly": 10.0,
+      "price_annual": null,
+      "currency": "USD",
+      "included_features": [
+        "All Free features +",
+        "5 teams",
+        "Unlimited issues",
+        "Unlimited file uploads",
+        "Admin roles"
+      ],
+      "cta_text": "Get started",
+      "target_segment": "Startup"
+    },
+    {
+      "plan_name": "Business",
+      "billing_period": "annual",
+      "price_monthly": 16.0,
+      "price_annual": null,
+      "currency": "USD",
+      "included_features": [
+        "All Basic features +",
+        "Unlimited teams",
+        "Private teams and guests",
+        "Triage Intelligence",
+        "Linear Agent automations (beta)",
+        "Linear Insights",
+        "Linear Asks",
+        "Zendesk and Intercom integrations"
+      ],
+      "cta_text": "Get started",
+      "target_segment": "Pro"
+    },
+    {
+      "plan_name": "Enterprise",
+      "billing_period": "custom",
+      "price_monthly": null,
+      "price_annual": null,
+      "currency": null,
+      "included_features": [
+        "All Business features +",
+        "Invoice/PO billing",
+        "SAML and SCIM",
+        "Granular admin controls",
+        "Enterprise-grade security",
+        "Advanced org modeling",
+        "Migration & onboarding support",
+        "Priority support",
+        "Account management"
+      ],
+      "cta_text": "Contact sales",
+      "target_segment": "Enterprise"
+    }
+  ],
   "errors": []
 }

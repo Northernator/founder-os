@@ -39,19 +39,21 @@ karri· 4 min ago
 Right now we show a spinner forever, which makes it look like the car disappeared...
 ![](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/f28b59f4-538c-4517-cfd7-510913015200/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)
 jori· just now
-**@ Codex** can you take a stab at this?
-jori connected Codex · just now
-![](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/13a0909f-186f-4d83-3fd3-d04883ec2d00/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)Codex
+**@ Cursor** can you take a stab at this?
+jori connected Cursor · just now
+![](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/5a228df7-2423-4807-6105-cd32ddddde00/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)Cursor
 Examining issue ENG-2703
-Codex moved from Todo to In Progress · just now
-![](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/13a0909f-186f-4d83-3fd3-d04883ec2d00/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)Codex
-On it! I've received your request.Kicked off a task in kinetic/kinetic-iOS environment.Searching for root AGENTS filekinetic/kinetic-iOS$ /bin/bash -lc rg --files -g 'AGENTS.md' AGENTS.mdLocating initialization logic for vehicle_state
+Cursor moved from Todo to In Progress · just now
+![](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/5a228df7-2423-4807-6105-cd32ddddde00/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)Cursor
+Examining issue ENG-2703Started cloud agent kinetic/kinetic-iOS@masterclaude-4.5-sonnet-thinkingLet me break down the task:
+1.I need to understand why iOS launch is blocking on vehicle_state sync
+2.Find where the app waits on vehicle state during startup
 Thinking...
 ENG-2703
 In Progress
 High
 ![](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/f28b59f4-538c-4517-cfd7-510913015200/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)jori
-![Codex](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/13a0909f-186f-4d83-3fd3-d04883ec2d00/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)Codex
+![Cursor](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/5a228df7-2423-4807-6105-cd32ddddde00/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)Cursor
 LabelsCycle
 Cycle 144
 Project
@@ -120,16 +122,16 @@ ENG-1991
 Improve rider visibility into veh...
 Thread in #feedback
 ![didier](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/c8aeedda-7726-4a4f-226a-f573f85d8d00/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)
-didier11:38 PM
+didier9:50 PM
 Has anyone been looking into the iOS startup performance issues?
 ![lena](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/580cd9c0-2770-4fe4-1ad2-95c76fc6f000/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)
-lena11:38 PM
+lena9:50 PM
 Anyone else noticing the iOS app feels slow to open if you haven't used it in a bit?
 ![didier](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/c8aeedda-7726-4a4f-226a-f573f85d8d00/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)
-didier11:38 PM
+didier9:50 PM
 Yea, we're still blocking initial render on a full vehicle_state sync every time...
 ![andreas](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/22210a73-581d-42db-d42a-bf2907860300/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)
-andreas11:38 PM
+andreas9:50 PM
 Feels like we could render sooner and load the rest in the background. Probably also worth tracking startup timing so we know how often this happens!
 @Linearcreate issues urgent issues and assign to me
 1.1Linear Agent +
@@ -230,9 +232,10 @@ Agents Command Menu
 3.5Cycles +
 ## Review PRs and agent output
 Understand code changes at a glance with structural diffs for human and agent output. Review, discuss, and merge — all within Linear.
-[ 4.0Diffs (Coming soon)→ ](https://linear.app/diffs)
+[ 4.0Diffs→ ](https://linear.app/diffs)
 ![](https://linear.app/cdn-cgi/imagedelivery/fO02fVwohEs9s9UHFwon6A/c16152f3-a36c-468e-89ae-f87c2f244d00/f=auto,dpr=2,q=95,fit=scale-down,metadata=none)
 kinetic-ios/src/screens/Home/HomeScreen.tsxkinetic-ios/src/HomeScreen.tsx
+Linear
 
 ```
 import React from 'react'import { View, ActivityIndicator } from 'react-native'import { useVehicleState } from '@hooks/useVehicleState'import { Dashboard } from '@components/Dashboard'export const HomeScreen = () => {  const { vehicleState, isFullySynced } = useVehicleState()  if (!isFullySynced) {    return <ActivityIndicator size="large" />  }  return (    <View>      <Dashboard state={vehicleState} />    </View>  )}
@@ -285,7 +288,7 @@ Cycle time by agent
 Cursor
 Codex
 No Agent
-Weekly Pulse for Apr 27
+Weekly Pulse for May 1
 1.0×
 Projects
 UI refresh
@@ -306,10 +309,10 @@ By julian · 3 hours ago
 5.2Insights +
 5.3Dashboards +
 ## Changelog
+[ ReleasesPlan and track your software releases directly from Linear.Apr 30, 2026 ](https://linear.app/changelog/2026-04-30-releases)
 [ Linear Agent MCP supportLinear Agent can now connect to your tools via MCP, giving it access to data and actions beyond your Linear workspace. Bring external context into your workflows to investigate issues, plan projects, write specs, and draft updates grounded in your full context.Apr 23, 2026 ](https://linear.app/changelog/2026-04-23-linear-agent-mcp-support)
 [ Linear for Microsoft TeamsMention @Linear in any Microsoft Teams channel to turn your conversations into actionable work.Apr 15, 2026 ](https://linear.app/changelog/2026-04-16-linear-for-microsoft-teams)
 [ Multi-level sub-teamsStructure your teams in Linear to match how your organization works.Apr 8, 2026 ](https://linear.app/changelog/2026-04-09-multi-level-sub-teams)
-[ Web forms for Linear AsksLinear Asks allows you to capture internal requests and bring them into Linear so the appropriate team can work on them. Previously, we've enabled intake through Slack and email.Apr 1, 2026 ](https://linear.app/changelog/2026-04-02-web-forms-for-linear-asks)
 [ View all→ ](https://linear.app/changelog)
 [
 > You just have to use it and you will see, you will just feel it.

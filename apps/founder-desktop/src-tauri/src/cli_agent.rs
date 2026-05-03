@@ -173,7 +173,7 @@ fn agent_config(agent: &str) -> Option<CliConfig> {
 /// error. That's the right UX: "claude not installed" rather than a
 /// misleading "no such path: C:\\…\\claude".
 #[cfg(windows)]
-fn resolve_binary(name: &str) -> Option<PathBuf> {
+pub(crate) fn resolve_binary(name: &str) -> Option<PathBuf> {
     // Respect PATHEXT — user may have a custom order (e.g. ".EXE;.CMD").
     // Default mirrors the standard Windows value.
     let exts = std::env::var("PATHEXT")
@@ -231,7 +231,7 @@ fn resolve_binary(name: &str) -> Option<PathBuf> {
 /// trap via `~/.local/bin` — an increasingly common `$PREFIX` for
 /// per-user installs.
 #[cfg(not(windows))]
-fn resolve_binary(name: &str) -> Option<PathBuf> {
+pub(crate) fn resolve_binary(name: &str) -> Option<PathBuf> {
     for dir in well_known_install_dirs() {
         let candidate = dir.join(name);
         if candidate.is_file() {

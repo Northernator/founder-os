@@ -209,24 +209,48 @@ def _scrapegraph_llm_config() -> dict[str, Any]:
     return cfg
 
 
-async def extract_pricing(pricing_url: str, pricing_md: str | None = None) -> list[PricingPlan]:
+async def extract_pricing(
+    pricing_url: str, pricing_md: str | None = None
+) -> tuple[list[PricingPlan], str | None]:
     """Extract structured pricing plans from a competitor's pricing page.
 
     Pass pricing_md if you already crawled the page (saves a re-fetch).
     Otherwise SmartScraperGraph fetches it itself.
+
+    Returns (plans, error). On success error is None. On any failure mode
+    (LLM exception, malformed shape, zero valid plans) the error string
+    describes what happened so callers can surface it via errors[].
     """
     # Lazy import.
     from scrapegraphai.graphs import SmartScraperGraph  # type: ignore[import-not-found]
     from .prompt_master import optimize as pm_optimize
 
+    # Prompt written in prose, NOT JSON-shape examples. ScrapeGraphAI
+    # internally wraps this in a LangChain PromptTemplate, which treats
+    # `{...}` as variable substitution and `{{...}}` as escaped braces.
+    # When we used the literal example shape `{"plans": ...}` here, models
+    # (notably Notion's pricing page on a smart slot of gpt-4o) echoed
+    # `{{"plans": ...}}` back, which LangChain's JSON output parser then
+    # rejected as "Invalid json". Prose-only avoids that whole class of
+    # bug. See research_competitors_shipped.md memory for the original
+    # incident (2026-04-30).
     prompt = (
-        "Extract every pricing plan visible on this page. For each plan return: "
-        "plan_name (short marketing name), billing_period (monthly/annual/free/custom), "
-        "price_monthly (numeric or null), price_annual (numeric or null), "
-        "currency (ISO 4217 code), included_features (array of bullet strings), "
-        "cta_text (button label), target_segment (e.g. Free/Startup/Pro/Enterprise). "
-        "Return strictly the JSON shape {\"plans\": [PricingPlan, ...]}. "
-        "If a field is not visible, set it to null/empty rather than guessing."
+        "Extract every pricing plan visible on this page. "
+        "For each plan return the following fields: "
+        "plan_name (short marketing name), "
+        "billing_period (one of: monthly, annual, free, custom), "
+        "price_monthly (numeric or null), "
+        "price_annual (numeric or null), "
+        "currency (ISO 4217 code), "
+        "included_features (array of bullet strings), "
+        "cta_text (button label), "
+        "target_segment (e.g. Free, Startup, Pro, Enterprise). "
+        "Output a single JSON object with exactly one top-level key named "
+        "plans whose value is an array of plan objects. Do not include "
+        "any prose, code fences, or wrapping characters around the JSON. "
+        "Do not double-escape braces. "
+        "If a field is not visible on the page, set it to null or an "
+        "empty array/string rather than guessing."
     )
 
     # Optimize the prompt before sending to SmartScraperGraph. Falls back to
@@ -258,20 +282,29 @@ async def extract_pricing(pricing_url: str, pricing_md: str | None = None) -> li
         raw = await asyncio.to_thread(_run)
     except Exception as exc:  # noqa: BLE001 - any LLM/network blowup is non-fatal
         log.warning("scrapegraphai pricing extract failed for %s: %s", pricing_url, exc)
-        return []
+        return [], f"scrapegraphai: {exc}"
 
     plans_raw = raw.get("plans") if isinstance(raw, dict) else None
     if not isinstance(plans_raw, list):
         log.warning("scrapegraphai returned no `plans` list for %s; raw=%r", pricing_url, raw)
-        return []
+        return [], f"scrapegraphai returned no `plans` list; raw={raw!r}"[:500]
 
     out: list[PricingPlan] = []
+    drop_count = 0
     for item in plans_raw:
         try:
             out.append(PricingPlan.model_validate(item))
         except Exception as e:  # noqa: BLE001
             log.warning("dropping malformed pricing row from %s: %s | row=%r", pricing_url, e, item)
-    return out
+            drop_count += 1
+
+    if not out:
+        if drop_count:
+            return [], f"scrapegraphai returned {drop_count} plans but all were malformed"
+        return [], "scrapegraphai returned 0 plans"
+    if drop_count:
+        return out, f"{drop_count} malformed plans dropped"
+    return out, None
 
 
 # -------------------- Per-competitor end-to-end scan ----------------------
@@ -319,13 +352,16 @@ async def scan_competitor(url: str) -> CompetitorScanResult:
     pricing_plans: list[PricingPlan] = []
     if pages.pricing:
         try:
-            pricing_plans = await extract_pricing(pages.pricing, pricing_md)
+            pricing_plans, pricing_err = await extract_pricing(pages.pricing, pricing_md)
+            if pricing_err:
+                errors.append(f"pricing extract {pages.pricing}: {pricing_err}")
         except Exception as exc:  # noqa: BLE001
             errors.append(f"pricing extract {pages.pricing}: {exc}")
             log.warning("pricing extract failed | url=%s | err=%s", pages.pricing, exc)
 
     return CompetitorScanResult(
         url=url,
+        slug=derive_competitor_slug(url),
         pages=pages,
         landing_md=landing_md,
         pricing_md=pricing_md,

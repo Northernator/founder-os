@@ -1,0 +1,90 @@
+{
+  "competitor_url": "https://raycast.com",
+  "competitor_slug": "raycast-com",
+  "pricing_url": "https://www.raycast.com/pricing",
+  "plans": [
+    {
+      "plan_name": "Raycast Free",
+      "billing_period": "free",
+      "price_monthly": 0.0,
+      "price_annual": null,
+      "currency": null,
+      "included_features": [
+        "Clipboard History",
+        "Quicklinks",
+        "Calculator",
+        "Snippets",
+        "Emoji Picker",
+        "Window Management",
+        "and many more..."
+      ],
+      "cta_text": null,
+      "target_segment": "Free"
+    },
+    {
+      "plan_name": "Raycast Pro",
+      "billing_period": "monthly",
+      "price_monthly": 8.0,
+      "price_annual": 96.0,
+      "currency": "USD",
+      "included_features": [
+        "Raycast AI, including providers",
+        "Cloud Sync",
+        "Sync Snippets",
+        "Notes",
+        "Chats with other Macs and iOS"
+      ],
+      "cta_text": null,
+      "target_segment": "Pro"
+    },
+    {
+      "plan_name": "Pro + Advanced AI",
+      "billing_period": "monthly",
+      "price_monthly": 16.0,
+      "price_annual": 192.0,
+      "currency": "USD",
+      "included_features": [
+        "Advanced AI Models, including the best models"
+      ],
+      "cta_text": null,
+      "target_segment": "Pro"
+    },
+    {
+      "plan_name": "Teams Pro",
+      "billing_period": "monthly",
+      "price_monthly": 12.0,
+      "price_annual": 144.0,
+      "currency": "USD",
+      "included_features": [
+        "AI and everything in Pro for your whole team"
+      ],
+      "cta_text": null,
+      "target_segment": "Teams"
+    },
+    {
+      "plan_name": "Teams + Advanced AI",
+      "billing_period": "monthly",
+      "price_monthly": 20.0,
+      "price_annual": 240.0,
+      "currency": "USD",
+      "included_features": [
+        "The best AI and everything in Pro for your whole team"
+      ],
+      "cta_text": null,
+      "target_segment": "Teams"
+    },
+    {
+      "plan_name": "Raycast for Enterprise",
+      "billing_period": "custom",
+      "price_monthly": null,
+      "price_annual": null,
+      "currency": null,
+      "included_features": [
+        "For advanced security and control"
+      ],
+      "cta_text": null,
+      "target_segment": "Enterprise"
+    }
+  ],
+  "errors": []
+}

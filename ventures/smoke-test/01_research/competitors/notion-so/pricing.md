@@ -5,7 +5,7 @@ Product
 [Notion Calendar](https://www.notion.com/product/calendar)
 [Notion Mail](https://www.notion.com/product/mail)
 [Notion AIAI tools for work](https://www.notion.com/product/ai)
-[AgentsNewAutomate busywork](https://www.notion.com/product/agents)
+[AgentsAutomate busywork](https://www.notion.com/product/agents)
 [AI Meeting NotesPerfectly written by AI](https://www.notion.com/product/ai-meeting-notes)
 [Enterprise SearchFind answers instantly](https://www.notion.com/product/enterprise-search)
 [Knowledge BaseCentralize your knowledge](https://www.notion.com/product/wikis)
@@ -19,7 +19,7 @@ AI
 ![](https://www.notion.com/_next/image?url=%2Ffront-static%2Fshared%2Fnavigation%2Fai_group.png&w=384&q=75)
 ## AI features
 [Notion AIAI tools for work](https://www.notion.com/product/ai)
-[AgentsNewAutomate busywork](https://www.notion.com/product/agents)
+[AgentsAutomate busywork](https://www.notion.com/product/agents)
 [AI Meeting NotesPerfectly written by AI](https://www.notion.com/product/ai-meeting-notes)
 [Enterprise SearchFind answers instantly](https://www.notion.com/product/enterprise-search)
 ## Explore use cases
@@ -55,7 +55,7 @@ Resources
 [Product tours](https://www.notion.com/product/demos)
 [Help](https://www.notion.com/help)
 [Enterprise](https://www.notion.com/enterprise)[Pricing](https://www.notion.com/pricing)[Request a demo](https://www.notion.com/contact-sales)
-[Get Notion free](https://www.notion.com/signup?from=marketing&pathname=%2Fpricing&tid=w_84b52a503cf04c99ba8abe8ad207ac99)[Log in](https://www.notion.com/login?from=marketing&pathname=%2Fpricing&tid=w_84b52a503cf04c99ba8abe8ad207ac99)
+[Get Notion free](https://www.notion.com/signup?from=marketing&pathname=%2Fpricing&tid=w_45ed5a535deb49bd8723b23a81e593ae)[Log in](https://www.notion.com/login?from=marketing&pathname=%2Fpricing&tid=w_45ed5a535deb49bd8723b23a81e593ae)
 # One tool to run your company.
 Trusted by teams at
 ![OpenAI](https://www.notion.com/_next/image?url=https%3A%2F%2Fimages.ctfassets.net%2Fspoqsaf9291f%2FjWkCPMAAj0Av69704DQoB%2F84499b606028b276e0bf94c238f07097%2FOpenAI-black-wordmark-cropped.png&w=3840&q=75)![Figma](https://images.ctfassets.net/spoqsaf9291f/502ApiNcRHgIwrDU8XRYTQ/497492503acb3fa21bbd9dd1aec193c3/Figma-logo-color.svg)![Volvo](https://www.notion.com/_next/image?url=https%3A%2F%2Fimages.ctfassets.net%2Fspoqsaf9291f%2F4xtSoCGKxiZcTwsYPlBB5h%2F0fb7d4155e89ef5a852936099e014313%2Fvolvo.png&w=1920&q=75)![Ramp](https://www.notion.com/_next/image?url=https%3A%2F%2Fimages.ctfassets.net%2Fspoqsaf9291f%2F4eiEZBWL5gEClwB1IHi18I%2Fb9b86479965977121ceabd01f45567a7%2Framp.png&w=3840&q=75)![Cursor](https://www.notion.com/_next/image?url=https%3A%2F%2Fimages.ctfassets.net%2Fspoqsaf9291f%2F3CSWr4Z4uIvbfO7102KPY%2Fbbd97c8edd0673853ac8dae2887a638d%2Fcursor.png&w=1920&q=75)
@@ -354,6 +354,7 @@ Establish ownership of your company domain and take actions on workspaces that b
 Domain Management
 Consolidate content from multiple workspaces, including users, page content, and permissions, into your main workspace as teamspace(s) that keep their structure.
 Workspace consolidation
+Custom
 Manage the users within your domain, including a dashboard where you can get information and make changes.
 Managed users dashboard & controls
 Integrate with SIEM and DLP tools to automatically centralize audit logs & set policies to detect sensitive content in your workspace and trigger automated actions to remediate.

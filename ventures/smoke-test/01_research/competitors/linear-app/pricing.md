@@ -104,6 +104,9 @@ Issue sync
 Issue SLAs
 Triage responsibility
 Triage rules
+Releases
+5 pipelines
+Unlimited
 Sub-initiatives
 AI and agent workflows
 Agent platform

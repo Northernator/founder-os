@@ -12,6 +12,7 @@ mod llm;
 mod pdf;
 mod pricing;
 mod secrets;
+mod sales_report;
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -410,6 +411,7 @@ pub fn run() {
             cli_agent::cli_agent_check,
             cli_agent::cli_agent_login,
             cli_agent::cli_agent_stream,
+            sales_report::generate_sales_report,
             secrets::keyring_set,
             secrets::keyring_get,
             secrets::keyring_delete,

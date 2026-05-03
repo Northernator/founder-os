@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "typeRoots": ["/sessions/gracious-serene-cori/tscheck/node_modules/@types"]
+  },
+  "exclude": ["test", "dist", "node_modules"]
+}

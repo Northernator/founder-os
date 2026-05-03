@@ -9,7 +9,7 @@ ScrapeGraphAI. Same async-job pattern. Writes per-competitor markdown
 under 01_research/competitors/{slug}/ and a unified
 02_validation/pricing/competitors-pricing.csv.
 
-Phase 2c-icp stub (still 501): /research/icp.
+Phase 2c-icp: /research/icp wired through pydantic-ai. Same async-job pattern.
 """
 
 from __future__ import annotations
@@ -341,15 +341,109 @@ async def _run_competitor_scan(job_id: str, req: CompetitorScanRequest) -> None:
 # ------------------------------ /research/icp -----------------------------
 
 class IcpRequest(BaseModel):
+    venture_slug: str = Field(..., description="Folder under ventures/ to read inputs and write outputs")
+
+
+class IcpAcceptedResponse(BaseModel):
+    job_id: str
+    status: str
     venture_slug: str
+    poll: str
 
 
-@router.post("/icp", response_model=dict)
-async def synthesize_icp(req: IcpRequest) -> dict:
-    raise HTTPException(
-        status_code=501,
-        detail="Phase 2c-icp - pydantic-ai ICP agent not yet wired.",
+def _icp_output_dir(slug: str) -> Path:
+    return settings.ventures_dir / slug / "02_validation" / "icp"
+
+
+@router.post(
+    "/icp",
+    response_model=IcpAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def synthesize_icp(req: IcpRequest) -> IcpAcceptedResponse:
+    """Kick off an ICP synthesis job. Returns immediately with a job_id."""
+    _validate_slug(req.venture_slug)
+
+    record = await job_store.create(
+        kind="icp_synthesis",
+        venture_slug=req.venture_slug,
     )
+
+    asyncio.create_task(_run_icp_synthesis(record.job_id, req))
+
+    return IcpAcceptedResponse(
+        job_id=record.job_id,
+        status=record.status,
+        venture_slug=record.venture_slug,
+        poll=f"/research/jobs/{record.job_id}",
+    )
+
+
+async def _run_icp_synthesis(job_id: str, req: IcpRequest) -> None:
+    try:
+        await job_store.update(
+            job_id,
+            status="running",
+            progress_message="gathering 01_research/ artifacts",
+        )
+
+        # Lazy import the agent so a partial install doesn't break boot.
+        from research_py.icp import (
+            gather_inputs,
+            synthesize_icp as run_agent,
+            write_icp_artifacts,
+        )
+
+        venture_root = settings.ventures_dir / req.venture_slug
+        inputs = gather_inputs(venture_root)
+        if not inputs:
+            raise RuntimeError(
+                "no research inputs found under "
+                f"{venture_root}/01_research/. Run /research/deep and/or "
+                "/research/competitors first."
+            )
+
+        await job_store.update(
+            job_id,
+            progress_message=f"running pydantic-ai agent over {len(inputs)} input(s)",
+        )
+        synthesis = await run_agent(req.venture_slug, venture_root)
+
+        await job_store.update(job_id, progress_message="writing icp.yaml + icp.md")
+        yaml_path, md_path = write_icp_artifacts(
+            venture_root, req.venture_slug, synthesis
+        )
+
+        await job_store.update(
+            job_id,
+            status="done",
+            progress_message="done",
+            result={
+                "venture_slug": req.venture_slug,
+                "yaml_path": str(yaml_path),
+                "md_path": str(md_path),
+                "personas_count": len(synthesis.personas),
+                "summary_chars": len(synthesis.summary),
+                "input_count": len(inputs),
+                "personas": [
+                    {"id": p.id, "name": p.name, "primaryGoal": p.primaryGoal}
+                    for p in synthesis.personas
+                ],
+            },
+        )
+        log.info(
+            "icp_synthesis done | job=%s | slug=%s | personas=%d | inputs=%d",
+            job_id, req.venture_slug, len(synthesis.personas), len(inputs),
+        )
+
+    except Exception as exc:  # noqa: BLE001
+        log.exception("icp_synthesis failed | job=%s", job_id)
+        await job_store.update(
+            job_id,
+            status="error",
+            progress_message="error",
+            error=f"{type(exc).__name__}: {exc}",
+        )
 
 
 # ------------------------------ /research/jobs ----------------------------

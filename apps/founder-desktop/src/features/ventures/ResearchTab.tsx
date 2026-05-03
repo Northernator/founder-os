@@ -14,6 +14,7 @@ import {
 import { pushToast } from "../../lib/toasts.js";
 import { joinPath } from "../../lib/venture-io.js";
 import { AdvanceConfirmModal } from "./AdvanceConfirmModal.js";
+import { ResearchChatPanel } from "./ResearchChatPanel.js";
 import {
   type DistillFieldConfig,
   DistillDiffModal,
@@ -820,6 +821,16 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
         {/* LEFT — questions */}
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
           {/* Section 1 — Research Documents */}
+          {/* AI Research Chat -- v0.1, fires research-py jobs and watches them complete. */}
+          <Section title="0. AI Research Chat" icon="*">
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-tertiary)" }}>
+              Conversational driver for the research-py sidecar.
+              Slash commands fire deep-research and competitor-scan jobs and stream their progress here.
+              Outputs land under <code>01_research/market-gaps/</code> and
+              <code> 01_research/competitors/</code>. Type <code>/help</code> in the chat for the full list.
+            </p>
+            <ResearchChatPanel venture={venture} />
+          </Section>
           <Section title="1. Research Documents" icon="📎">
             <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-tertiary)" }}>
               Upload market reports, interview transcripts, competitor screenshots, or any

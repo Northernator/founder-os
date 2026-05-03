@@ -106,6 +106,12 @@
       ],
       "@founder-os/agent-accounts": [
         "packages/agent-accounts/src/index.ts"
+      ],
+      "@founder-os/research-runner": [
+        "packages/research-runner/src/index.ts"
+      ],
+      "@founder-os/sales-agents": [
+        "packages/sales-agents/src/index.ts"
       ]
     }
   }

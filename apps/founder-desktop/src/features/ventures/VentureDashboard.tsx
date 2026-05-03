@@ -43,6 +43,7 @@ import { BrandTab } from "./BrandTab.js";
 import { IdeaTab } from "./IdeaTab.js";
 import { OptionsTab } from "./OptionsTab.js";
 import { ResearchTab } from "./ResearchTab.js";
+import { SalesTab } from "./SalesTab.js";
 import { ScreensTab } from "./ScreensTab.js";
 import { SpecTab } from "./SpecTab.js";
 import { UkSetupTab } from "./UkSetupTab.js";
@@ -72,6 +73,7 @@ type Tab =
   | "chat"
   | "pipeline"
   | "artifacts"
+  | "sales"
   | "audit"
   | "options";
 
@@ -1682,6 +1684,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
     pipeline: "Pipeline",
     artifacts: "Artifacts",
     audit: "Audit",
+    sales: "Sales",
   };
 
   return (
@@ -1743,36 +1746,54 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
         </div>
       )}
 
-      {/* Tabs */}
-      <div
-        style={{
-          display: "flex",
-          gap: 0,
-          borderBottom: "1px solid var(--border-subtle)",
-          padding: "0 28px",
-        }}
-      >
-        {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
+      {/* Tabs -- multi-row: max 10 per row, evenly split.
+          14 tabs -> 7+7. 21 tabs -> 7+7+7. 10 or fewer -> single row.
+          Only the LAST row gets the bottom border so per-row underlines
+          don't visually stack between rows. */}
+      {(() => {
+        const tabKeys = Object.keys(TAB_LABELS) as Tab[];
+        const MAX_PER_ROW = 10;
+        const numRows = Math.max(1, Math.ceil(tabKeys.length / MAX_PER_ROW));
+        const perRow = Math.ceil(tabKeys.length / numRows);
+        const rows: Tab[][] = Array.from({ length: numRows }, (_, i) =>
+          tabKeys.slice(i * perRow, (i + 1) * perRow),
+        );
+        return rows.map((rowKeys, rowIdx) => (
+          <div
+            key={`tab-row-${rowIdx}`}
             style={{
-              padding: "12px 18px",
-              fontWeight: tab === t ? 700 : 500,
-              fontSize: 14,
-              color: tab === t ? "var(--accent)" : "var(--text-tertiary)",
-              background: "none",
-              border: "none",
+              display: "flex",
+              gap: 0,
               borderBottom:
-                tab === t ? "2px solid var(--accent)" : "2px solid transparent",
-              cursor: "pointer",
-              marginBottom: -1,
+                rowIdx === rows.length - 1
+                  ? "1px solid var(--border-subtle)"
+                  : "none",
+              padding: "0 28px",
             }}
           >
-            {TAB_LABELS[t]}
-          </button>
-        ))}
-      </div>
+            {rowKeys.map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                style={{
+                  padding: "12px 18px",
+                  fontWeight: tab === t ? 700 : 500,
+                  fontSize: 14,
+                  color: tab === t ? "var(--accent)" : "var(--text-tertiary)",
+                  background: "none",
+                  border: "none",
+                  borderBottom:
+                    tab === t ? "2px solid var(--accent)" : "2px solid transparent",
+                  cursor: "pointer",
+                  marginBottom: rowIdx === rows.length - 1 ? -1 : 0,
+                }}
+              >
+                {TAB_LABELS[t]}
+              </button>
+            ))}
+          </div>
+        ));
+      })()}
 
       {/* Tab content */}
       <div style={{ flex: 1, overflow: "hidden" }}>
@@ -2268,6 +2289,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
             refreshToken={auditRefreshToken}
           />
         )}
+        {tab === "sales" && <SalesTab venture={venture} />}
         {tab === "options" && <OptionsTab />}
       </div>
 

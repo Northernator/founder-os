@@ -2,6 +2,94 @@
   "competitor_url": "https://notion.so",
   "competitor_slug": "notion-so",
   "pricing_url": "https://www.notion.so/pricing",
-  "plans": [],
+  "plans": [
+    {
+      "plan_name": "Free",
+      "billing_period": "free",
+      "price_monthly": 0.0,
+      "price_annual": null,
+      "currency": "GBP",
+      "included_features": [
+        "Trial AI capabilities like generating docs, or autofilling databases Trial of Notion AI",
+        "Capture, organize, and act on responses right inside Notion. Basic forms",
+        "Publish a Notion page to the web Basic sites",
+        "Connect multiple Calendars to manage work and time together. Notion Calendar",
+        "Connect your Gmail for an AI-powered, personalized inbox. Notion Mail (Syncs with Gmail)",
+        "Organize hundreds or thousands of items in one place, like projects or tasks Databases including subtasks, dependencies, custom properties and more"
+      ],
+      "cta_text": "Sign up",
+      "target_segment": "Free"
+    },
+    {
+      "plan_name": "Plus",
+      "billing_period": "monthly",
+      "price_monthly": 8.5,
+      "price_annual": null,
+      "currency": "GBP",
+      "included_features": [
+        "Trial AI capabilities like generating docs, or autofilling databases Trial of Notion AI",
+        "Remove Notion branding from public forms Custom forms",
+        "Customize your top header, choose a light or dark theme, add a custom favicon, and integrate with Google Analytics. Custom sites",
+        "Visualize data from databases in different ways (e.g. donut, bar, and line charts). Unlimited charts",
+        "Blocks are pieces of content you add to a page (e.g. to-do checkboxes, paragraphs, bullet points, etc.). Unlimited collaborative blocks",
+        "A per file size limit may apply to any file that you upload to a Notion page or database. Unlimited file uploads",
+        "Integrate with some tools like Slack & Google Drive Basic integrations"
+      ],
+      "cta_text": "Get started",
+      "target_segment": "Startup"
+    },
+    {
+      "plan_name": "Business",
+      "billing_period": "monthly",
+      "price_monthly": 16.5,
+      "price_annual": null,
+      "currency": "GBP",
+      "included_features": [
+        "Does work for you. Completes complex, multi-step tasks using context from Notion, your connected apps, and the web. Notion Agent",
+        "Automate your meeting notes and follow-ups, no bot needed AI Meeting Notes",
+        "Search across connected apps like Slack, Github & more Enterprise SearchBeta",
+        "Manage employee access at scale with secure single sign-on. SAML SSO",
+        "Collaborate in Notion databases without giving access to the entire database. Limit access to rows where the collaborator is assigned. Granular database permissions",
+        "Add a verified badge to pages that are up to date. Appears in search results and AI citations. Verify any page",
+        "Create teamspaces that can\u2019t be seen or discovered by anyone except those you add. Great for sensitive information like company planning or performance reviews. Private teamspaces",
+        "Verify ownership of an email domain to access advanced security features including single-sign on. Domain verification",
+        "Integrate with GitHub, Asana & more Premium integrations"
+      ],
+      "cta_text": "Get started",
+      "target_segment": "Business"
+    },
+    {
+      "plan_name": "Enterprise",
+      "billing_period": "custom",
+      "price_monthly": null,
+      "price_annual": null,
+      "currency": null,
+      "included_features": [
+        "When using Notion AI, our LLM providers utilize zero data retention for Enterprise plan workspaces Zero data retention with LLM providers",
+        "Access the Notion SCIM API to provision and manage users and groups. User provisioning (SCIM)",
+        "Unlock extra permission controls to prevent certain people from sharing pages externally, disable guests, and set workspace-level rules. Advanced security & controls",
+        "Access a detailed log of security and safety-related activity for your workspace account to identify potential security issues, investigate suspicious behavior, or troubleshoot access. Audit log",
+        "Our team of Customer Success Managers are experts to help you get the most out of Notion. Customer success manager",
+        "Integrate with SIEM and DLP tools to automatically centralize audit logs & set policies to detect sensitive content in your workspace and trigger automated actions to remediate. Security & Compliance integrations (DLP, SIEM)",
+        "Establish ownership of your company domain and take actions on workspaces that belong to your verified domain (request ownership transfer, delete, claim) Domain management",
+        "Integrate with even more tools Advanced integrations"
+      ],
+      "cta_text": "Contact Sales",
+      "target_segment": "Enterprise"
+    },
+    {
+      "plan_name": "Custom Agents",
+      "billing_period": "custom",
+      "price_monthly": null,
+      "price_annual": null,
+      "currency": "USD",
+      "included_features": [
+        "AI agents handle repetitive tasks autonomously, so your team doesn\u2019t have to.",
+        "Free to try, then $10 per 1,000 monthly Notion credits."
+      ],
+      "cta_text": null,
+      "target_segment": null
+    }
+  ],
   "errors": []
 }

@@ -5,7 +5,7 @@ Product
 [Notion Calendar](https://www.notion.com/product/calendar)
 [Notion Mail](https://www.notion.com/product/mail)
 [Notion AIAI tools for work](https://www.notion.com/product/ai)
-[AgentsNewAutomate busywork](https://www.notion.com/product/agents)
+[AgentsAutomate busywork](https://www.notion.com/product/agents)
 [AI Meeting NotesPerfectly written by AI](https://www.notion.com/product/ai-meeting-notes)
 [Enterprise SearchFind answers instantly](https://www.notion.com/product/enterprise-search)
 [Knowledge BaseCentralize your knowledge](https://www.notion.com/product/wikis)
@@ -19,7 +19,7 @@ AI
 ![](https://www.notion.com/_next/image?url=%2Ffront-static%2Fshared%2Fnavigation%2Fai_group.png&w=384&q=75)
 ## AI features
 [Notion AIAI tools for work](https://www.notion.com/product/ai)
-[AgentsNewAutomate busywork](https://www.notion.com/product/agents)
+[AgentsAutomate busywork](https://www.notion.com/product/agents)
 [AI Meeting NotesPerfectly written by AI](https://www.notion.com/product/ai-meeting-notes)
 [Enterprise SearchFind answers instantly](https://www.notion.com/product/enterprise-search)
 ## Explore use cases
@@ -55,7 +55,7 @@ Resources
 [Product tours](https://www.notion.com/product/demos)
 [Help](https://www.notion.com/help)
 [Enterprise](https://www.notion.com/enterprise)[Pricing](https://www.notion.com/pricing)[Request a demo](https://www.notion.com/contact-sales)
-[Get Notion free](https://www.notion.com/signup?from=marketing&pathname=%2Fabout&tid=w_2176fce15068442898ccb2f58461f5fb)[Log in](https://www.notion.com/login?from=marketing&pathname=%2Fabout&tid=w_2176fce15068442898ccb2f58461f5fb)
+[Get Notion free](https://www.notion.com/signup?from=marketing&pathname=%2Fabout&tid=w_978d3160d3be4c95a0c3cf1d22cb444f)[Log in](https://www.notion.com/login?from=marketing&pathname=%2Fabout&tid=w_978d3160d3be4c95a0c3cf1d22cb444f)
 # About Notion
 ## A story of tools and the future of work
 ![An illustration of several people working on computers at their desk](https://www.notion.com/_next/image?url=%2Ffront-static%2Fpages%2Fabout%2Fabout-01-v2.png&w=2048&q=75)

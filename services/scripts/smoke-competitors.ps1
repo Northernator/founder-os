@@ -13,7 +13,7 @@ param(
     [string]   $VentureSlug    = "smoke-test",
     [string[]] $Urls           = @(
         "https://linear.app",
-        "https://height.app",
+        "https://raycast.com",
         "https://notion.so"
     ),
     [string]   $BaseUrl        = "http://localhost:3030",

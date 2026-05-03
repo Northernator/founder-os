@@ -1,0 +1,40 @@
+# CI: typecheck every workspace package via Turbo + run sales-agents tests.
+#
+# Scaffold added 2026-05-02 alongside @founder-os/sales-agents. Was
+# previously no CI in the repo; pre-commit hook only runs Biome lint.
+# The new sales-agents package is picked up automatically because
+# Turbo discovers from pnpm-workspace.yaml -- no per-package config.
+#
+# Extend with `lint` or `build` jobs as needed.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (all workspace packages)
+        run: pnpm typecheck
+
+      - name: Test (sales-agents)
+        run: pnpm --filter @founder-os/sales-agents test
