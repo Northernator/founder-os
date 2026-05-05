@@ -53,6 +53,10 @@ export const AppTypeSchema = z.enum([
 ]);
 export type AppType = z.infer<typeof AppTypeSchema>;
 
+// PipelineConfigSchema is defined in ./stage-runners.ts and re-exported
+// from this barrel below. We import it here for VentureManifestSchema.
+import { PipelineConfigSchema } from "./stage-runners.js";
+
 export const VentureManifestSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -67,6 +71,11 @@ export const VentureManifestSchema = z.object({
   monthlyBudgetCapGBP: z.number().optional(),
   currentStage: VentureStageSchema,
   blockers: z.array(z.string()).default([]),
+  /**
+   * Optional pipeline config. When absent, defaults are applied
+   * (see PipelineConfigSchema). Existing manifests parse unchanged.
+   */
+  pipeline: PipelineConfigSchema.optional(),
 });
 export type VentureManifest = z.infer<typeof VentureManifestSchema>;
 
@@ -121,3 +130,10 @@ export * from "./spec.js";
 // scoped to a screen INVENTORY, not element-level layout. See
 // screens.ts header for the deliberately-did-not policy.
 export * from "./screens.js";
+
+// --- Stage runners (slice 1 of stage-runners feature) ---
+// StageName + StageRunResult + ReviewGate + StageProgress contracts
+// consumed by @founder-os/stage-runners. Distinct from VentureStage:
+// StageName names the running stage, VentureStage names the
+// post-completion state. STAGE_PRODUCES bridges the two.
+export * from "./stage-runners.js";
