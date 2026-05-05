@@ -449,8 +449,11 @@ async function runWithConcurrency<T>(limit: number, tasks: Array<() => Promise<T
     while (true) {
       const i = cursor++;
       if (i >= tasks.length) return;
-      // Non-null assertion is safe: we just bounds-checked `i`.
-      results[i] = await tasks[i]!();
+      // Bounds-checked above, but `noUncheckedIndexedAccess` still types
+      // `tasks[i]` as `T | undefined`. Pull into a local + guard to
+      // satisfy the checker without a non-null assertion.
+      const task = tasks[i];
+      if (task) results[i] = await task();
     }
   };
   const workerCount = Math.max(1, Math.min(limit, tasks.length));
@@ -466,7 +469,7 @@ function ensureTitle(raw: string, fallbackTitle: string): string {
   let text = raw.trim();
   // Strip a leading ```markdown fence if the model added one.
   const fenced = /^```(?:markdown|md)?\s*\n([\s\S]*?)\n```\s*$/i.exec(text);
-  if (fenced && fenced[1]) {
+  if (fenced?.[1]) {
     text = fenced[1].trim();
   }
   if (!/^#\s+/.test(text)) {
