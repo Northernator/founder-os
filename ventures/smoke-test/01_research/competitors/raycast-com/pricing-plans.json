@@ -43,9 +43,7 @@
       "price_monthly": 16.0,
       "price_annual": 192.0,
       "currency": "USD",
-      "included_features": [
-        "Advanced AI Models, including the best models"
-      ],
+      "included_features": ["Advanced AI Models, including the best models"],
       "cta_text": null,
       "target_segment": "Pro"
     },
@@ -55,9 +53,7 @@
       "price_monthly": 12.0,
       "price_annual": 144.0,
       "currency": "USD",
-      "included_features": [
-        "AI and everything in Pro for your whole team"
-      ],
+      "included_features": ["AI and everything in Pro for your whole team"],
       "cta_text": null,
       "target_segment": "Teams"
     },
@@ -67,9 +63,7 @@
       "price_monthly": 20.0,
       "price_annual": 240.0,
       "currency": "USD",
-      "included_features": [
-        "The best AI and everything in Pro for your whole team"
-      ],
+      "included_features": ["The best AI and everything in Pro for your whole team"],
       "cta_text": null,
       "target_segment": "Teams"
     },
@@ -79,9 +73,7 @@
       "price_monthly": null,
       "price_annual": null,
       "currency": null,
-      "included_features": [
-        "For advanced security and control"
-      ],
+      "included_features": ["For advanced security and control"],
       "cta_text": null,
       "target_segment": "Enterprise"
     }

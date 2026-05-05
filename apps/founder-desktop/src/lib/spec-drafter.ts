@@ -273,7 +273,7 @@ async function tryReadResearchReports(
       }
       const trimmed =
         text.length > PER_FILE_RESEARCH_CHARS
-          ? text.slice(0, PER_FILE_RESEARCH_CHARS) + "\n\n[... truncated ...]"
+          ? `${text.slice(0, PER_FILE_RESEARCH_CHARS)}\n\n[... truncated ...]`
           : text;
       const filename = file.path.split(/[\\/]/).pop() ?? file.path;
       parts.push(`### ${filename}\n${trimmed}`);

@@ -18,7 +18,7 @@
  * runs opportunistically when writes detect we're over budget — no
  * background sweeper to keep things simple.
  */
-import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { type CacheBackend, type CacheStats, type CachedEntry, setCacheBackend } from "./cache.js";
@@ -49,7 +49,7 @@ function maxBytes(): number {
 }
 
 function pathFor(hash: string): string {
-  return join(cacheDir(), hash.slice(0, 2), hash.slice(2) + ".json");
+  return join(cacheDir(), hash.slice(0, 2), `${hash.slice(2)}.json`);
 }
 
 function indexPath(): string {
@@ -86,6 +86,7 @@ async function evictIfNeeded(index: CacheIndex): Promise<void> {
   // Evict least-recently-used until under cap.
   index.entries.sort((a, b) => a.lastUsed.localeCompare(b.lastUsed));
   while (index.totalBytes > cap && index.entries.length > 0) {
+    // biome-ignore lint/style/noNonNullAssertion: value asserted non-null by surrounding logic
     const victim = index.entries.shift()!;
     try {
       await unlink(pathFor(victim.hash));

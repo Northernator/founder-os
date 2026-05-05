@@ -44,7 +44,8 @@ const STRING_FIELD_SCHEMA: Record<
   tagline: "Short marketing tagline — one line, evocative",
   mission: "Mission statement — what the company exists to do, in 1–2 sentences",
   targetAudience: "Who the brand is speaking to — the primary audience description",
-  toneOfVoice: "Tone of voice description — how the brand should sound (warm / direct / playful / …)",
+  toneOfVoice:
+    "Tone of voice description — how the brand should sound (warm / direct / playful / …)",
   notes: "Any free-form designer notes the founder wants captured for later",
 };
 

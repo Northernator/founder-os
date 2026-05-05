@@ -62,7 +62,7 @@ export async function writeVentureManifest(
   const manifestPath = joinPath(rootPath, "venture.yaml");
   await invoke("write_file", {
     path: manifestPath,
-    content: JSON.stringify(manifest, null, 2) + "\n",
+    content: `${JSON.stringify(manifest, null, 2)}\n`,
   });
 }
 

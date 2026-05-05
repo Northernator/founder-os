@@ -81,31 +81,19 @@ export class ResearchClient {
   // ---------- /research/deep ----------
 
   async createDeepResearch(req: DeepResearchRequest): Promise<DeepResearchAcceptedResponse> {
-    return await this.request<DeepResearchAcceptedResponse>(
-      "POST",
-      "/research/deep",
-      req,
-    );
+    return await this.request<DeepResearchAcceptedResponse>("POST", "/research/deep", req);
   }
 
   // ---------- /research/competitors ----------
 
   async scanCompetitors(req: CompetitorScanRequest): Promise<CompetitorScanAcceptedResponse> {
-    return await this.request<CompetitorScanAcceptedResponse>(
-      "POST",
-      "/research/competitors",
-      req,
-    );
+    return await this.request<CompetitorScanAcceptedResponse>("POST", "/research/competitors", req);
   }
 
   // ---------- /research/icp ----------
 
   async synthesizeIcp(req: IcpRequest): Promise<IcpAcceptedResponse> {
-    return await this.request<IcpAcceptedResponse>(
-      "POST",
-      "/research/icp",
-      req,
-    );
+    return await this.request<IcpAcceptedResponse>("POST", "/research/icp", req);
   }
 
   // ---------- /research/jobs ----------
@@ -114,10 +102,7 @@ export class ResearchClient {
     if (!jobId) {
       throw new Error("ResearchClient.getJob: jobId is required");
     }
-    return await this.request<JobRecord>(
-      "GET",
-      `/research/jobs/${encodeURIComponent(jobId)}`,
-    );
+    return await this.request<JobRecord>("GET", `/research/jobs/${encodeURIComponent(jobId)}`);
   }
 
   async listJobs(): Promise<JobListResponse> {
@@ -130,7 +115,7 @@ export class ResearchClient {
     method: "GET" | "POST",
     path: string,
     body?: unknown,
-    overrideTimeoutMs?: number,
+    overrideTimeoutMs?: number
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const controller = new AbortController();
@@ -141,9 +126,10 @@ export class ResearchClient {
     try {
       response = await this.fetchImpl(url, {
         method,
-        headers: body !== undefined
-          ? { "Content-Type": "application/json", "Accept": "application/json" }
-          : { "Accept": "application/json" },
+        headers:
+          body !== undefined
+            ? { "Content-Type": "application/json", Accept: "application/json" }
+            : { Accept: "application/json" },
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
@@ -173,7 +159,7 @@ export class ResearchClient {
       const detail = extractDetail(parsed);
       throw new ResearchClientError(
         `${method} ${path} failed: HTTP ${response.status}${detail ? ` -- ${detail}` : ""}`,
-        { status: response.status, body: parsed },
+        { status: response.status, body: parsed }
       );
     }
 

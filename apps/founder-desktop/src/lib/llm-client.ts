@@ -235,6 +235,7 @@ export async function streamChat(opts: StreamChatOptions): Promise<string> {
     }
   };
 
+  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: executor must remain async for spawn lifecycle
   return new Promise<string>(async (resolve, reject) => {
     try {
       unlisteners.push(

@@ -35,7 +35,10 @@ function jsonResponse(body: unknown, status = 200): Response {
 console.log("ResearchClient");
 
 await run("baseUrl strips trailing slash", async () => {
-  const c = new ResearchClient({ baseUrl: "http://x:3030//", fetchImpl: (async () => jsonResponse({})) as typeof fetch });
+  const c = new ResearchClient({
+    baseUrl: "http://x:3030//",
+    fetchImpl: (async () => jsonResponse({})) as typeof fetch,
+  });
   assert.equal(c.baseUrl, "http://x:3030");
 });
 
@@ -108,7 +111,8 @@ await run("transitions queued -> running -> done and emits onProgress per change
     mkJob({ status: "running", progress_message: "writing report" }),
     mkJob({ status: "done", progress_message: "done", result: { ok: true } }),
   ];
-  const fakeFetch: typeof fetch = (async () => jsonResponse(seq[i++] ?? seq[seq.length - 1])) as typeof fetch;
+  const fakeFetch: typeof fetch = (async () =>
+    jsonResponse(seq[i++] ?? seq[seq.length - 1])) as typeof fetch;
   const c = new ResearchClient({ baseUrl: "http://x", fetchImpl: fakeFetch });
   const messages: string[] = [];
   const outcome = await pollJob(c, "j-1", {

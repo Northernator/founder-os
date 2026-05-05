@@ -131,7 +131,7 @@ export class FsAccountStore implements AccountStore {
 }
 
 function writeAtomic(target: string, content: string): void {
-  const tmp = target + ".tmp-" + process.pid + "-" + Date.now();
+  const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
   fs.writeFileSync(tmp, content, "utf-8");
   fs.renameSync(tmp, target);
 }

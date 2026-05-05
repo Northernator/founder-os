@@ -58,9 +58,7 @@ export class RuntimeHomeService {
     const target = this.targetAuthPath(agent);
     if (!target) {
       throw new Error(
-        agent.id +
-          " has no configHome/authFile in its AgentDefinition; " +
-          "managed-account materialisation isn't supported for it."
+        `${agent.id} has no configHome/authFile in its AgentDefinition; managed-account materialisation isn't supported for it.`
       );
     }
 
@@ -70,7 +68,7 @@ export class RuntimeHomeService {
     // Grab the account's stored auth and write it atomically.
     const account = this.store.get(agent.id, accountId);
     if (!account) {
-      throw new Error("agent-accounts: account " + accountId + " not found for " + agent.id);
+      throw new Error(`agent-accounts: account ${accountId} not found for ${agent.id}`);
     }
     fs.mkdirSync(path.dirname(target), { recursive: true });
     writeAtomic(target, account.authJson);
@@ -147,7 +145,7 @@ export function expandHome(input: string): string {
 }
 
 function writeAtomic(target: string, content: string): void {
-  const tmp = target + ".tmp-" + process.pid + "-" + Date.now();
+  const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
   fs.writeFileSync(tmp, content, "utf-8");
   fs.renameSync(tmp, target);
 }

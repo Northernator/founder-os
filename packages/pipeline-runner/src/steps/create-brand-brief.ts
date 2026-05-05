@@ -71,7 +71,8 @@ export async function createBrandBriefStep(
   }
 
   const personalities = ctx.personalities ?? ["minimal", "technical"];
-  const palette = DEFAULT_PALETTES[personalities[0] ?? "minimal"] ?? DEFAULT_PALETTES["minimal"]!;
+  // biome-ignore lint/style/noNonNullAssertion: value asserted non-null by surrounding logic
+  const palette = DEFAULT_PALETTES[personalities[0] ?? "minimal"] ?? DEFAULT_PALETTES.minimal!;
 
   const brief = createBrandBrief({
     ventureId: ctx.manifest.id,

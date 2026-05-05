@@ -10,7 +10,7 @@ import { Card } from "@founder-os/ui";
  * "Use default" is the null state — stored as NULL in SQLite, shown as the
  * first option in the dropdown.
  */
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import * as db from "../../lib/db.js";
 
 type Props = {

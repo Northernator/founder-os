@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
@@ -20,99 +16,38 @@
     "isolatedModules": true,
     "baseUrl": ".",
     "paths": {
-      "@founder-os/domain": [
-        "packages/domain/src/index.ts"
-      ],
-      "@founder-os/workspace-core": [
-        "packages/workspace-core/src/index.ts"
-      ],
-      "@founder-os/workspace-tauri": [
-        "packages/workspace-tauri/src/index.ts"
-      ],
-      "@founder-os/workspace-node": [
-        "packages/workspace-node/src/index.ts"
-      ],
-      "@founder-os/db": [
-        "packages/db/src/index.ts"
-      ],
-      "@founder-os/pipeline-core": [
-        "packages/pipeline-core/src/index.ts"
-      ],
-      "@founder-os/pipeline-runner": [
-        "packages/pipeline-runner/src/index.ts"
-      ],
-      "@founder-os/branding-core": [
-        "packages/branding-core/src/index.ts"
-      ],
-      "@founder-os/branding-assets": [
-        "packages/branding-assets/src/index.ts"
-      ],
-      "@founder-os/artifacts-core": [
-        "packages/artifacts-core/src/index.ts"
-      ],
-      "@founder-os/artifacts-index": [
-        "packages/artifacts-index/src/index.ts"
-      ],
-      "@founder-os/handoff-contract": [
-        "packages/handoff-contract/src/index.ts"
-      ],
-      "@founder-os/handoff-desktop": [
-        "packages/handoff-desktop/src/index.ts"
-      ],
-      "@founder-os/handoff-vscode": [
-        "packages/handoff-vscode/src/index.ts"
-      ],
-      "@founder-os/audit-contract": [
-        "packages/audit-contract/src/index.ts"
-      ],
-      "@founder-os/chat-ui": [
-        "packages/chat-ui/src/index.ts"
-      ],
-      "@founder-os/ui": [
-        "packages/ui/src/index.ts"
-      ],
-      "@founder-os/graph-ui": [
-        "packages/graph-ui/src/index.ts"
-      ],
-      "@founder-os/state": [
-        "packages/state/src/index.ts"
-      ],
-      "@founder-os/query": [
-        "packages/query/src/index.ts"
-      ],
-      "@founder-os/prompts": [
-        "packages/prompts/src/index.ts"
-      ],
-      "@founder-os/logger": [
-        "packages/logger/src/index.ts"
-      ],
-      "@founder-os/llm-providers": [
-        "packages/llm-providers/src/index.ts"
-      ],
-      "@founder-os/agent-registry": [
-        "packages/agent-registry/src/index.ts"
-      ],
-      "@founder-os/agent-runner": [
-        "packages/agent-runner/src/index.ts"
-      ],
-      "@founder-os/worktree-manager": [
-        "packages/worktree-manager/src/index.ts"
-      ],
-      "@founder-os/mission-control-protocol": [
-        "packages/mission-control-protocol/src/index.ts"
-      ],
-      "@founder-os/mission-control-ui": [
-        "packages/mission-control-ui/src/main.tsx"
-      ],
-      "@founder-os/agent-accounts": [
-        "packages/agent-accounts/src/index.ts"
-      ],
-      "@founder-os/research-runner": [
-        "packages/research-runner/src/index.ts"
-      ],
-      "@founder-os/sales-agents": [
-        "packages/sales-agents/src/index.ts"
-      ]
+      "@founder-os/domain": ["packages/domain/src/index.ts"],
+      "@founder-os/workspace-core": ["packages/workspace-core/src/index.ts"],
+      "@founder-os/workspace-tauri": ["packages/workspace-tauri/src/index.ts"],
+      "@founder-os/workspace-node": ["packages/workspace-node/src/index.ts"],
+      "@founder-os/db": ["packages/db/src/index.ts"],
+      "@founder-os/pipeline-core": ["packages/pipeline-core/src/index.ts"],
+      "@founder-os/pipeline-runner": ["packages/pipeline-runner/src/index.ts"],
+      "@founder-os/branding-core": ["packages/branding-core/src/index.ts"],
+      "@founder-os/branding-assets": ["packages/branding-assets/src/index.ts"],
+      "@founder-os/artifacts-core": ["packages/artifacts-core/src/index.ts"],
+      "@founder-os/artifacts-index": ["packages/artifacts-index/src/index.ts"],
+      "@founder-os/handoff-contract": ["packages/handoff-contract/src/index.ts"],
+      "@founder-os/handoff-desktop": ["packages/handoff-desktop/src/index.ts"],
+      "@founder-os/handoff-vscode": ["packages/handoff-vscode/src/index.ts"],
+      "@founder-os/audit-contract": ["packages/audit-contract/src/index.ts"],
+      "@founder-os/chat-ui": ["packages/chat-ui/src/index.ts"],
+      "@founder-os/ui": ["packages/ui/src/index.ts"],
+      "@founder-os/graph-ui": ["packages/graph-ui/src/index.ts"],
+      "@founder-os/state": ["packages/state/src/index.ts"],
+      "@founder-os/query": ["packages/query/src/index.ts"],
+      "@founder-os/prompts": ["packages/prompts/src/index.ts"],
+      "@founder-os/logger": ["packages/logger/src/index.ts"],
+      "@founder-os/llm-providers": ["packages/llm-providers/src/index.ts"],
+      "@founder-os/agent-registry": ["packages/agent-registry/src/index.ts"],
+      "@founder-os/agent-runner": ["packages/agent-runner/src/index.ts"],
+      "@founder-os/worktree-manager": ["packages/worktree-manager/src/index.ts"],
+      "@founder-os/mission-control-protocol": ["packages/mission-control-protocol/src/index.ts"],
+      "@founder-os/mission-control-ui": ["packages/mission-control-ui/src/main.tsx"],
+      "@founder-os/agent-accounts": ["packages/agent-accounts/src/index.ts"],
+      "@founder-os/research-runner": ["packages/research-runner/src/index.ts"],
+      "@founder-os/sales-agents": ["packages/sales-agents/src/index.ts"],
+      "@founder-os/stage-runners": ["packages/stage-runners/src/index.ts"]
     }
   }
 }

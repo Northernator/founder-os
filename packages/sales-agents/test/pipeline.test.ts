@@ -17,10 +17,7 @@ import { runSalesPipeline } from "../src/pipeline.js";
 import type { CallLlm, SalesMemory } from "../src/types.js";
 import { InMemoryFs } from "./_helpers/in-memory-fs.js";
 
-function makeMockLlm(
-  order: string[],
-  failAgent?: string,
-): CallLlm {
+function makeMockLlm(order: string[], failAgent?: string): CallLlm {
   return async ({ system }) => {
     const id = identifyAgent(system);
     order.push(id);

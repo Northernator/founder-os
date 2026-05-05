@@ -17,7 +17,7 @@ import { Button, Card } from "@founder-os/ui";
  * flips back to `api_key` and disables — we don't touch the vendor's
  * credentials file, that's the CLI's business.
  */
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CLI_AGENT_IDS,
   CLI_AGENT_META,
@@ -502,6 +502,7 @@ function SubscriptionCard({
           {state.loginLog.length === 0
             ? "Waiting for CLI output…"
             : state.loginLog.map((l, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: static list, order does not change
                 <div key={i} style={{ color: l.stream === "stderr" ? "#FCA5A5" : "#E5E7EB" }}>
                   {l.line}
                 </div>

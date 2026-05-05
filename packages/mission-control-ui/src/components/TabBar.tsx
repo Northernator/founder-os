@@ -35,6 +35,7 @@ export function TabBar(props: {
     <div className="mc-tabs" role="tablist">
       {TAB_DEFS.map((t) => (
         <button
+          type="button"
           key={t.id}
           role="tab"
           aria-selected={props.active === t.id}

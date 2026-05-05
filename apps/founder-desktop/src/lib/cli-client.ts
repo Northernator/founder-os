@@ -125,6 +125,7 @@ export async function cliLogin(agent: CliAgentId, opts: CliLoginOptions = {}): P
     }
   };
 
+  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: executor must remain async for spawn lifecycle
   return new Promise<boolean>(async (resolve, reject) => {
     try {
       unlisteners.push(
@@ -240,6 +241,7 @@ export async function cliStream(
     }
   };
 
+  // biome-ignore lint/suspicious/noAsyncPromiseExecutor: executor must remain async for spawn lifecycle
   return new Promise<string>(async (resolve, reject) => {
     try {
       unlisteners.push(

@@ -71,9 +71,7 @@ describe("BaseAgent.callJson", () => {
   });
 
   it("returns AgentOutput.error when LLM throws", async () => {
-    const out = await agent.run(
-      makeInput(fixedLlm(() => Promise.reject(new Error("rate limit")))),
-    );
+    const out = await agent.run(makeInput(fixedLlm(() => Promise.reject(new Error("rate limit")))));
     expect(out.status).toBe("error");
     expect(out.error).toBe("rate limit");
   });

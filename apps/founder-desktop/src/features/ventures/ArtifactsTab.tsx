@@ -7,7 +7,7 @@
  * that after a pipeline run completes, so freshly-written files appear
  * without the user having to click anything.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ScannedArtifact,
   readArtifactText,
@@ -48,6 +48,7 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
   // overwrite a newer scan's results.
   const latestScanKey = useRef<string>("");
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   const runScan = useCallback(async () => {
     const key = `${ventureId}@${Date.now()}`;
     latestScanKey.current = key;
@@ -89,6 +90,7 @@ export function ArtifactsTab({ ventureId, ventureRoot, rescanToken = 0 }: Props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ventureId, ventureRoot]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     void runScan();
   }, [runScan, rescanToken]);
@@ -305,7 +307,9 @@ function PreviewPane({ artifact }: { artifact: ScannedArtifact }) {
   return (
     <div style={{ padding: 28 }}>
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>{artifact.filename}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>
+          {artifact.filename}
+        </div>
         <div
           style={{
             fontSize: 11,
@@ -425,7 +429,7 @@ function CodeBlock({ content }: { content: string }) {
 // Helpers
 // ────────────────────────────────────────────────────────────────────
 
-function groupByType(items: ScannedArtifact[]): Array<[string, ScannedArtifact[]]> {
+function groupByType(items: ScannedArtifact[]): [string, ScannedArtifact[]][] {
   const map = new Map<string, ScannedArtifact[]>();
   for (const a of items) {
     const list = map.get(a.type);

@@ -25,7 +25,7 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<SessionEntry
 
   getTreeItem(entry: SessionEntry): vscode.TreeItem {
     const item = new vscode.TreeItem(entry.agent, vscode.TreeItemCollapsibleState.None);
-    item.description = entry.branch + " · " + entry.status;
+    item.description = `${entry.branch} · ${entry.status}`;
     item.contextValue = "agentSession";
     item.iconPath = new vscode.ThemeIcon(
       entry.status === "running"
@@ -34,18 +34,7 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<SessionEntry
           ? "check"
           : "stop-circle"
     );
-    item.tooltip =
-      entry.agent +
-      " session " +
-      entry.id +
-      "\nBranch: " +
-      entry.branch +
-      "\nWorktree: " +
-      entry.worktreePath +
-      "\nPID: " +
-      entry.session.pid +
-      "\nStarted: " +
-      new Date(entry.startedAt).toLocaleTimeString();
+    item.tooltip = `${entry.agent} session ${entry.id}\nBranch: ${entry.branch}\nWorktree: ${entry.worktreePath}\nPID: ${entry.session.pid}\nStarted: ${new Date(entry.startedAt).toLocaleTimeString()}`;
     item.command = {
       command: "founderCowork.showSession",
       title: "Show",

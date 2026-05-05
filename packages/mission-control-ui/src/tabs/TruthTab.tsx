@@ -64,7 +64,7 @@ export function TruthTab(_props: TabProps) {
           />
         </div>
         <div className="mc-row" style={{ marginTop: 10, justifyContent: "flex-end" }}>
-          <button onClick={run} disabled={busy}>
+          <button type="button" onClick={run} disabled={busy}>
             {busy ? "Generating…" : "Generate TRUTH.md"}
           </button>
         </div>
@@ -75,7 +75,7 @@ export function TruthTab(_props: TabProps) {
           <div className="mc-row" style={{ justifyContent: "space-between" }}>
             <h3 className="mc-card-title" style={{ margin: 0 }}>
               Result{" "}
-              <span className={"mc-pill " + statusClass(result.status)}>{result.status}</span>
+              <span className={`mc-pill ${statusClass(result.status)}`}>{result.status}</span>
             </h3>
             <span style={{ color: "var(--fc-fg-muted)", fontSize: 12 }}>run {result.runId}</span>
           </div>

@@ -67,7 +67,7 @@ export function TaskTab(props: TabProps) {
           />
         </div>
         <div className="mc-row" style={{ marginTop: 10, justifyContent: "flex-end" }}>
-          <button onClick={handleSpawn} disabled={!agentId || !prompt.trim()}>
+          <button type="button" onClick={handleSpawn} disabled={!agentId || !prompt.trim()}>
             Spawn session
           </button>
         </div>
@@ -77,6 +77,7 @@ export function TaskTab(props: TabProps) {
         <h3 className="mc-card-title">
           Orchestrate (PM + Executor){" "}
           <button
+            type="button"
             className="secondary"
             style={{ float: "right", padding: "2px 8px", fontSize: 12 }}
             onClick={() => setOrchestrating((v) => !v)}
@@ -121,6 +122,7 @@ export function TaskTab(props: TabProps) {
             <div />
             <div className="mc-row" style={{ marginTop: 6, justifyContent: "flex-end" }}>
               <button
+                type="button"
                 onClick={handleOrchestrate}
                 disabled={!pmAgent || !executorAgent || !goal.trim()}
               >
@@ -158,7 +160,7 @@ function SessionsCard(props: { sessions: TabProps["sessions"] }) {
               <th>Status</th>
               <th>PID</th>
               <th>Started</th>
-              <th></th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -169,18 +171,20 @@ function SessionsCard(props: { sessions: TabProps["sessions"] }) {
                   <code>{s.branch}</code>
                 </td>
                 <td>
-                  <span className={"mc-pill " + statusClass(s.status)}>{s.status}</span>
+                  <span className={`mc-pill ${statusClass(s.status)}`}>{s.status}</span>
                 </td>
                 <td>{s.pid}</td>
                 <td>{new Date(s.startedAt).toLocaleTimeString()}</td>
                 <td className="mc-row" style={{ gap: 6, justifyContent: "flex-end" }}>
                   <button
+                    type="button"
                     className="secondary"
                     onClick={() => send({ type: "session:show", sessionId: s.id })}
                   >
                     Show
                   </button>
                   <button
+                    type="button"
                     className="secondary"
                     onClick={() => send({ type: "session:kill", sessionId: s.id })}
                     disabled={s.status !== "running"}
@@ -251,6 +255,7 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
     }
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     void refreshStats();
   }, []);
@@ -285,6 +290,7 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
       <h3 className="mc-card-title">
         PM workflow{" "}
         <button
+          type="button"
           className="secondary"
           style={{ float: "right", padding: "2px 8px", fontSize: 12 }}
           onClick={() => setOpen((v) => !v)}
@@ -311,6 +317,7 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
               </p>
               <div className="mc-row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
                 <button
+                  type="button"
                   onClick={() => void fire("analyze", { type: "task:analyzeRepo" })}
                   disabled={busy !== null}
                 >
@@ -328,6 +335,7 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
               />
               <div className="mc-row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
                 <button
+                  type="button"
                   onClick={() => {
                     if (!planGoal.trim()) return;
                     void fire("plan", { type: "task:planTask", goal: planGoal.trim() });
@@ -356,6 +364,7 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
               </div>
               <div className="mc-row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
                 <button
+                  type="button"
                   onClick={() => {
                     if (!executor) return;
                     void fire("execute", {
@@ -376,6 +385,7 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
               </p>
               <div className="mc-row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
                 <button
+                  type="button"
                   onClick={() => void fire("review", { type: "task:reviewExecution" })}
                   disabled={busy !== null}
                 >
@@ -386,7 +396,7 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
 
             <SubCard title="5. Approve or request revision">
               <div className="mc-row" style={{ gap: 8, alignItems: "flex-end", marginBottom: 12 }}>
-                <button onClick={approve} disabled={busy !== null}>
+                <button type="button" onClick={approve} disabled={busy !== null}>
                   {busy === "approve" ? "Committing…" : "Approve (commit)"}
                 </button>
                 {lastApprove && <span className="mc-pill success">{lastApprove.slice(0, 8)}</span>}
@@ -399,6 +409,7 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
               />
               <div className="mc-row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
                 <button
+                  type="button"
                   className="secondary"
                   onClick={() => {
                     if (!executor || !revisionNotes.trim()) return;
@@ -425,6 +436,7 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
               />
               <div className="mc-row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
                 <button
+                  type="button"
                   onClick={() => {
                     if (!askGeminiQ.trim()) return;
                     void fire("ask", { type: "task:askGemini", question: askGeminiQ.trim() });
@@ -446,6 +458,7 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
               />
               <div className="mc-row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
                 <button
+                  type="button"
                   onClick={() => {
                     if (!askGeminiDiffQ.trim()) return;
                     void fire("ask-diff", {
@@ -463,7 +476,12 @@ function PmWorkflowCard(props: PmWorkflowCardProps) {
           </div>
 
           <div className="mc-row" style={{ gap: 8, marginTop: 14, alignItems: "center" }}>
-            <button className="secondary" onClick={refreshStats} disabled={busy !== null}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={refreshStats}
+              disabled={busy !== null}
+            >
               {busy === "stats" ? "Loading…" : "Refresh stats"}
             </button>
             {stats && (

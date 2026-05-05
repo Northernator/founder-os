@@ -256,7 +256,7 @@ async function tryReadSpecCanvas(ventureRoot: string): Promise<string | null> {
       console.warn(
         `[screens-drafter] spec canvas exceeded ${SPEC_CANVAS_CHAR_CAP} chars, truncating for prompt`
       );
-      return raw.slice(0, SPEC_CANVAS_CHAR_CAP) + "\n... (truncated)";
+      return `${raw.slice(0, SPEC_CANVAS_CHAR_CAP)}\n... (truncated)`;
     }
     return raw;
   } catch (err) {
@@ -319,7 +319,7 @@ async function tryReadResearchReports(
       }
       const trimmed =
         text.length > PER_FILE_RESEARCH_CHARS
-          ? text.slice(0, PER_FILE_RESEARCH_CHARS) + "\n\n[... truncated ...]"
+          ? `${text.slice(0, PER_FILE_RESEARCH_CHARS)}\n\n[... truncated ...]`
           : text;
       const filename = file.path.split(/[\\/]/).pop() ?? file.path;
       parts.push(`### ${filename}\n${trimmed}`);

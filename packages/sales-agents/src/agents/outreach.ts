@@ -32,19 +32,12 @@ export class OutreachAgent extends BaseAgent {
   protected async execute(input: AgentInput): Promise<Record<string, unknown>> {
     const memory = await this.loadMemory(input.fs, input.memoryPath);
 
-    const userPrompt =
-      `Write a personalised 5-email outreach sequence for this prospect.\n\n` +
-      `Research:\n${JSON.stringify(memory.research?.company ?? {}, null, 2)}\n\n` +
-      `BANT fit score: ${memory.bant?.fitScore ?? "N/A"} / 100\n` +
-      `BANT reasoning: ${memory.bant?.reasoning ?? "N/A"}\n\n` +
-      `Decision makers:\n${JSON.stringify(memory.decisionMakers?.contacts ?? [], null, 2)}\n\n` +
-      `Competitive context:\n${JSON.stringify(memory.competitiveIntel ?? {}, null, 2)}\n\n` +
-      `Make each email reference something specific. No generic openers.`;
+    const userPrompt = `Write a personalised 5-email outreach sequence for this prospect.\n\nResearch:\n${JSON.stringify(memory.research?.company ?? {}, null, 2)}\n\nBANT fit score: ${memory.bant?.fitScore ?? "N/A"} / 100\nBANT reasoning: ${memory.bant?.reasoning ?? "N/A"}\n\nDecision makers:\n${JSON.stringify(memory.decisionMakers?.contacts ?? [], null, 2)}\n\nCompetitive context:\n${JSON.stringify(memory.competitiveIntel ?? {}, null, 2)}\n\nMake each email reference something specific. No generic openers.`;
 
     const parsed = await this.callJson<{ emails: OutreachSlice["emails"] }>(
       input.callLlm,
       SYSTEM_PROMPT,
-      userPrompt,
+      userPrompt
     );
 
     const slice: OutreachSlice = {

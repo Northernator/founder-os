@@ -41,7 +41,7 @@ const DEFAULT_BASE_URL = "http://localhost:3030";
 const CHAT_HISTORY_REL_DIR = "01_research";
 const CHAT_HISTORY_FILE = "chat.jsonl";
 const POLL_INTERVAL_MS = 3000;
-const DEEP_TIMEOUT_MS = 15 * 60_000;        // GPT-Researcher can be slow
+const DEEP_TIMEOUT_MS = 15 * 60_000; // GPT-Researcher can be slow
 const COMPETITORS_TIMEOUT_MS = 20 * 60_000; // 20 URLs * scrape latency
 
 // ----------------------------- types -----------------------------
@@ -108,10 +108,13 @@ async function loadChatHistory(rootPath: string): Promise<ChatMessage[]> {
   }
 }
 
-async function persistChatHistory(rootPath: string, messages: readonly ChatMessage[]): Promise<void> {
+async function persistChatHistory(
+  rootPath: string,
+  messages: readonly ChatMessage[]
+): Promise<void> {
   try {
     await invoke("mkdir_p", { path: joinPath(rootPath, CHAT_HISTORY_REL_DIR) });
-    const jsonl = messages.map((m) => JSON.stringify(m)).join("\n") + "\n";
+    const jsonl = `${messages.map((m) => JSON.stringify(m)).join("\n")}\n`;
     await invoke("write_file", { path: chatHistoryPath(rootPath), content: jsonl });
   } catch (err) {
     console.warn("[research-chat] persistChatHistory failed", err);
@@ -119,7 +122,10 @@ async function persistChatHistory(rootPath: string, messages: readonly ChatMessa
 }
 
 function tokenize(rest: string): string[] {
-  return rest.split(/\s+/).map((s) => s.trim()).filter(Boolean);
+  return rest
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function shortError(err: unknown): string {
@@ -232,7 +238,7 @@ export function ResearchChatPanel(props: {
       setMessages((m) => [...m, { id, role, content, ts: Date.now(), ...extra }]);
       return id;
     },
-    [],
+    []
   );
 
   const updateMessage = useCallback((id: string, patch: Partial<ChatMessage>) => {
@@ -247,11 +253,9 @@ export function ResearchChatPanel(props: {
         append("system", "Usage: /deep <topic>");
         return;
       }
-      const messageId = append(
-        "assistant",
-        `Starting deep research: "${topic}" -- queued.`,
-        { jobStatus: "queued" },
-      );
+      const messageId = append("assistant", `Starting deep research: "${topic}" -- queued.`, {
+        jobStatus: "queued",
+      });
 
       let jobId: string;
       try {
@@ -314,7 +318,7 @@ export function ResearchChatPanel(props: {
         });
       }
     },
-    [append, client, updateMessage, venture.id],
+    [append, client, updateMessage, venture.id]
   );
 
   // ---- /competitors ----
@@ -332,7 +336,7 @@ export function ResearchChatPanel(props: {
       const messageId = append(
         "assistant",
         `Starting competitor scan over ${urls.length} URL(s) -- queued.`,
-        { jobStatus: "queued" },
+        { jobStatus: "queued" }
       );
 
       let jobId: string;
@@ -395,16 +399,14 @@ export function ResearchChatPanel(props: {
         });
       }
     },
-    [append, client, updateMessage, venture.id],
+    [append, client, updateMessage, venture.id]
   );
 
   // ---- /icp ----
   const handleIcp = useCallback(async () => {
-    const messageId = append(
-      "assistant",
-      "Starting ICP synthesis -- queued.",
-      { jobStatus: "queued" },
-    );
+    const messageId = append("assistant", "Starting ICP synthesis -- queued.", {
+      jobStatus: "queued",
+    });
 
     let jobId: string;
     try {
@@ -470,9 +472,10 @@ export function ResearchChatPanel(props: {
     try {
       const list = await client.listJobs();
       const jobs = list.jobs.slice(0, 20);
-      const summary = jobs.length === 0
-        ? "No jobs yet -- /deep or /competitors will create some."
-        : `Showing ${jobs.length} most recent job(s).`;
+      const summary =
+        jobs.length === 0
+          ? "No jobs yet -- /deep or /competitors will create some."
+          : `Showing ${jobs.length} most recent job(s).`;
       updateMessage(messageId, { content: summary, jobsList: jobs });
     } catch (err) {
       updateMessage(messageId, {
@@ -490,7 +493,8 @@ export function ResearchChatPanel(props: {
       {
         id: makeId(),
         role: "system",
-        content: "Cleared. (Disk history at 01_research/chat.jsonl is untouched -- it will be rewritten on next message.)",
+        content:
+          "Cleared. (Disk history at 01_research/chat.jsonl is untouched -- it will be rewritten on next message.)",
         ts: Date.now(),
       },
     ]);
@@ -529,7 +533,7 @@ export function ResearchChatPanel(props: {
       }
       append("system", `Unknown command: ${cmd}. Type /help for the list.`);
     },
-    [append, handleClear, handleCompetitors, handleDeep, handleIcp, handleJobs],
+    [append, handleClear, handleCompetitors, handleDeep, handleIcp, handleJobs]
   );
 
   const handleSend = useCallback(async () => {
@@ -540,7 +544,7 @@ export function ResearchChatPanel(props: {
     if (!text.startsWith("/")) {
       append(
         "system",
-        "Plain prose isn't sent anywhere yet -- only slash commands trigger jobs. Type /help.",
+        "Plain prose isn't sent anywhere yet -- only slash commands trigger jobs. Type /help."
       );
       return;
     }
@@ -657,8 +661,8 @@ function MessageRow(props: { m: ChatMessage; onOpenPath: (p: string) => void }) 
     m.role === "user"
       ? { color: "var(--text-primary)", fontWeight: 600 }
       : m.role === "system"
-      ? { color: "var(--text-tertiary)", fontStyle: "italic" }
-      : { color: "var(--text-secondary)" };
+        ? { color: "var(--text-tertiary)", fontStyle: "italic" }
+        : { color: "var(--text-secondary)" };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -710,15 +714,11 @@ function MessageRow(props: { m: ChatMessage; onOpenPath: (p: string) => void }) 
           {m.errorText}
         </pre>
       )}
-      {m.deepResult && (
-        <DeepResultCard result={m.deepResult} onOpenPath={onOpenPath} />
-      )}
+      {m.deepResult && <DeepResultCard result={m.deepResult} onOpenPath={onOpenPath} />}
       {m.competitorResult && (
         <CompetitorResultCard result={m.competitorResult} onOpenPath={onOpenPath} />
       )}
-      {m.icpResult && (
-        <IcpResultCard result={m.icpResult} onOpenPath={onOpenPath} />
-      )}
+      {m.icpResult && <IcpResultCard result={m.icpResult} onOpenPath={onOpenPath} />}
       {m.jobsList && <JobsListCard jobs={m.jobsList} />}
     </div>
   );
@@ -764,11 +764,10 @@ function DeepResultCard(props: {
       </div>
       {result.sources.length > 0 && (
         <details style={{ fontSize: 12, color: "var(--text-tertiary)" }}>
-          <summary style={{ cursor: "pointer" }}>
-            Sources ({result.sources.length})
-          </summary>
+          <summary style={{ cursor: "pointer" }}>Sources ({result.sources.length})</summary>
           <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
             {result.sources.slice(0, 30).map((s, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: static list, order does not change
               <li key={i} style={{ wordBreak: "break-all" }}>
                 <code>{s}</code>
               </li>
@@ -806,11 +805,7 @@ function CompetitorResultCard(props: {
       <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
         Scanned {result.competitor_count}, captured {result.pricing_rows_total} pricing row(s).
       </div>
-      <button
-        type="button"
-        onClick={() => onOpenPath(result.pricing_csv)}
-        style={openButtonStyle}
-      >
+      <button type="button" onClick={() => onOpenPath(result.pricing_csv)} style={openButtonStyle}>
         Open competitors-pricing.csv
       </button>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -838,9 +833,7 @@ function CompetitorRow(props: { c: CompetitorBreakdown }) {
     >
       <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
         <code style={{ minWidth: 140, color: "var(--text-primary)" }}>{c.slug}</code>
-        <span style={{ color: "var(--text-tertiary)" }}>
-          {c.pricing_rows} row(s)
-        </span>
+        <span style={{ color: "var(--text-tertiary)" }}>{c.pricing_rows} row(s)</span>
         <span style={{ color: "var(--text-muted)" }}>
           [{flagsOk.join(", ") || "no pages captured"}]
         </span>
@@ -848,7 +841,10 @@ function CompetitorRow(props: { c: CompetitorBreakdown }) {
       {c.errors.length > 0 && (
         <ul style={{ margin: "2px 0 0 18px", color: "var(--danger, #f87171)", fontSize: 11 }}>
           {c.errors.map((e, i) => (
-            <li key={i} style={{ wordBreak: "break-word" }}>{e}</li>
+            // biome-ignore lint/suspicious/noArrayIndexKey: static list, order does not change
+            <li key={i} style={{ wordBreak: "break-word" }}>
+              {e}
+            </li>
           ))}
         </ul>
       )}
@@ -918,22 +914,15 @@ function IcpResultCard(props: {
       }}
     >
       <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-        {result.personas_count} persona(s); summary {result.summary_chars.toLocaleString()} chars; from
+        {result.personas_count} persona(s); summary {result.summary_chars.toLocaleString()} chars;
+        from
         <code> {result.input_count}</code> input artifact(s).
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          onClick={() => onOpenPath(result.yaml_path)}
-          style={openButtonStyle}
-        >
+        <button type="button" onClick={() => onOpenPath(result.yaml_path)} style={openButtonStyle}>
           Open icp.yaml
         </button>
-        <button
-          type="button"
-          onClick={() => onOpenPath(result.md_path)}
-          style={openButtonStyle}
-        >
+        <button type="button" onClick={() => onOpenPath(result.md_path)} style={openButtonStyle}>
           Open icp.md
         </button>
       </div>

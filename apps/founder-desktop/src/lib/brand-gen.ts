@@ -133,7 +133,12 @@ export async function generateLogoCandidates(opts: {
   onArchetypeStart?: (archetype: LogoArchetype) => void;
   onArchetypeDone?: (candidate: LogoCandidate & { error?: string }) => void;
 }): Promise<(LogoCandidate & { error?: string })[]> {
-  const ALL_ARCHETYPES: LogoArchetype[] = ["wordmark", "lettermark", "icon-wordmark", "abstract-mark"];
+  const ALL_ARCHETYPES: LogoArchetype[] = [
+    "wordmark",
+    "lettermark",
+    "icon-wordmark",
+    "abstract-mark",
+  ];
   // When opts.archetypes is provided, run only that subset (preserving caller order).
   const archetypes: LogoArchetype[] = opts.archetypes
     ? opts.archetypes.filter((a) => ALL_ARCHETYPES.includes(a))
@@ -452,6 +457,7 @@ export function extractPaletteFromSvg(svg: string): string[] {
   const styleRe = /(?:fill|stroke)\s*:\s*(#[0-9a-fA-F]{3,8})/g;
   for (const re of [attrRe, styleRe]) {
     let match: RegExpExecArray | null;
+    // biome-ignore lint/suspicious/noAssignInExpressions: intentional assign-and-test pattern
     while ((match = re.exec(svg)) !== null) {
       const hex = match[1].toLowerCase();
       // Skip the "none" sentinel — SVGs often have fill="none" which

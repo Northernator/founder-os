@@ -22,7 +22,7 @@ import { Button } from "@founder-os/ui";
  * receives the picked provider id; parent is responsible for passing
  * it into the generation call.
  */
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import * as db from "../../lib/db.js";
 
 export type ProviderPickerResult = {
@@ -136,6 +136,7 @@ export function ProviderPickerDialog({
   if (!isOpen) return null;
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: role chosen intentionally; refactor deferred
     <div
       role="dialog"
       aria-modal="true"

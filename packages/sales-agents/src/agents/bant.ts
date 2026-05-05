@@ -32,10 +32,7 @@ export class BantAgent extends BaseAgent {
     const memory = await this.loadMemory(input.fs, input.memoryPath);
     const research = memory.research?.company ?? {};
 
-    const userPrompt =
-      `Score this prospect on BANT criteria.\n\n` +
-      `Company research:\n${JSON.stringify(research, null, 2)}\n\n` +
-      `Be honest -- under-score rather than over-score when uncertain.`;
+    const userPrompt = `Score this prospect on BANT criteria.\n\nCompany research:\n${JSON.stringify(research, null, 2)}\n\nBe honest -- under-score rather than over-score when uncertain.`;
 
     const parsed = await this.callJson<{
       scores: BantSlice["scores"];

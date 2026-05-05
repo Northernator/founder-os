@@ -13,14 +13,18 @@ export function AgentsTab(props: TabProps) {
           <h3 className="mc-card-title" style={{ margin: 0 }}>
             Registered agents
           </h3>
-          <button className="secondary" onClick={() => send({ type: "agents:rerunPreflight" })}>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => send({ type: "agents:rerunPreflight" })}
+          >
             Re-run preflight
           </button>
         </div>
         <table className="mc-table" style={{ marginTop: 8 }}>
           <thead>
             <tr>
-              <th></th>
+              <th />
               <th>Agent</th>
               <th>ID</th>
               <th>Auth</th>
@@ -71,6 +75,7 @@ export function AgentsTab(props: TabProps) {
         </p>
         <div className="mc-row" style={{ marginTop: 10 }}>
           <button
+            type="button"
             className="secondary"
             onClick={() => send({ type: "settings:open", query: "founderCowork.providers" })}
           >

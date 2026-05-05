@@ -128,11 +128,11 @@ function buildUserPrompt(ctx: GenerateNamingCandidatesContext): string {
 function extractCandidatesJson(raw: string): unknown {
   const text = raw.trim();
   const fenced = /```json\s*\n([\s\S]*?)\n```/i.exec(text) || /```\s*\n([\s\S]*?)\n```/i.exec(text);
-  if (fenced && fenced[1]) {
+  if (fenced?.[1]) {
     return JSON.parse(fenced[1]);
   }
   const brace = /(\{[\s\S]*\})/.exec(text);
-  if (brace && brace[1]) {
+  if (brace?.[1]) {
     return JSON.parse(brace[1]);
   }
   throw new Error("No JSON object found in LLM response");
@@ -194,12 +194,12 @@ export async function generateNamingCandidatesStep(
     };
   }
 
-  const rawCandidates: Array<Record<string, unknown>> =
+  const rawCandidates: Record<string, unknown>[] =
     typeof parsed === "object" &&
     parsed !== null &&
     "candidates" in parsed &&
     Array.isArray((parsed as { candidates: unknown }).candidates)
-      ? (parsed as { candidates: Array<Record<string, unknown>> }).candidates
+      ? (parsed as { candidates: Record<string, unknown>[] }).candidates
       : [];
 
   if (rawCandidates.length === 0) {
@@ -252,7 +252,7 @@ export async function generateNamingCandidatesStep(
   scan.candidates = [...scan.candidates, ...added];
   scan.updatedAt = now;
 
-  await ctx.fs.writeFile(scanPath, JSON.stringify(scan, null, 2) + "\n");
+  await ctx.fs.writeFile(scanPath, `${JSON.stringify(scan, null, 2)}\n`);
   log.info(`Wrote ${scanPath} — added ${added.length}, total ${scan.candidates.length}`);
 
   const status: "done" | "partial" = dropped > 0 ? "partial" : "done";

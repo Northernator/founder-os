@@ -79,5 +79,5 @@ export function writeSharedConfig(update: Partial<SharedConfig>): void {
   };
   const path = getSharedConfigPath();
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(next, null, 2) + "\n", "utf-8");
+  writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`, "utf-8");
 }

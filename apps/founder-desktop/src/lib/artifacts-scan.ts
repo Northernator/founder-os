@@ -45,7 +45,7 @@ function toForwardSlashes(p: string): string {
 function relativeFromRoot(root: string, child: string): string {
   const r = toForwardSlashes(root).replace(/\/+$/, "");
   const c = toForwardSlashes(child);
-  if (c.startsWith(r + "/")) return c.slice(r.length + 1);
+  if (c.startsWith(`${r}/`)) return c.slice(r.length + 1);
   return c;
 }
 

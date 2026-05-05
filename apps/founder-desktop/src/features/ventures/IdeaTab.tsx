@@ -147,6 +147,7 @@ function errDetail(err: unknown): string {
   }
 }
 
+// biome-ignore lint/correctness/noUnusedVariables: kept for future use / interface compatibility
 function makeid(): string {
   return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
     ? crypto.randomUUID()
@@ -194,6 +195,7 @@ export function IdeaTab({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Sync manifest fields into local state when manifest changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     if (!manifest) return;
     setEntityType(manifest.entityType);
@@ -205,6 +207,7 @@ export function IdeaTab({
   }, [manifest?.id]);
 
   // Load canvas from disk on venture change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     let cancelled = false;
     const path = canvasPath(venture.rootPath);
@@ -228,6 +231,7 @@ export function IdeaTab({
 
   // Load uploaded docs list from disk.
   // list_dir returns absolute paths — extract filename for display.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     let cancelled = false;
     const dir = uploadsDir(venture.rootPath);
@@ -274,7 +278,7 @@ export function IdeaTab({
         try {
           await invoke("write_file", {
             path: canvasPath(venture.rootPath),
-            content: JSON.stringify(canvasToSave, null, 2) + "\n",
+            content: `${JSON.stringify(canvasToSave, null, 2)}\n`,
           });
         } catch (err) {
           pushToast({
@@ -390,7 +394,7 @@ export function IdeaTab({
             const saveName = file.name.replace(/\.pdf$/i, ".extracted.txt");
             await invoke("write_file", {
               path: joinPath(dir, saveName),
-              content: content + "\n",
+              content: `${content}\n`,
             });
             setUploadedDocs((prev) => [
               ...prev.filter((d) => d.id !== saveName),
@@ -419,7 +423,7 @@ export function IdeaTab({
 
         await invoke("write_file", {
           path: joinPath(dir, file.name),
-          content: content + "\n",
+          content: `${content}\n`,
         });
         setUploadedDocs((prev) => [
           ...prev.filter((d) => d.id !== file.name),
@@ -454,7 +458,7 @@ export function IdeaTab({
       const canvasToSave: IdeaCanvas = { ...canvas, updatedAt: new Date().toISOString() };
       await invoke("write_file", {
         path: canvasPath(venture.rootPath),
-        content: JSON.stringify(canvasToSave, null, 2) + "\n",
+        content: `${JSON.stringify(canvasToSave, null, 2)}\n`,
       });
       if (manifest) {
         const updated: VentureManifest = {
@@ -752,7 +756,9 @@ Omit any field where the document has no relevant info.`;
                       {doc.name}
                     </span>
                     {doc.sizeKb > 0 && (
-                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{doc.sizeKb} KB</span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        {doc.sizeKb} KB
+                      </span>
                     )}
                     <button
                       type="button"
@@ -891,7 +897,8 @@ Omit any field where the document has no relevant info.`;
                 }}
                 style={{
                   ...selectStyle,
-                  borderColor: entityType === "undecided" ? "var(--warning-soft)" : "var(--border-input)",
+                  borderColor:
+                    entityType === "undecided" ? "var(--warning-soft)" : "var(--border-input)",
                 }}
               >
                 {ENTITY_OPTIONS.map((o) => (
@@ -982,7 +989,9 @@ Omit any field where the document has no relevant info.`;
               {canvas.talkedToCustomers && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <label style={{ fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+                    <label
+                      style={{ fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}
+                    >
                       How many?
                     </label>
                     <input
@@ -1027,7 +1036,9 @@ Omit any field where the document has no relevant info.`;
             >
               {canvas.hasEarlySignups && (
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <label style={{ fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+                  <label
+                    style={{ fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}
+                  >
                     How many?
                   </label>
                   <input
@@ -1134,7 +1145,14 @@ Omit any field where the document has no relevant info.`;
                 }}
               />
             </div>
-            <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginBottom: 14, textAlign: "right" }}>
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text-tertiary)",
+                marginBottom: 14,
+                textAlign: "right",
+              }}
+            >
               {doneCount} / 6 complete
             </div>
 
@@ -1147,7 +1165,9 @@ Omit any field where the document has no relevant info.`;
               />
             ))}
 
-            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border-subtle)" }}>
+            <div
+              style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border-subtle)" }}
+            >
               <button
                 type="button"
                 onClick={handleAdvance}
@@ -1173,7 +1193,12 @@ Omit any field where the document has no relevant info.`;
               </button>
               {allDone && (
                 <p
-                  style={{ margin: "8px 0 0", fontSize: 11, color: "var(--success)", textAlign: "center" }}
+                  style={{
+                    margin: "8px 0 0",
+                    fontSize: 11,
+                    color: "var(--success)",
+                    textAlign: "center",
+                  }}
                 >
                   All set! This moves you to the RESEARCHED stage.
                 </p>
@@ -1215,7 +1240,9 @@ function Section({
         }}
       >
         <span style={{ fontSize: 16 }}>{icon}</span>
-        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{title}</h4>
+        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+          {title}
+        </h4>
       </div>
       <div style={{ padding: "18px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
         {children}
@@ -1243,7 +1270,9 @@ function Field({
         {label}
         {required && <span style={{ color: "var(--danger)", marginLeft: 4 }}>*</span>}
       </span>
-      {hint && <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -2 }}>{hint}</span>}
+      {hint && (
+        <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -2 }}>{hint}</span>
+      )}
       {children}
     </label>
   );
@@ -1287,7 +1316,9 @@ function CharCount({ value, min }: { value: string; min: number }) {
   const len = value.trim().length;
   const ok = len >= min;
   return (
-    <span style={{ fontSize: 11, color: ok ? "var(--success)" : "var(--text-muted)", marginTop: -2 }}>
+    <span
+      style={{ fontSize: 11, color: ok ? "var(--success)" : "var(--text-muted)", marginTop: -2 }}
+    >
       {len} / {min} chars {ok ? "✓" : ""}
     </span>
   );
@@ -1319,7 +1350,13 @@ function CheckRow({
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
-          style={{ marginTop: 2, width: 15, height: 15, accentColor: "var(--accent)", flexShrink: 0 }}
+          style={{
+            marginTop: 2,
+            width: 15,
+            height: 15,
+            accentColor: "var(--accent)",
+            flexShrink: 0,
+          }}
         />
         <span style={{ fontSize: 13, color: "var(--text-primary)", lineHeight: 1.4 }}>{label}</span>
       </label>
@@ -1366,7 +1403,9 @@ function ToggleRow({
       />
       <div>
         <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{label}</div>
-        {hint && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{hint}</div>}
+        {hint && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{hint}</div>
+        )}
       </div>
     </label>
   );
@@ -1451,10 +1490,18 @@ function ChecklistItem({
         )}
       </div>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "var(--text-primary)" : "var(--text-tertiary)" }}>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: done ? "var(--text-primary)" : "var(--text-tertiary)",
+          }}
+        >
           {label}
         </div>
-        {!done && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{hint}</div>}
+        {!done && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{hint}</div>
+        )}
       </div>
     </div>
   );

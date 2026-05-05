@@ -35,6 +35,7 @@ export function VaultTab(_props: TabProps) {
     }
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     void refresh();
   }, []);
@@ -86,7 +87,7 @@ export function VaultTab(_props: TabProps) {
 
   async function deleteDoc(id: string): Promise<void> {
     if (!id) return;
-    if (typeof window !== "undefined" && !window.confirm("Delete '" + id + "'?")) return;
+    if (typeof window !== "undefined" && !window.confirm(`Delete '${id}'?`)) return;
     setBusy("delete");
     setError(null);
     try {
@@ -108,10 +109,10 @@ export function VaultTab(_props: TabProps) {
             Vault
           </h3>
           <div className="mc-row" style={{ gap: 6 }}>
-            <button className="secondary" onClick={() => setDraft(EMPTY_DRAFT)}>
+            <button type="button" className="secondary" onClick={() => setDraft(EMPTY_DRAFT)}>
               New doc
             </button>
-            <button className="secondary" onClick={refresh} disabled={busy !== null}>
+            <button type="button" className="secondary" onClick={refresh} disabled={busy !== null}>
               {busy === "list" ? "Loading…" : "Refresh"}
             </button>
           </div>
@@ -140,6 +141,7 @@ export function VaultTab(_props: TabProps) {
                 const active = d.id === draft.id;
                 return (
                   <button
+                    type="button"
                     key={d.id}
                     className="secondary"
                     onClick={() => void loadDoc(d.id)}
@@ -171,10 +173,11 @@ export function VaultTab(_props: TabProps) {
         <div className="mc-card" style={{ marginBottom: 0 }}>
           <div className="mc-row" style={{ justifyContent: "space-between" }}>
             <h3 className="mc-card-title" style={{ margin: 0 }}>
-              {draft.id ? "Editing: " + draft.id : "New doc"}
+              {draft.id ? `Editing: ${draft.id}` : "New doc"}
             </h3>
             {draft.id && (
               <button
+                type="button"
                 className="secondary"
                 onClick={() => void deleteDoc(draft.id)}
                 disabled={busy !== null}
@@ -210,7 +213,11 @@ export function VaultTab(_props: TabProps) {
             />
           </div>
           <div className="mc-row" style={{ marginTop: 10, justifyContent: "flex-end" }}>
-            <button onClick={saveDraft} disabled={!draft.title.trim() || busy !== null}>
+            <button
+              type="button"
+              onClick={saveDraft}
+              disabled={!draft.title.trim() || busy !== null}
+            >
               {busy === "save" ? "Saving…" : draft.id ? "Save" : "Create"}
             </button>
           </div>

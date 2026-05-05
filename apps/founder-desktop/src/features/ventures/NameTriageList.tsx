@@ -330,7 +330,9 @@ function CandidateRow({
         )}
       </div>
       {rationale && (
-        <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45 }}>{rationale}</p>
+        <p style={{ margin: 0, fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45 }}>
+          {rationale}
+        </p>
       )}
 
       {showChecks && (

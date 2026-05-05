@@ -49,19 +49,7 @@ export function buildAnalyzePrompt(): string {
 }
 
 export function buildPlanPrompt(goal: string): string {
-  return (
-    "You are the PM. Analyze the repo, then write a detailed `TASK.md` at " +
-    "the repo root describing the work required to: " +
-    goal +
-    ".\n\n" +
-    "Include:\n" +
-    "  - File-level guidance: which files to edit/create\n" +
-    "  - Step-by-step plan (numbered)\n" +
-    "  - Dependencies / packages to add (if any)\n" +
-    "  - Acceptance criteria\n\n" +
-    "Do NOT write source code yet - the executor will do that. " +
-    "Only write `TASK.md`."
-  );
+  return `You are the PM. Analyze the repo, then write a detailed \`TASK.md\` at the repo root describing the work required to: ${goal}.\n\nInclude:\n  - File-level guidance: which files to edit/create\n  - Step-by-step plan (numbered)\n  - Dependencies / packages to add (if any)\n  - Acceptance criteria\n\nDo NOT write source code yet - the executor will do that. Only write \`TASK.md\`.`;
 }
 
 export function buildExecutePrompt(): string {
@@ -76,30 +64,13 @@ export function buildExecutePrompt(): string {
 export function buildReviewPrompt(diffSnippet: string): string {
   const truncatedDiff =
     diffSnippet.length > 60_000
-      ? diffSnippet.slice(0, 60_000) + "\n[... truncated; see git history for full diff ...]"
+      ? `${diffSnippet.slice(0, 60_000)}\n[... truncated; see git history for full diff ...]`
       : diffSnippet;
-  return (
-    "You are the Reviewer. The executor has produced changes against this " +
-    "branch. Below is the cumulative diff. Write `REVIEW.md` at the repo " +
-    "root with:\n" +
-    "  - What changed (high-level summary)\n" +
-    "  - Issues, bugs, or risks (be specific - cite file:line)\n" +
-    "  - Style/clarity nits\n" +
-    "  - Verdict: APPROVE / REQUEST_REVISION (with reasons)\n\n" +
-    "If any test commands exist, suggest which ones to run.\n\n" +
-    "DIFF:\n" +
-    truncatedDiff
-  );
+  return `You are the Reviewer. The executor has produced changes against this branch. Below is the cumulative diff. Write \`REVIEW.md\` at the repo root with:\n  - What changed (high-level summary)\n  - Issues, bugs, or risks (be specific - cite file:line)\n  - Style/clarity nits\n  - Verdict: APPROVE / REQUEST_REVISION (with reasons)\n\nIf any test commands exist, suggest which ones to run.\n\nDIFF:\n${truncatedDiff}`;
 }
 
 export function buildRevisionPrompt(notes: string): string {
-  return (
-    "You are the Executor revising the previous work. Read `REVIEW.md` at " +
-    "the repo root for the reviewer's notes, plus the additional guidance " +
-    "below from the human reviewer. Address each item. Commit incrementally.\n\n" +
-    "ADDITIONAL NOTES:\n" +
-    notes
-  );
+  return `You are the Executor revising the previous work. Read \`REVIEW.md\` at the repo root for the reviewer's notes, plus the additional guidance below from the human reviewer. Address each item. Commit incrementally.\n\nADDITIONAL NOTES:\n${notes}`;
 }
 
 export function buildAskGeminiPrompt(question: string): string {
@@ -109,9 +80,9 @@ export function buildAskGeminiPrompt(question: string): string {
 export function buildAskGeminiDiffPrompt(diffSnippet: string, question: string): string {
   const truncatedDiff =
     diffSnippet.length > 60_000
-      ? diffSnippet.slice(0, 60_000) + "\n[... truncated ...]"
+      ? `${diffSnippet.slice(0, 60_000)}\n[... truncated ...]`
       : diffSnippet;
-  return question + "\n\nContext - cumulative diff:\n" + truncatedDiff;
+  return `${question}\n\nContext - cumulative diff:\n${truncatedDiff}`;
 }
 
 // ──────────────────────────────────────────────
@@ -156,14 +127,14 @@ export function commitApproved(
   workspaceRoot: string,
   reviewer = "Mission Control"
 ): { commitSha: string } {
-  const message = "Approved via " + reviewer;
+  const message = `Approved via ${reviewer}`;
   const add = cp.spawnSync("git", ["add", "-A"], {
     cwd: workspaceRoot,
     encoding: "utf8",
     windowsHide: true,
   });
   if (add.status !== 0) {
-    throw new Error("git add -A failed: " + (add.stderr || add.stdout || "unknown"));
+    throw new Error(`git add -A failed: ${add.stderr || add.stdout || "unknown"}`);
   }
   const commit = cp.spawnSync("git", ["commit", "-m", message, "--allow-empty"], {
     cwd: workspaceRoot,
@@ -171,7 +142,7 @@ export function commitApproved(
     windowsHide: true,
   });
   if (commit.status !== 0) {
-    throw new Error("git commit failed: " + (commit.stderr || commit.stdout || "unknown"));
+    throw new Error(`git commit failed: ${commit.stderr || commit.stdout || "unknown"}`);
   }
   const head = cp.spawnSync("git", ["rev-parse", "HEAD"], {
     cwd: workspaceRoot,

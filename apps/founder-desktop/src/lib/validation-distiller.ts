@@ -64,12 +64,14 @@ const FIELD_SCHEMA: Record<keyof DistilledValidationFields, string> = {
     "Reasoning behind the validation decision (validated / pivot / invalidated) — only if discussed",
 };
 
-export const distillValidation = createDistiller<DistilledValidationFields, ValidationCurrentFields>(
-  {
-    contextLabel: "validation-distill",
-    systemPromptTemplate: ({ sources, currentFields }) => {
-      const currentSummary = JSON.stringify(currentFields, null, 2);
-      return `You are a validation analyst. Your task is to read evidence — a chat conversation between a founder and an AI assistant about a startup venture, plus any attached documents — and distill it into structured fields for a Validation Canvas (ICP, offer, pricing, results).
+export const distillValidation = createDistiller<
+  DistilledValidationFields,
+  ValidationCurrentFields
+>({
+  contextLabel: "validation-distill",
+  systemPromptTemplate: ({ sources, currentFields }) => {
+    const currentSummary = JSON.stringify(currentFields, null, 2);
+    return `You are a validation analyst. Your task is to read evidence — a chat conversation between a founder and an AI assistant about a startup venture, plus any attached documents — and distill it into structured fields for a Validation Canvas (ICP, offer, pricing, results).
 
 Field schema (all string fields):
 ${JSON.stringify(FIELD_SCHEMA, null, 2)}
@@ -89,14 +91,13 @@ Current field values (so you don't regress):
 ${currentSummary}
 
 ${formatSourcesBlock(sources)}`;
-    },
-    parseDraft: (parsed) => {
-      const draft: DistilledValidationFields = {};
-      for (const key of Object.keys(FIELD_SCHEMA) as (keyof DistilledValidationFields)[]) {
-        const v = pickStringField(parsed, key);
-        if (v !== undefined) draft[key] = v;
-      }
-      return draft;
-    },
-  }
-);
+  },
+  parseDraft: (parsed) => {
+    const draft: DistilledValidationFields = {};
+    for (const key of Object.keys(FIELD_SCHEMA) as (keyof DistilledValidationFields)[]) {
+      const v = pickStringField(parsed, key);
+      if (v !== undefined) draft[key] = v;
+    }
+    return draft;
+  },
+});

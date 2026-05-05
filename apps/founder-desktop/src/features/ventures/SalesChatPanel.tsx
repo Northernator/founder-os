@@ -24,15 +24,15 @@
  * Adding a new cue is mechanical: add to CUES, add a button.
  */
 
+import { type ChatMessage, ProjectChat } from "@founder-os/chat-ui";
 import type { Venture } from "@founder-os/domain";
 import type { SalesMemory } from "@founder-os/sales-agents";
-import { type ChatMessage, ProjectChat } from "@founder-os/chat-ui";
 import { Button } from "@founder-os/ui";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { tauriFs } from "../../lib/pipeline-fs.js";
 import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
+import { tauriFs } from "../../lib/pipeline-fs.js";
 import { pushToast } from "../../lib/toasts.js";
 
 const CHAT_REL_PATH = ".founder/sales/chat.jsonl";
@@ -45,7 +45,11 @@ const CHAT_REL_PATH = ".founder/sales/chat.jsonl";
 const CUES = [
   { token: "SALES_ONE_PAGER_READY", label: "Save One-Pager", filename: "one-pager.md" },
   { token: "SALES_PROPOSAL_READY", label: "Save Proposal", filename: "proposal.md" },
-  { token: "SALES_OUTREACH_REFINED", label: "Save Refined Outreach", filename: "refined-outreach.md" },
+  {
+    token: "SALES_OUTREACH_REFINED",
+    label: "Save Refined Outreach",
+    filename: "refined-outreach.md",
+  },
 ] as const;
 
 /**
@@ -180,7 +184,7 @@ export function SalesChatPanel({ venture, memoryPath }: SalesChatPanelProps) {
         signal: ctrl.signal,
         onDelta: (delta) => {
           setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + delta } : m)),
+            prev.map((m) => (m.id === assistantId ? { ...m, content: m.content + delta } : m))
           );
         },
       });
@@ -190,8 +194,8 @@ export function SalesChatPanel({ venture, memoryPath }: SalesChatPanelProps) {
         const msg = err instanceof Error ? err.message : String(err);
         setMessages((prev) =>
           prev.map((m) =>
-            m.id === assistantId ? { ...m, content: m.content + `\n\n[error: ${msg}]` } : m,
-          ),
+            m.id === assistantId ? { ...m, content: `${m.content}\n\n[error: ${msg}]` } : m
+          )
         );
         pushToast({ kind: "error", message: `Chat failed: ${msg.slice(0, 120)}` });
       }
@@ -206,7 +210,7 @@ export function SalesChatPanel({ venture, memoryPath }: SalesChatPanelProps) {
    * directory (next to memory.json). Strips the cue token from the
    * tail of the message so the saved file does not include it.
    */
-  async function handleSaveAction(cue: typeof CUES[number]): Promise<void> {
+  async function handleSaveAction(cue: (typeof CUES)[number]): Promise<void> {
     if (!memoryPath || savingCue) return;
     const last = lastAssistantMessage(messages);
     if (!last) {
@@ -243,9 +247,7 @@ export function SalesChatPanel({ venture, memoryPath }: SalesChatPanelProps) {
             fontSize: "0.85rem",
           }}
         >
-          <span style={{ alignSelf: "center", opacity: 0.75, marginRight: "0.25rem" }}>
-            Try:
-          </span>
+          <span style={{ alignSelf: "center", opacity: 0.75, marginRight: "0.25rem" }}>Try:</span>
           {SUGGESTIONS.map((s) => (
             <button
               key={s}

@@ -37,7 +37,7 @@ export type PollJobOutcome =
 export async function pollJob(
   client: ResearchClient,
   jobId: string,
-  opts: PollJobOptions = {},
+  opts: PollJobOptions = {}
 ): Promise<PollJobOutcome> {
   const intervalMs = opts.intervalMs ?? 3000;
   const timeoutMs = opts.timeoutMs ?? 15 * 60_000;

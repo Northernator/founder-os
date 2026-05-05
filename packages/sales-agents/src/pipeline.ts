@@ -23,11 +23,11 @@
  * per-agent status as it lands.
  */
 
-import { ResearchAgent } from "./agents/research.js";
 import { BantAgent } from "./agents/bant.js";
-import { DecisionMakerFinderAgent } from "./agents/decision-makers.js";
 import { CompetitiveIntelAgent } from "./agents/competitive-intel.js";
+import { DecisionMakerFinderAgent } from "./agents/decision-makers.js";
 import { OutreachAgent } from "./agents/outreach.js";
+import { ResearchAgent } from "./agents/research.js";
 import type {
   AgentInput,
   AgentOutput,
@@ -67,16 +67,14 @@ export async function runSalesPipeline(opts: RunSalesPipelineOpts): Promise<Pipe
   const researchOut = await research.run(input);
   results.push(researchOut);
   if (researchOut.status === "success") {
-    await mergeAndSave(fs, memoryPath, { research: researchOut.data as unknown as SalesMemory["research"] });
+    await mergeAndSave(fs, memoryPath, {
+      research: researchOut.data as unknown as SalesMemory["research"],
+    });
   }
   onProgress?.({ phase: "result", agent: research.name, output: researchOut });
 
   // ---- Stage 2: fan-out (BANT, DecisionMakers, CompetitiveIntel in parallel) ----
-  const fanOut = [
-    new BantAgent(),
-    new DecisionMakerFinderAgent(),
-    new CompetitiveIntelAgent(),
-  ];
+  const fanOut = [new BantAgent(), new DecisionMakerFinderAgent(), new CompetitiveIntelAgent()];
   for (const agent of fanOut) onProgress?.({ phase: "start", agent: agent.name });
   const fanOutResults = await Promise.all(fanOut.map((a) => a.run(input)));
   results.push(...fanOutResults);
@@ -86,7 +84,8 @@ export async function runSalesPipeline(opts: RunSalesPipelineOpts): Promise<Pipe
   const fanOutPatch: Partial<SalesMemory> = {};
   for (const out of fanOutResults) {
     if (out.status !== "success") continue;
-    if (out.agentName === "BantAgent") fanOutPatch.bant = out.data as unknown as SalesMemory["bant"];
+    if (out.agentName === "BantAgent")
+      fanOutPatch.bant = out.data as unknown as SalesMemory["bant"];
     if (out.agentName === "DecisionMakerFinderAgent")
       fanOutPatch.decisionMakers = out.data as unknown as SalesMemory["decisionMakers"];
     if (out.agentName === "CompetitiveIntelAgent")
@@ -103,7 +102,9 @@ export async function runSalesPipeline(opts: RunSalesPipelineOpts): Promise<Pipe
   const outreachOut = await outreach.run(input);
   results.push(outreachOut);
   if (outreachOut.status === "success") {
-    await mergeAndSave(fs, memoryPath, { outreach: outreachOut.data as unknown as SalesMemory["outreach"] });
+    await mergeAndSave(fs, memoryPath, {
+      outreach: outreachOut.data as unknown as SalesMemory["outreach"],
+    });
   }
   onProgress?.({ phase: "result", agent: outreach.name, output: outreachOut });
 
@@ -118,7 +119,7 @@ export async function runSalesPipeline(opts: RunSalesPipelineOpts): Promise<Pipe
 async function mergeAndSave(
   fs: FsAdapter,
   path: string,
-  patch: Partial<SalesMemory>,
+  patch: Partial<SalesMemory>
 ): Promise<void> {
   const current = (await fs.readJson<SalesMemory>(path)) ?? {};
   await fs.writeJson(path, { ...current, ...patch });
@@ -137,8 +138,14 @@ function parentDir(path: string): string {
 export function slugForUrl(url: string): string {
   try {
     const u = new URL(url);
-    return u.hostname.replace(/^www\./, "").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    return u.hostname
+      .replace(/^www\./, "")
+      .replace(/[^a-z0-9]+/gi, "-")
+      .toLowerCase();
   } catch {
-    return url.replace(/[^a-z0-9]+/gi, "-").toLowerCase().slice(0, 64);
+    return url
+      .replace(/[^a-z0-9]+/gi, "-")
+      .toLowerCase()
+      .slice(0, 64);
   }
 }

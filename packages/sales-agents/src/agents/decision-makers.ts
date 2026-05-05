@@ -31,16 +31,12 @@ export class DecisionMakerFinderAgent extends BaseAgent {
     const memory = await this.loadMemory(input.fs, input.memoryPath);
     const research = memory.research?.company ?? {};
 
-    const userPrompt =
-      `Find likely decision makers at this company:\n\n` +
-      `${JSON.stringify(research, null, 2)}\n\n` +
-      `List 3-5 ROLES (not named people). Include department, seniority, and ` +
-      `concrete finding tips.`;
+    const userPrompt = `Find likely decision makers at this company:\n\n${JSON.stringify(research, null, 2)}\n\nList 3-5 ROLES (not named people). Include department, seniority, and concrete finding tips.`;
 
     const parsed = await this.callJson<{ contacts: DecisionMakersSlice["contacts"] }>(
       input.callLlm,
       SYSTEM_PROMPT,
-      userPrompt,
+      userPrompt
     );
 
     const slice: DecisionMakersSlice = {

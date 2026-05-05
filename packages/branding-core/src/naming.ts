@@ -48,14 +48,14 @@ export function generateSeedCandidates(seeds: string[], industry: string): NameC
       trademarkRiskHint: "unknown",
     },
     {
-      name: seeds[0]?.toLowerCase() + "ly",
+      name: `${seeds[0]?.toLowerCase()}ly`,
       style: "invented",
       rationale: `"${seeds[0]}" with invented suffix for SaaS feel`,
       domainAvailabilityHint: "unknown",
       trademarkRiskHint: "unknown",
     },
     {
-      name: seeds[0]?.toLowerCase() + "hq",
+      name: `${seeds[0]?.toLowerCase()}hq`,
       style: "descriptive",
       rationale: `"${seeds[0]}" + HQ — signals ${industry} hub`,
       domainAvailabilityHint: "likely",

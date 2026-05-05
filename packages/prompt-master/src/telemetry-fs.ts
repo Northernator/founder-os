@@ -55,7 +55,7 @@ class FsTelemetrySink implements TelemetrySink {
 
     try {
       await this.ensureDir();
-      await appendFile(logFileInternal(), line + "\n", "utf8");
+      await appendFile(logFileInternal(), `${line}\n`, "utf8");
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("[prompt-master] telemetry write failed:", err);

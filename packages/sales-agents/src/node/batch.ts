@@ -20,7 +20,7 @@
 import { readFile } from "node:fs/promises";
 
 import type { CallLlm, FsAdapter } from "../types.js";
-import { runOneProspect, type RunOneProspectResult } from "./run-prospect.js";
+import { type RunOneProspectResult, runOneProspect } from "./run-prospect.js";
 
 export interface RunBatchOpts {
   /** Path to targets file (.json or .txt). */
@@ -102,6 +102,7 @@ export async function runBatch(opts: RunBatchOpts): Promise<RunBatchResult> {
             agentSummary: [],
             error: err instanceof Error ? err.message : String(err),
           };
+          // biome-ignore lint/style/noNonNullAssertion: value asserted non-null by surrounding logic
           opts.onProspectEvent?.({ phase: "done", index: idx, total, result: results[idx]! });
         })
         .finally(() => {
@@ -156,12 +157,14 @@ function parseJsonTargets(raw: string, path: string): string[] {
     throw new Error(`could not parse JSON in ${path}: ${err instanceof Error ? err.message : err}`);
   }
   if (Array.isArray(parsed)) return parsed.filter(isUrlString);
-  if (parsed && typeof parsed === "object" && Array.isArray((parsed as { prospects?: unknown }).prospects)) {
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    Array.isArray((parsed as { prospects?: unknown }).prospects)
+  ) {
     return (parsed as { prospects: unknown[] }).prospects.filter(isUrlString);
   }
-  throw new Error(
-    `${path} JSON must be an array of URLs or an object with a "prospects" array`,
-  );
+  throw new Error(`${path} JSON must be an array of URLs or an object with a "prospects" array`);
 }
 
 function isUrlString(v: unknown): v is string {

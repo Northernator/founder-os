@@ -1,11 +1,6 @@
 import { watchInbox } from "@founder-os/handoff-vscode";
 import { acceptBundle, consumeInboxFile } from "@founder-os/handoff-vscode";
-import {
-  makeFailureResult,
-  makeSuccessResult,
-  writeProgress,
-  writeResult,
-} from "@founder-os/handoff-vscode";
+import { makeFailureResult, writeProgress, writeResult } from "@founder-os/handoff-vscode";
 import { createLogger } from "@founder-os/logger";
 import { setTransport } from "@founder-os/prompt-master";
 import { createClaudeCliTransport, installNodeBackends } from "@founder-os/prompt-master/node";
@@ -155,7 +150,7 @@ function getVentureRoot(): string | null {
 async function handleBundle(
   bundle: HandoffBundle,
   ventureRoot: string,
-  context: vscode.ExtensionContext
+  _context: vscode.ExtensionContext
 ): Promise<void> {
   log.info(`Received bundle ${bundle.runId} (${bundle.type})`);
 

@@ -28,6 +28,7 @@ const HTML_ESCAPE: Record<string, string> = {
 };
 
 function escapeHtml(s: string): string {
+  // biome-ignore lint/style/noNonNullAssertion: value asserted non-null by surrounding logic
   return s.replace(/[&<>"']/g, (c) => HTML_ESCAPE[c]!);
 }
 

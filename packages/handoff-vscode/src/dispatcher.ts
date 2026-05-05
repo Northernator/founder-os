@@ -41,7 +41,7 @@ export async function dispatchBundle(
 ): Promise<HandoffResult> {
   const runner = runners[bundle.type];
   if (!runner) {
-    throw new Error("HandoffDispatcher: no runner registered for bundle.type=" + bundle.type);
+    throw new Error(`HandoffDispatcher: no runner registered for bundle.type=${bundle.type}`);
   }
   return runner(bundle, ctx);
 }

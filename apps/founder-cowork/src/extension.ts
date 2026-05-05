@@ -23,7 +23,6 @@ import {
   makeAccount,
 } from "@founder-os/agent-accounts";
 import {
-  AGENT_REGISTRY,
   type AgentDefinition,
   type AgentId,
   getAgent,
@@ -58,7 +57,7 @@ const log = createLogger("founder-cowork");
 const FIRST_OPEN_KEY = "founderCowork.hasSeenMissionControl";
 const ACTIVE_ACCOUNTS_KEY = "founderCowork.activeAccounts";
 
-let extensionContext: vscode.ExtensionContext | null = null;
+let _extensionContext: vscode.ExtensionContext | null = null;
 let unsubscribeInbox: (() => void) | null = null;
 let statusProvider: StatusTreeProvider | null = null;
 let sessionProvider: SessionTreeProvider | null = null;
@@ -114,7 +113,7 @@ function getActiveAccountId(
 
 export function activate(context: vscode.ExtensionContext): void {
   log.info("Founder Cowork activating...");
-  extensionContext = context;
+  _extensionContext = context;
 
   // Wire up Prompt Master via the Claude CLI subprocess - no separate API
   // key needed. Uses whatever auth the CLI itself has (OAuth from
@@ -133,7 +132,7 @@ export function activate(context: vscode.ExtensionContext): void {
     );
     log.info("prompt-master: claude-cli transport registered (uses CLI auth)");
   } catch (err) {
-    log.warn("prompt-master: transport setup failed (" + String(err) + "), falling back to no-op");
+    log.warn(`prompt-master: transport setup failed (${String(err)}), falling back to no-op`);
   }
 
   // Ensure globalStorage exists (FsAccountStore uses it).
@@ -280,16 +279,15 @@ export function activate(context: vscode.ExtensionContext): void {
   void runPreflight().then((h) => {
     agentHealth = h;
     log.info(
-      "Preflight: " +
-        Object.entries(h)
-          .map(([k, v]) => k + "=" + (v.healthy ? "ok" : "missing"))
-          .join(", ")
+      `Preflight: ${Object.entries(h)
+        .map(([k, v]) => `${k}=${v.healthy ? "ok" : "missing"}`)
+        .join(", ")}`
     );
     postAgentHealth(h);
   });
 
   const agentCount = listAgents().length;
-  log.info("Founder Cowork activated (" + agentCount + " agents)");
+  log.info(`Founder Cowork activated (${agentCount} agents)`);
 
   const hasSeen = context.globalState.get<boolean>(FIRST_OPEN_KEY, false);
   if (!hasSeen) {
@@ -298,7 +296,7 @@ export function activate(context: vscode.ExtensionContext): void {
   } else {
     void vscode.window
       .showInformationMessage(
-        "Founder Cowork ready (" + agentCount + " agents registered)",
+        `Founder Cowork ready (${agentCount} agents registered)`,
         "Open Mission Control"
       )
       .then((pick) => {
@@ -379,7 +377,7 @@ function idFromLabel(label: string): string {
     .trim()
     .replace(/[^A-Za-z0-9_-]+/g, "-")
     .slice(0, 64);
-  return slug || "account-" + Date.now().toString(36);
+  return slug || `account-${Date.now().toString(36)}`;
 }
 
 // ──────────────────────────────────────────────
@@ -393,7 +391,7 @@ async function runPreflight(): Promise<AgentHealthMap> {
       const healthy = await probeBinary(def.detectCmd);
       results[def.id] = healthy
         ? { healthy: true }
-        : { healthy: false, hint: "`" + def.detectCmd + "` not found on PATH" };
+        : { healthy: false, hint: `\`${def.detectCmd}\` not found on PATH` };
     } catch (e) {
       results[def.id] = {
         healthy: false,
@@ -441,8 +439,8 @@ async function cmdNewSession(context: vscode.ExtensionContext): Promise<void> {
   if (!picked) return;
 
   const prompt = await vscode.window.showInputBox({
-    prompt: "Prompt for " + picked.label,
-    placeHolder: "what should " + picked.label + " work on in this session?",
+    prompt: `Prompt for ${picked.label}`,
+    placeHolder: `what should ${picked.label} work on in this session?`,
     ignoreFocusOut: true,
   });
   if (prompt === undefined) return;
@@ -472,25 +470,14 @@ async function runOrchestration(
   goal: string,
   context: vscode.ExtensionContext
 ): Promise<void> {
-  const pmPrompt =
-    "You are the PM. Analyze the repo, then write a detailed TASK.md at the repo root " +
-    "describing the work required to: " +
-    goal +
-    ". Include file-level guidance. Do not write code yet.";
-  const execPrompt =
-    "You are the executor. Read TASK.md at the repo root and implement what it describes. " +
-    "Commit incrementally. Goal: " +
-    goal;
+  const pmPrompt = `You are the PM. Analyze the repo, then write a detailed TASK.md at the repo root describing the work required to: ${goal}. Include file-level guidance. Do not write code yet.`;
+  const execPrompt = `You are the executor. Read TASK.md at the repo root and implement what it describes. Commit incrementally. Goal: ${goal}`;
 
   await spawnSession(pm, pmPrompt, { branchSuffix: "pm" }, context);
   await spawnSession(executor, execPrompt, { branchSuffix: "exec" }, context);
 
   void vscode.window.showInformationMessage(
-    "Orchestrated: " +
-      pm.label +
-      " + " +
-      executor.label +
-      ". Watch the two terminals for live output."
+    `Orchestrated: ${pm.label} + ${executor.label}. Watch the two terminals for live output.`
   );
 }
 
@@ -507,7 +494,7 @@ async function spawnSession(
   const health = agentHealth[def.id];
   if (health && !health.healthy) {
     const pick = await vscode.window.showWarningMessage(
-      "Founder Cowork: " + (health.hint ?? def.detectCmd + " not found") + ". Spawn anyway?",
+      `Founder Cowork: ${health.hint ?? `${def.detectCmd} not found`}. Spawn anyway?`,
       "Spawn anyway",
       "Cancel"
     );
@@ -516,10 +503,7 @@ async function spawnSession(
 
   if (def.promptInjection === "http") {
     void vscode.window.showInformationMessage(
-      "Founder Cowork: " +
-        def.label +
-        " uses HTTP (no PTY session). " +
-        "Use the Mission Control Ollama tab instead."
+      `Founder Cowork: ${def.label} uses HTTP (no PTY session). Use the Mission Control Ollama tab instead.`
     );
     return;
   }
@@ -552,6 +536,7 @@ async function spawnSession(
   const account =
     def.authStyle === "managed-account" ? getActiveAccountId(context, def.id) : undefined;
 
+  // biome-ignore lint/suspicious/noImplicitAnyLet: type inferred from later assignment
   let session;
   try {
     session = await getRunner().spawn({
@@ -563,15 +548,13 @@ async function spawnSession(
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.error("AgentRunner.spawn failed: " + msg);
-    void vscode.window.showErrorMessage(
-      "Founder Cowork: failed to spawn " + def.label + " — " + msg
-    );
+    log.error(`AgentRunner.spawn failed: ${msg}`);
+    void vscode.window.showErrorMessage(`Founder Cowork: failed to spawn ${def.label} — ${msg}`);
     return;
   }
 
-  const accountSuffix = account ? " · @" + account : "";
-  const terminalName = def.icon + " " + def.label + " · " + branch.slice(-8) + accountSuffix;
+  const accountSuffix = account ? ` · @${account}` : "";
+  const terminalName = `${def.icon} ${def.label} · ${branch.slice(-8)}${accountSuffix}`;
   const { terminal, dispose: disposeTerminal } = createSessionTerminal(session, terminalName);
   terminal.show(false);
 
@@ -591,7 +574,7 @@ async function spawnSession(
   postSessionStarted(toSummary(entry));
 
   session.onExit(({ exitCode }) => {
-    log.info("Session " + session.id + " (" + def.id + ") exited code=" + exitCode);
+    log.info(`Session ${session.id} (${def.id}) exited code=${exitCode}`);
     sessionProvider?.update(session.id, { status: "exited" });
     postSessionExited(session.id, exitCode);
   });
@@ -670,7 +653,7 @@ async function resolveSession(sessionId?: string): Promise<SessionEntry | undefi
   if (all.length === 1) return all[0];
   const pick = await vscode.window.showQuickPick(
     all.map((s) => ({
-      label: s.agent + " · " + s.branch,
+      label: `${s.agent} · ${s.branch}`,
       description: s.status,
       id: s.id,
     })),
@@ -686,13 +669,11 @@ async function pickAgent(placeHolder: string): Promise<AgentDefinition | undefin
       const h = agentHealth[a.id];
       const healthMark = h === undefined ? "" : h.healthy ? " ✓" : " ⚠";
       return {
-        label: a.icon + "  " + a.label + healthMark,
+        label: `${a.icon}  ${a.label}${healthMark}`,
         description: a.id,
-        detail:
-          (h && !h.healthy ? (h.hint ?? "not found") + " · " : "") +
-          a.authStyle +
-          " · prompt via " +
-          a.promptInjection,
+        detail: `${
+          (h && !h.healthy ? `${h.hint ?? "not found"} · ` : "") + a.authStyle
+        } · prompt via ${a.promptInjection}`,
         id: a.id,
       };
     }),
@@ -714,7 +695,7 @@ async function cmdPickVentureRoot(): Promise<void> {
     .getConfiguration("founderCowork")
     .update("ventureRoot", path, vscode.ConfigurationTarget.Global);
   postVentureRoot(path);
-  void vscode.window.showInformationMessage("Venture root set: " + path);
+  void vscode.window.showInformationMessage(`Venture root set: ${path}`);
 }
 
 // ──────────────────────────────────────────────
@@ -722,7 +703,7 @@ async function cmdPickVentureRoot(): Promise<void> {
 // ──────────────────────────────────────────────
 
 function startWatching(ventureRoot: string, context: vscode.ExtensionContext): void {
-  log.info("Starting handoff inbox watch on " + ventureRoot);
+  log.info(`Starting handoff inbox watch on ${ventureRoot}`);
   unsubscribeInbox = watchInbox(ventureRoot, (bundle) =>
     handleBundle(bundle, ventureRoot, context)
   );
@@ -742,7 +723,7 @@ async function handleBundle(
   ventureRoot: string,
   _context: vscode.ExtensionContext
 ): Promise<void> {
-  log.info("Received bundle " + bundle.runId + " (" + bundle.type + ")");
+  log.info(`Received bundle ${bundle.runId} (${bundle.type})`);
 
   const claudeBinary =
     vscode.workspace.getConfiguration("founderCowork").get<string>("providers.claude.binaryName") ??
@@ -768,8 +749,8 @@ async function handleBundle(
     writeResult(result, ventureRoot);
     statusProvider?.updateRun(bundle.runId, result.status, 100);
   } catch (err) {
-    log.error("handleBundle error: " + String(err));
-    const failure = makeFailureResult(bundle, "Runner error: " + String(err));
+    log.error(`handleBundle error: ${String(err)}`);
+    const failure = makeFailureResult(bundle, `Runner error: ${String(err)}`);
     writeResult(failure, ventureRoot);
     statusProvider?.updateRun(bundle.runId, "failed", 100);
   }

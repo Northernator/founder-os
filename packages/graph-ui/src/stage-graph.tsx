@@ -11,7 +11,7 @@ import {
   ReactFlow,
 } from "@xyflow/react";
 import type React from "react";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import "@xyflow/react/dist/style.css";
 import { VENTURE_STAGE_ORDER, type VentureStage } from "@founder-os/domain";
 

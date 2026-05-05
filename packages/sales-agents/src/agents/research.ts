@@ -30,15 +30,12 @@ export class ResearchAgent extends BaseAgent {
   readonly name = "ResearchAgent";
 
   protected async execute(input: AgentInput): Promise<Record<string, unknown>> {
-    const userPrompt =
-      `Research this company website and provide structured intelligence:\n` +
-      `${input.prospectUrl}\n\n` +
-      `Focus on: who they are, what they do, market position, growth indicators.`;
+    const userPrompt = `Research this company website and provide structured intelligence:\n${input.prospectUrl}\n\nFocus on: who they are, what they do, market position, growth indicators.`;
 
     const parsed = await this.callJson<{ company: ResearchSlice["company"] }>(
       input.callLlm,
       SYSTEM_PROMPT,
-      userPrompt,
+      userPrompt
     );
 
     const slice: ResearchSlice = {

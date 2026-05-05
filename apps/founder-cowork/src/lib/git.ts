@@ -117,7 +117,7 @@ export async function createPR(
     });
     child.on("exit", (code) => {
       if (code !== 0) {
-        reject(new Error("gh pr create exited " + code + ": " + (err || out)));
+        reject(new Error(`gh pr create exited ${code}: ${err || out}`));
         return;
       }
       // gh prints the PR URL on the last line of stdout.
@@ -127,7 +127,7 @@ export async function createPR(
         .reverse()
         .find((l) => l.startsWith("http"));
       if (!url) {
-        reject(new Error("gh pr create returned no URL: " + out));
+        reject(new Error(`gh pr create returned no URL: ${out}`));
         return;
       }
       resolve({ url });

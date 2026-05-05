@@ -181,14 +181,12 @@ export class BuildRunner {
       });
       child.on("error", (err: Error) => {
         clearTimeout(timer);
-        reject(new Error("claude CLI spawn failed: " + err.message));
+        reject(new Error(`claude CLI spawn failed: ${err.message}`));
       });
       child.on("close", (code: number | null) => {
         clearTimeout(timer);
         if (code !== 0) {
-          reject(
-            new Error("claude CLI exit " + (code ?? "?") + " - " + stderr.slice(0, 240).trim())
-          );
+          reject(new Error(`claude CLI exit ${code ?? "?"} - ${stderr.slice(0, 240).trim()}`));
           return;
         }
         resolve(streaming ? accumulated : stdout);
@@ -203,7 +201,9 @@ export class BuildRunner {
     const written: string[] = [];
     const filenameRegex = /```([\w./-]+\.\w+)\s*\n/g;
 
+    // biome-ignore lint/suspicious/noImplicitAnyLet: type inferred from later assignment
     let match;
+    // biome-ignore lint/suspicious/noAssignInExpressions: intentional assign-and-test pattern
     while ((match = filenameRegex.exec(response)) !== null) {
       const filename = match[1];
       if (

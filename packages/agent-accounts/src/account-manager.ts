@@ -90,12 +90,7 @@ export class AccountManager {
           // but we rethrow nothing so the original error (if any) wins.
           // eslint-disable-next-line no-console
           console.warn(
-            "AccountManager: restore() failed for " +
-              agent.id +
-              " account=" +
-              handle.accountId +
-              ": " +
-              String(err)
+            `AccountManager: restore() failed for ${agent.id} account=${handle.accountId}: ${String(err)}`
           );
         }
       }

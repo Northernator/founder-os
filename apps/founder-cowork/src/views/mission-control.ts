@@ -89,6 +89,7 @@ export function openMissionControl(
   panel.webview.html = renderHtml(context, panel.webview, health);
 
   panel.webview.onDidReceiveMessage((m: WebviewToHostMessage) =>
+    // biome-ignore lint/style/noNonNullAssertion: value asserted non-null by surrounding logic
     handleWebviewMessage(m, panel!, health, context)
   );
 
@@ -160,15 +161,7 @@ function buildExplainPrompt(selection: string, question?: string): string {
   const ask =
     question?.trim() ||
     "Explain what this code/text does, line by line where useful, then give a short summary at the end.";
-  return (
-    "You are the Founder Cowork Explain agent. " +
-    ask +
-    "\n\n" +
-    "TARGET:\n" +
-    "```\n" +
-    selection +
-    "\n```"
-  );
+  return `You are the Founder Cowork Explain agent. ${ask}\n\nTARGET:\n\`\`\`\n${selection}\n\`\`\``;
 }
 
 async function handleWebviewMessage(
@@ -310,8 +303,8 @@ async function handleWebviewMessage(
         }
         const fileName = path.basename(editor.document.fileName);
         const saved = memoryLib.saveMemory(root, {
-          name: "Snapshot: " + fileName,
-          description: "Saved from " + editor.document.fileName + " at " + new Date().toISOString(),
+          name: `Snapshot: ${fileName}`,
+          description: `Saved from ${editor.document.fileName} at ${new Date().toISOString()}`,
           type: "reference",
           body: editor.document.getText(),
         });
@@ -480,7 +473,7 @@ async function handleWebviewMessage(
         send(p, {
           type: "toast",
           level: "info",
-          message: "Approved -> " + result.commitSha.slice(0, 8),
+          message: `Approved -> ${result.commitSha.slice(0, 8)}`,
         });
         return;
       }
@@ -556,39 +549,21 @@ function renderHtml(
 
   if (!fs.existsSync(indexPath)) {
     return fallbackHtml(
-      "Mission Control UI bundle missing. Expected: " +
-        indexPath +
-        ". Run `pnpm --filter @founder-os/mission-control-ui build` first, " +
-        "or run `pnpm --filter founder-cowork build` which chains both."
+      `Mission Control UI bundle missing. Expected: ${indexPath}. Run \`pnpm --filter @founder-os/mission-control-ui build\` first, or run \`pnpm --filter founder-cowork build\` which chains both.`
     );
   }
 
   let html = fs.readFileSync(indexPath, "utf8");
 
   const nonce = makeNonce();
-  const csp =
-    "default-src 'none'; " +
-    "img-src " +
-    webview.cspSource +
-    " data:; " +
-    "style-src " +
-    webview.cspSource +
-    " 'unsafe-inline'; " +
-    "script-src " +
-    webview.cspSource +
-    " 'nonce-" +
-    nonce +
-    "' 'unsafe-inline'; " +
-    "font-src " +
-    webview.cspSource +
-    ";";
+  const csp = `default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}' 'unsafe-inline'; font-src ${webview.cspSource};`;
 
-  const cspMeta = '<meta http-equiv="Content-Security-Policy" content="' + csp + '" />';
-  html = html.replace(/<head>/, "<head>" + cspMeta);
+  const cspMeta = `<meta http-equiv="Content-Security-Policy" content="${csp}" />`;
+  html = html.replace(/<head>/, `<head>${cspMeta}`);
 
   html = html.replace(
     /<script(\s[^>]*)?>/g,
-    (_match, attrs) => "<script" + (attrs || "") + ' nonce="' + nonce + '">'
+    (_match, attrs) => `<script${attrs || ""} nonce="${nonce}">`
   );
 
   return html;

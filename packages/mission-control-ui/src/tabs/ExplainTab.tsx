@@ -84,7 +84,7 @@ export function ExplainTab(props: TabProps) {
           />
         </div>
         <div className="mc-row" style={{ marginTop: 10, justifyContent: "flex-end" }}>
-          <button onClick={run} disabled={busy || !selection.trim()}>
+          <button type="button" onClick={run} disabled={busy || !selection.trim()}>
             {busy ? "Spawning…" : "Explain"}
           </button>
         </div>

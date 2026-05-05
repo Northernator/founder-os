@@ -28,6 +28,7 @@ export function OllamaTab(_props: TabProps) {
     }
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     void refresh();
   }, []);
@@ -59,10 +60,11 @@ export function OllamaTab(_props: TabProps) {
             Local models
           </h3>
           <div className="mc-row" style={{ gap: 6 }}>
-            <button className="secondary" onClick={refresh} disabled={busy !== null}>
+            <button type="button" className="secondary" onClick={refresh} disabled={busy !== null}>
               {busy === "models" ? "Loading…" : "Refresh"}
             </button>
             <button
+              type="button"
               className="secondary"
               onClick={() =>
                 send({ type: "settings:open", query: "founderCowork.providers.ollama" })
@@ -92,7 +94,7 @@ export function OllamaTab(_props: TabProps) {
                     <td>
                       <code>{m.name}</code>
                     </td>
-                    <td>{m.sizeBytes ? mb(m.sizeBytes) + " MB" : "—"}</td>
+                    <td>{m.sizeBytes ? `${mb(m.sizeBytes)} MB` : "—"}</td>
                     <td>{m.modifiedAt ? new Date(m.modifiedAt).toLocaleString() : "—"}</td>
                   </tr>
                 ))}
@@ -137,7 +139,11 @@ export function OllamaTab(_props: TabProps) {
           />
         </div>
         <div className="mc-row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
-          <button onClick={doRun} disabled={!model || !prompt.trim() || busy !== null}>
+          <button
+            type="button"
+            onClick={doRun}
+            disabled={!model || !prompt.trim() || busy !== null}
+          >
             {busy === "run" ? "Running…" : "Generate"}
           </button>
         </div>

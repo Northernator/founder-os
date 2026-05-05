@@ -1,5 +1,4 @@
 import type { VentureStage } from "@founder-os/domain";
-import React from "react";
 
 const STAGE_COLOURS: Record<VentureStage, { bg: string; text: string }> = {
   IDEA: { bg: "#FEF3C7", text: "#92400E" },

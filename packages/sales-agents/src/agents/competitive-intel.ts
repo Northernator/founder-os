@@ -31,11 +31,7 @@ export class CompetitiveIntelAgent extends BaseAgent {
     const memory = await this.loadMemory(input.fs, input.memoryPath);
     const research = memory.research?.company ?? {};
 
-    const userPrompt =
-      `Analyse the competitive landscape for this company:\n\n` +
-      `${JSON.stringify(research, null, 2)}\n\n` +
-      `Be specific about real competitors where you can name them. Avoid ` +
-      `generic platitudes like "established players in the space".`;
+    const userPrompt = `Analyse the competitive landscape for this company:\n\n${JSON.stringify(research, null, 2)}\n\nBe specific about real competitors where you can name them. Avoid generic platitudes like "established players in the space".`;
 
     const parsed = await this.callJson<{
       competitors: CompetitiveIntelSlice["competitors"];

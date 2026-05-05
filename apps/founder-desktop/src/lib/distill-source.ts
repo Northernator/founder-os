@@ -31,15 +31,7 @@ const MAX_DOC_CHARS = 4_000;
 const MAX_TOTAL_DOC_CHARS = 20_000;
 const MAX_DOC_BYTES = 500_000;
 
-const TEXT_EXTS: ReadonlySet<string> = new Set([
-  "txt",
-  "md",
-  "csv",
-  "json",
-  "yaml",
-  "yml",
-  "xml",
-]);
+const TEXT_EXTS: ReadonlySet<string> = new Set(["txt", "md", "csv", "json", "yaml", "yml", "xml"]);
 
 /** Mirror of Rust `list_dir_recursive` return shape. */
 type RustDirEntry = {

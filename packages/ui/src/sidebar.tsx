@@ -1,6 +1,4 @@
 import type { VentureStage } from "@founder-os/domain";
-import { VENTURE_STAGE_ORDER } from "@founder-os/domain";
-import React from "react";
 
 export type SidebarVenture = {
   id: string;
@@ -55,6 +53,7 @@ export function Sidebar({
       <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
         {ventures.map((v) => (
           <button
+            type="button"
             key={v.id}
             onClick={() => onSelectVenture?.(v.id)}
             style={{
@@ -68,9 +67,7 @@ export function Sidebar({
               cursor: "pointer",
               textAlign: "left",
               borderLeft:
-                v.id === activeVentureId
-                  ? "3px solid var(--accent)"
-                  : "3px solid transparent",
+                v.id === activeVentureId ? "3px solid var(--accent)" : "3px solid transparent",
               transition: "background 0.15s",
             }}
           >
@@ -87,6 +84,7 @@ export function Sidebar({
       {/* New venture button */}
       <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border-subtle)" }}>
         <button
+          type="button"
           onClick={onNewVenture}
           style={{
             width: "100%",

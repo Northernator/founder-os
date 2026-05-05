@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 /**
  * BrandChatPanel -- v0.2 of the Gemini-pinned CLI-style chat that will
  * eventually replace the concepts-grid + full-pack regions of the
@@ -23,28 +24,27 @@
  * persistence to JSONL, copying refs into <root>/03_brand/refs/.
  */
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { injectImageRefs } from "../../lib/brand-chat/refs.js";
 import {
-  type TypographyPairing,
   TYPOGRAPHY_CATALOG,
+  type TypographyPairing,
 } from "../../lib/brand-chat/typography-catalog.js";
 import {
   type BrandGenBrief,
+  FULL_PACK_SPECS,
   type LogoArchetype,
   type LogoCandidate,
   type PackAssetResult,
-  FULL_PACK_SPECS,
   SYSTEM_PROMPT_SVG,
   extractSvg,
   generateFullPack,
   generateLogoCandidates,
 } from "../../lib/brand-gen.js";
 import { streamChat } from "../../lib/llm-client.js";
-import { joinPath } from "../../lib/venture-io.js";
 import { pushToast } from "../../lib/toasts.js";
+import { joinPath } from "../../lib/venture-io.js";
 
 /** Triage state for a generated concept card. Mirrors the name-triage
  *  UX in NameTriageList: "new" = freshly generated, "possible" = user
@@ -123,10 +123,7 @@ const ARCHETYPE_DESCRIPTIONS: Record<LogoArchetype, string> = {
  * Lives at module scope so handleSlash can call it without taking
  * `messages` through a useCallback dep tangle.
  */
-function pickFromLatestRun(
-  messages: ChatMessage[],
-  n: number
-): ConceptAttachment | null {
+function pickFromLatestRun(messages: ChatMessage[], n: number): ConceptAttachment | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m.attachments && m.attachments.length > 0) {
@@ -171,10 +168,7 @@ function parseRef(arg: string): ConceptRef | null {
 /** Resolve a ConceptRef to a concrete attachment. ref.runId === null
  *  falls back to pickFromLatestRun for backward compat with the
  *  earlier "/lock 2" form that never had run numbers. */
-function pickConcept(
-  messages: readonly ChatMessage[],
-  ref: ConceptRef
-): ConceptAttachment | null {
+function pickConcept(messages: readonly ChatMessage[], ref: ConceptRef): ConceptAttachment | null {
   if (ref.runId === null) {
     return pickFromLatestRun(messages as ChatMessage[], ref.index);
   }
@@ -197,9 +191,9 @@ const HELP_TEXT = [
   "  /logo <archetype>        Generate one archetype only",
   `                           Options: ${ALL_ARCHETYPES.join(", ")}`,
   "  /iterate <n> <prompt>    Refine concept [n] from the latest run",
-  "                           Use \"<R>.<n>\" to target an earlier run",
+  '                           Use "<R>.<n>" to target an earlier run',
   "  /lock <n>                Save concept [n] as the brand logo + palette",
-  "                           Use \"<R>.<n>\" to lock from an earlier run",
+  '                           Use "<R>.<n>" to lock from an earlier run',
   "  /pack                    Generate the full brand pack (6 assets)",
   "  /export                  Write the latest pack to 03_brand/exports/",
   "  /type                    Suggest 3 Google Fonts pairings for this brand",
@@ -295,7 +289,7 @@ async function persistChatHistory(
     await invoke("mkdir_p", {
       path: joinPath(rootPath, CHAT_HISTORY_REL_DIR),
     });
-    const jsonl = messages.map((m) => JSON.stringify(m)).join("\n") + "\n";
+    const jsonl = `${messages.map((m) => JSON.stringify(m)).join("\n")}\n`;
     await invoke("write_file", {
       path: chatHistoryPath(rootPath),
       content: jsonl,
@@ -319,10 +313,7 @@ async function autoSaveConcept(
   svg: string
 ): Promise<void> {
   if (!svg || !rootPath) return;
-  const dir = joinPath(
-    joinPath(joinPath(rootPath, "03_brand"), "logo"),
-    "generated"
-  );
+  const dir = joinPath(joinPath(joinPath(rootPath, "03_brand"), "logo"), "generated");
   try {
     await invoke("mkdir_p", { path: dir });
     const filename = `run-${runId}-${archetype}.svg`;
@@ -331,11 +322,7 @@ async function autoSaveConcept(
       content: svg,
     });
   } catch (err) {
-    console.warn(
-      "[brand-chat] autoSaveConcept failed",
-      archetype,
-      err
-    );
+    console.warn("[brand-chat] autoSaveConcept failed", archetype, err);
   }
 }
 
@@ -372,8 +359,7 @@ function parseTypeResponse(raw: string): TypeSuggestion[] {
   for (const item of parsed) {
     if (!item || typeof item !== "object") continue;
     const rec = item as { catalogIndex?: unknown; rationale?: unknown };
-    const idx =
-      typeof rec.catalogIndex === "number" ? rec.catalogIndex : Number.NaN;
+    const idx = typeof rec.catalogIndex === "number" ? rec.catalogIndex : Number.NaN;
     if (!Number.isFinite(idx)) continue;
     if (idx < 1 || idx > TYPOGRAPHY_CATALOG.length) continue;
     if (seen.has(idx)) continue;
@@ -383,8 +369,7 @@ function parseTypeResponse(raw: string): TypeSuggestion[] {
       index: out.length + 1,
       heading: cat.heading,
       body: cat.body,
-      rationale:
-        typeof rec.rationale === "string" ? rec.rationale : "",
+      rationale: typeof rec.rationale === "string" ? rec.rationale : "",
     });
   }
   return out;
@@ -560,9 +545,7 @@ export function BrandChatPanel(props: {
       copied = false;
     }
 
-    setRefs((r) =>
-      r.includes(storedPath) ? r : [...r, storedPath]
-    );
+    setRefs((r) => (r.includes(storedPath) ? r : [...r, storedPath]));
     append(
       "system",
       copied
@@ -578,11 +561,7 @@ export function BrandChatPanel(props: {
         return;
       }
       const brief = props.getBrief?.() ?? null;
-      if (
-        !brief ||
-        !brief.companyName ||
-        brief.companyName === "Untitled brand"
-      ) {
+      if (!brief || !brief.companyName || brief.companyName === "Untitled brand") {
         append(
           "system",
           "No brand brief yet. Pick a name candidate and fill the Direction section first."
@@ -634,20 +613,13 @@ export function BrandChatPanel(props: {
               m.map((msg) => {
                 if (msg.id !== headerId) return msg;
                 const next = (msg.attachments ?? []).map((a) =>
-                  a.archetype === cand.archetype
-                    ? { ...a, svg: cand.svg, error: cand.error }
-                    : a
+                  a.archetype === cand.archetype ? { ...a, svg: cand.svg, error: cand.error } : a
                 );
                 return { ...msg, attachments: next };
               })
             );
             if (cand.svg && !cand.error) {
-              void autoSaveConcept(
-                props.rootPath,
-                myRunId,
-                cand.archetype,
-                cand.svg
-              );
+              void autoSaveConcept(props.rootPath, myRunId, cand.archetype, cand.svg);
             }
           },
         });
@@ -681,12 +653,9 @@ export function BrandChatPanel(props: {
     [append, props, refs, running]
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   const runIterate = useCallback(
-    async (
-      archetype: LogoArchetype,
-      prevSvg: string,
-      refinement: string
-    ) => {
+    async (archetype: LogoArchetype, prevSvg: string, refinement: string) => {
       if (running) {
         append("system", "Already running. Cancel first.");
         return;
@@ -789,23 +758,13 @@ export function BrandChatPanel(props: {
       return;
     }
     const brief = props.getBrief?.() ?? null;
-    if (
-      !brief ||
-      !brief.companyName ||
-      brief.companyName === "Untitled brand"
-    ) {
-      append(
-        "system",
-        "No brand brief yet. Pick a name and fill the Direction section first."
-      );
+    if (!brief || !brief.companyName || brief.companyName === "Untitled brand") {
+      append("system", "No brand brief yet. Pick a name and fill the Direction section first.");
       return;
     }
     const lockedLogo = props.getLockedLogoSvg?.() ?? null;
     if (!lockedLogo) {
-      append(
-        "system",
-        "No logo locked yet. Run /concepts, then /lock <n> before /pack."
-      );
+      append("system", "No logo locked yet. Run /concepts, then /lock <n> before /pack.");
       return;
     }
 
@@ -884,10 +843,7 @@ export function BrandChatPanel(props: {
     }
     const brief = props.getBrief?.() ?? null;
     if (!brief || !brief.companyName) {
-      append(
-        "system",
-        "No brand brief yet. Pick a name and fill the Direction section first."
-      );
+      append("system", "No brand brief yet. Pick a name and fill the Direction section first.");
       return;
     }
 
@@ -942,8 +898,7 @@ export function BrandChatPanel(props: {
     try {
       const raw = await streamChat({
         provider: "gemini",
-        system:
-          "You output ONLY valid JSON. No prose, no markdown fences, no commentary.",
+        system: "You output ONLY valid JSON. No prose, no markdown fences, no commentary.",
         messages: [{ role: "user", content: userContent }],
         temperature: 0.3,
         maxTokens: 600,
@@ -1004,6 +959,7 @@ export function BrandChatPanel(props: {
     return null;
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   const handleSlash = useCallback(
     async (raw: string): Promise<boolean> => {
       const cmd = raw.trim();
@@ -1034,52 +990,33 @@ export function BrandChatPanel(props: {
             return true;
           }
           if (refs.length === 0) {
-            append(
-              "system",
-              "Reference tray is empty. Use /style to add one."
-            );
+            append("system", "Reference tray is empty. Use /style to add one.");
             return true;
           }
-          append(
-            "system",
-            "Current refs:\n" +
-              refs.map((p, i) => `  [${i + 1}] ${p}`).join("\n")
-          );
+          append("system", `Current refs:\n${refs.map((p, i) => `  [${i + 1}] ${p}`).join("\n")}`);
           return true;
         case "concepts":
           await runConcepts(undefined);
           return true;
         case "logo":
           if (!arg) {
-            append(
-              "system",
-              `Specify an archetype: ${ALL_ARCHETYPES.join(", ")}`
-            );
+            append("system", `Specify an archetype: ${ALL_ARCHETYPES.join(", ")}`);
             return true;
           }
           if (!isLogoArchetype(arg)) {
-            append(
-              "system",
-              `Unknown archetype: ${arg}. One of: ${ALL_ARCHETYPES.join(", ")}`
-            );
+            append("system", `Unknown archetype: ${arg}. One of: ${ALL_ARCHETYPES.join(", ")}`);
             return true;
           }
           await runConcepts(arg);
           return true;
         case "lock": {
           if (!arg) {
-            append(
-              "system",
-              "Specify which concept to lock, e.g. /lock 1 or /lock 2.3"
-            );
+            append("system", "Specify which concept to lock, e.g. /lock 1 or /lock 2.3");
             return true;
           }
           const ref = parseRef(arg);
           if (!ref) {
-            append(
-              "system",
-              `/lock expects a number or "<run>.<n>", got "${arg}"`
-            );
+            append("system", `/lock expects a number or "<run>.<n>", got "${arg}"`);
             return true;
           }
           const card = pickConcept(messages, ref);
@@ -1100,10 +1037,7 @@ export function BrandChatPanel(props: {
             return true;
           }
           if (!props.onLockCandidate) {
-            append(
-              "system",
-              "Lock callback isn't wired by the host -- contact a developer."
-            );
+            append("system", "Lock callback isn't wired by the host -- contact a developer.");
             return true;
           }
           props.onLockCandidate({
@@ -1112,8 +1046,7 @@ export function BrandChatPanel(props: {
             description: ARCHETYPE_DESCRIPTIONS[card.archetype],
             provider: "gemini",
           });
-          const runLabel =
-            ref.runId !== null ? `Run ${ref.runId} ` : "";
+          const runLabel = ref.runId !== null ? `Run ${ref.runId} ` : "";
           append(
             "system",
             `Locked ${runLabel}[${card.index}] ${card.archetype} as the brand logo. Palette + canonical SVG updated.`
@@ -1158,10 +1091,7 @@ export function BrandChatPanel(props: {
         case "export": {
           const pack = pickLatestPack(messages);
           if (!pack) {
-            append(
-              "system",
-              "No pack to export. Run /pack first."
-            );
+            append("system", "No pack to export. Run /pack first.");
             return true;
           }
           const writable = pack.filter((r) => r.content && !r.error);
@@ -1173,17 +1103,12 @@ export function BrandChatPanel(props: {
             return true;
           }
           if (!props.onExportPack) {
-            append(
-              "system",
-              "Export callback isn't wired by the host -- contact a developer."
-            );
+            append("system", "Export callback isn't wired by the host -- contact a developer.");
             return true;
           }
           try {
             const summary = await props.onExportPack(pack);
-            const target = summary.targetDir
-              ? ` to ${summary.targetDir}`
-              : "";
+            const target = summary.targetDir ? ` to ${summary.targetDir}` : "";
             append(
               "system",
               `Wrote ${summary.written} asset${summary.written === 1 ? "" : "s"}${target}${summary.failed ? `, ${summary.failed} failed` : ""}.`
@@ -1198,10 +1123,7 @@ export function BrandChatPanel(props: {
           await runType();
           return true;
         default:
-          append(
-            "system",
-            `Unknown command: /${head}. Type /help for the list.`
-          );
+          append("system", `Unknown command: /${head}. Type /help for the list.`);
           return true;
       }
     },
@@ -1222,10 +1144,7 @@ export function BrandChatPanel(props: {
 
     const userTurn = injectImageRefs(text, refs);
     const assistantId = makeId();
-    setMessages((m) => [
-      ...m,
-      { id: assistantId, role: "assistant", content: "", ts: Date.now() },
-    ]);
+    setMessages((m) => [...m, { id: assistantId, role: "assistant", content: "", ts: Date.now() }]);
 
     try {
       await streamChat({
@@ -1238,9 +1157,7 @@ export function BrandChatPanel(props: {
         onDelta: (delta) => {
           setMessages((m) =>
             m.map((msg) =>
-              msg.id === assistantId
-                ? { ...msg, content: msg.content + delta }
-                : msg
+              msg.id === assistantId ? { ...msg, content: msg.content + delta } : msg
             )
           );
         },
@@ -1265,11 +1182,7 @@ export function BrandChatPanel(props: {
    *  per-card Possible / Fail buttons. Status persists via JSONL since
    *  it's part of the message attachments array. */
   const setConceptStatus = useCallback(
-    (
-      messageId: string,
-      archetype: LogoArchetype,
-      status: ConceptStatus
-    ) => {
+    (messageId: string, archetype: LogoArchetype, status: ConceptStatus) => {
       setMessages((m) =>
         m.map((msg) => {
           if (msg.id !== messageId || !msg.attachments) return msg;
@@ -1288,22 +1201,17 @@ export function BrandChatPanel(props: {
   /** Hard-remove a concept attachment from a message. The card's `x`
    *  button calls this. Doesn't delete the on-disk SVG -- the file
    *  stays under 03_brand/logo/generated/ for manual recovery. */
-  const deleteConcept = useCallback(
-    (messageId: string, archetype: LogoArchetype) => {
-      setMessages((m) =>
-        m.map((msg) => {
-          if (msg.id !== messageId || !msg.attachments) return msg;
-          return {
-            ...msg,
-            attachments: msg.attachments.filter(
-              (a) => a.archetype !== archetype
-            ),
-          };
-        })
-      );
-    },
-    []
-  );
+  const deleteConcept = useCallback((messageId: string, archetype: LogoArchetype) => {
+    setMessages((m) =>
+      m.map((msg) => {
+        if (msg.id !== messageId || !msg.attachments) return msg;
+        return {
+          ...msg,
+          attachments: msg.attachments.filter((a) => a.archetype !== archetype),
+        };
+      })
+    );
+  }, []);
 
   /** Lock a single concept via the host's onLockCandidate prop (same
    *  function /lock <n> calls). Tags the card status as "chosen" so the
@@ -1315,10 +1223,7 @@ export function BrandChatPanel(props: {
         return;
       }
       if (!props.onLockCandidate) {
-        append(
-          "system",
-          "Lock callback isn't wired by the host -- contact a developer."
-        );
+        append("system", "Lock callback isn't wired by the host -- contact a developer.");
         return;
       }
       props.onLockCandidate({
@@ -1328,10 +1233,7 @@ export function BrandChatPanel(props: {
         provider: "gemini",
       });
       setConceptStatus(messageId, a.archetype, "chosen");
-      append(
-        "system",
-        `Locked ${a.archetype} as the brand logo. Palette + canonical SVG updated.`
-      );
+      append("system", `Locked ${a.archetype} as the brand logo. Palette + canonical SVG updated.`);
     },
     [append, props, setConceptStatus]
   );
@@ -1346,8 +1248,7 @@ export function BrandChatPanel(props: {
         display: "flex",
         flexDirection: "column",
         gap: 10,
-        fontFamily:
-          "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         fontSize: 13,
         color: "var(--text-primary)",
         minHeight: 360,
@@ -1404,9 +1305,7 @@ export function BrandChatPanel(props: {
             gap: 8,
           }}
         >
-          <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>
-            Quick start
-          </div>
+          <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>Quick start</div>
           <ol
             style={{
               margin: 0,
@@ -1418,57 +1317,51 @@ export function BrandChatPanel(props: {
           >
             <li>
               <strong>Drop in reference logos.</strong> Type{" "}
-              <code style={inlineCmdStyle}>/style</code> to open a file picker
-              and pick a logo or image you like the look of. It shows up above
-              the input as a "ref" and is reused for every generation.
+              <code style={inlineCmdStyle}>/style</code> to open a file picker and pick a logo or
+              image you like the look of. It shows up above the input as a "ref" and is reused for
+              every generation.
             </li>
             <li>
-              <strong>Generate logo concepts.</strong>{" "}
-              <code style={inlineCmdStyle}>/concepts</code> spins up four
-              different styles in parallel.{" "}
-              <code style={inlineCmdStyle}>/logo wordmark</code> generates one
-              specific style (options: wordmark, lettermark, icon-wordmark,
-              abstract-mark).
+              <strong>Generate logo concepts.</strong> <code style={inlineCmdStyle}>/concepts</code>{" "}
+              spins up four different styles in parallel.{" "}
+              <code style={inlineCmdStyle}>/logo wordmark</code> generates one specific style
+              (options: wordmark, lettermark, icon-wordmark, abstract-mark).
             </li>
             <li>
-              <strong>Need a brand brief first?</strong> Pick a name in
-              section 1 (Name) and fill out section 2 (Brand Direction). If
-              anything's missing, the chat will let you know politely instead
-              of running.
+              <strong>Need a brand brief first?</strong> Pick a name in section 1 (Name) and fill
+              out section 2 (Brand Direction). If anything's missing, the chat will let you know
+              politely instead of running.
             </li>
             <li>
               <strong>Style with references.</strong> Drop a ref with{" "}
               <code style={inlineCmdStyle}>/style</code> first, then run{" "}
-              <code style={inlineCmdStyle}>/concepts</code> -- Gemini uses your
-              uploaded image as a style anchor for the new logos.
+              <code style={inlineCmdStyle}>/concepts</code> -- Gemini uses your uploaded image as a
+              style anchor for the new logos.
             </li>
             <li>
               <strong>Refine and pick.</strong> Once you have concepts, type{" "}
-              <code style={inlineCmdStyle}>/iterate 2 make the lettering bolder</code>
-              {" "}to tweak [2] from the latest run. Going back to an earlier
-              run? Use <code style={inlineCmdStyle}>/iterate 1.3 ...</code>
-              {" "}(run 1, concept 3). Happy with one?{" "}
-              <code style={inlineCmdStyle}>/lock 2</code> (or{" "}
-              <code style={inlineCmdStyle}>/lock 1.3</code>) saves it as the
-              official brand logo and patches the palette automatically.
+              <code style={inlineCmdStyle}>/iterate 2 make the lettering bolder</code> to tweak [2]
+              from the latest run. Going back to an earlier run? Use{" "}
+              <code style={inlineCmdStyle}>/iterate 1.3 ...</code> (run 1, concept 3). Happy with
+              one? <code style={inlineCmdStyle}>/lock 2</code> (or{" "}
+              <code style={inlineCmdStyle}>/lock 1.3</code>) saves it as the official brand logo and
+              patches the palette automatically.
             </li>
             <li>
-              <strong>Generate the full brand pack.</strong> Once a logo is
-              locked, <code style={inlineCmdStyle}>/pack</code> spins up six
-              polished assets in parallel (email header, X/LinkedIn banners,
-              OG image, brand guide). Review them in chat, then{" "}
+              <strong>Generate the full brand pack.</strong> Once a logo is locked,{" "}
+              <code style={inlineCmdStyle}>/pack</code> spins up six polished assets in parallel
+              (email header, X/LinkedIn banners, OG image, brand guide). Review them in chat, then{" "}
               <code style={inlineCmdStyle}>/export</code> writes everything to{" "}
               <code style={inlineCmdStyle}>03_brand/exports/</code>.
             </li>
             <li>
-              <strong>Just chat normally.</strong> Anything that doesn't start
-              with <code style={inlineCmdStyle}>/</code> is sent to Gemini as a
-              regular message, with your refs riding along automatically.
+              <strong>Just chat normally.</strong> Anything that doesn't start with{" "}
+              <code style={inlineCmdStyle}>/</code> is sent to Gemini as a regular message, with
+              your refs riding along automatically.
             </li>
           </ol>
           <div style={{ color: "var(--text-tertiary)", fontSize: 11 }}>
-            Type <code style={inlineCmdStyle}>/help</code> any time for the
-            full command list.
+            Type <code style={inlineCmdStyle}>/help</code> any time for the full command list.
           </div>
         </div>
       )}
@@ -1494,10 +1387,7 @@ export function BrandChatPanel(props: {
             </span>
             <span
               style={{
-                color:
-                  m.role === "system"
-                    ? "var(--text-tertiary)"
-                    : "var(--text-primary)",
+                color: m.role === "system" ? "var(--text-tertiary)" : "var(--text-primary)",
               }}
             >
               {m.content}
@@ -1508,9 +1398,7 @@ export function BrandChatPanel(props: {
                   marginTop: 6,
                   display: "grid",
                   gridTemplateColumns:
-                    m.attachments.length === 1
-                      ? "1fr"
-                      : "repeat(2, minmax(0, 1fr))",
+                    m.attachments.length === 1 ? "1fr" : "repeat(2, minmax(0, 1fr))",
                   gap: 6,
                 }}
               >
@@ -1526,11 +1414,7 @@ export function BrandChatPanel(props: {
                       )
                     }
                     onFail={() =>
-                      setConceptStatus(
-                        m.id,
-                        a.archetype,
-                        a.status === "fail" ? "new" : "fail"
-                      )
+                      setConceptStatus(m.id, a.archetype, a.status === "fail" ? "new" : "fail")
                     }
                     onLock={() => handleLockConcept(m.id, a)}
                     onDelete={() => deleteConcept(m.id, a.archetype)}
@@ -1565,9 +1449,7 @@ export function BrandChatPanel(props: {
                   <TypeSuggestionCard
                     key={s.index}
                     s={s}
-                    sampleHeading={
-                      props.getBrief?.()?.companyName || "Your brand"
-                    }
+                    sampleHeading={props.getBrief?.()?.companyName || "Your brand"}
                     sampleBody={
                       props.getBrief?.()?.tagline ||
                       "Body copy sets the tone for everything beyond the headline."
@@ -1578,9 +1460,7 @@ export function BrandChatPanel(props: {
             )}
           </div>
         ))}
-        {running && (
-          <div style={{ color: "var(--text-tertiary)" }}>... streaming</div>
-        )}
+        {running && <div style={{ color: "var(--text-tertiary)" }}>... streaming</div>}
       </div>
 
       {refs.length > 0 && (
@@ -2001,8 +1881,7 @@ function panelButtonStyle(color: string): React.CSSProperties {
 }
 
 const inlineCmdStyle: React.CSSProperties = {
-  fontFamily:
-    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
   fontSize: 11,
   background: "var(--bg-panel-strong, #0d0f12)",
   border: "1px solid var(--border-subtle)",

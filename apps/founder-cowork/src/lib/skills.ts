@@ -89,10 +89,10 @@ export function listSkills(input: SkillScanInput): SkillSummary[] {
 export function readSkill(input: SkillScanInput, id: string, source: SkillSource): SkillBody {
   const dirMap = new Map(resolveSourceDirs(input));
   const dir = dirMap.get(source);
-  if (!dir) throw new Error("unknown skill source: " + source);
+  if (!dir) throw new Error(`unknown skill source: ${source}`);
   const skillFile = path.join(dir, id, "SKILL.md");
   if (!fs.existsSync(skillFile)) {
-    throw new Error("SKILL.md not found at " + skillFile);
+    throw new Error(`SKILL.md not found at ${skillFile}`);
   }
   const text = fs.readFileSync(skillFile, "utf8");
   const { frontmatter, body } = parseFrontmatter(text);
@@ -149,7 +149,7 @@ function readSummary(id: string, filePath: string, source: SkillSource): SkillSu
   };
 }
 
-function resolveSourceDirs(input: SkillScanInput): Array<[SkillSource, string | null]> {
+function resolveSourceDirs(input: SkillScanInput): [SkillSource, string | null][] {
   const ws = input.workspaceRoot
     ? path.join(input.workspaceRoot, ".founder-cowork", "skills")
     : null;

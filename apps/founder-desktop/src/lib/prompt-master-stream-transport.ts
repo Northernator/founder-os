@@ -76,7 +76,8 @@ export function createStreamChatTransport(
       try {
         const setting = await db.getLlmSetting(provider);
         const fromSetting = setting?.model?.trim();
-        model = fromSetting && fromSetting.length > 0 ? fromSetting : getProvider(provider).defaultModel;
+        model =
+          fromSetting && fromSetting.length > 0 ? fromSetting : getProvider(provider).defaultModel;
       } catch {
         model = getProvider(provider).defaultModel;
       }

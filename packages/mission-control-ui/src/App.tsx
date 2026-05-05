@@ -62,7 +62,7 @@ export function App() {
           break;
         case "toast":
           // Lightweight: just log; Phase 1b.X may add a real toast UI.
-          console.log("[toast " + m.level + "]", m.message);
+          console.log(`[toast ${m.level}]`, m.message);
           break;
         case "response":
           // Handled by the request() promise wrappers.
@@ -80,7 +80,7 @@ export function App() {
         <h1 className="mc-title">Founder Cowork — Mission Control</h1>
         <p className="mc-subtitle">
           v{state.extensionVersion}
-          {state.ventureRoot ? " · venture: " + state.ventureRoot : " · no venture root selected"}
+          {state.ventureRoot ? ` · venture: ${state.ventureRoot}` : " · no venture root selected"}
           {!hydrated && " · waiting for extension host…"}
         </p>
         <TabBar active={activeTab} onChange={setActiveTab} />

@@ -30,6 +30,7 @@ export function GitHubTab(_props: TabProps) {
     }
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     void refresh(); /* on mount */
   }, []);
@@ -62,7 +63,7 @@ export function GitHubTab(_props: TabProps) {
       await refresh();
       if (!r.pushed) {
         setError(
-          "Committed " + r.commitSha.slice(0, 8) + " but push failed: " + (r.pushHint ?? "unknown")
+          `Committed ${r.commitSha.slice(0, 8)} but push failed: ${r.pushHint ?? "unknown"}`
         );
       }
     } catch (e) {
@@ -99,7 +100,7 @@ export function GitHubTab(_props: TabProps) {
           <h3 className="mc-card-title" style={{ margin: 0 }}>
             Status
           </h3>
-          <button className="secondary" onClick={refresh} disabled={busy !== null}>
+          <button type="button" className="secondary" onClick={refresh} disabled={busy !== null}>
             {busy === "status" ? "Refreshing…" : "Refresh"}
           </button>
         </div>
@@ -111,8 +112,8 @@ export function GitHubTab(_props: TabProps) {
               {status.tracking && <span className="mc-pill">tracks {status.tracking}</span>}
               {status.ahead > 0 && <span className="mc-pill warn">{status.ahead} ahead</span>}
               {status.behind > 0 && <span className="mc-pill warn">{status.behind} behind</span>}
-              <span className={"mc-pill " + (status.isClean ? "success" : "warn")}>
-                {status.isClean ? "clean" : status.changedFiles.length + " changed"}
+              <span className={`mc-pill ${status.isClean ? "success" : "warn"}`}>
+                {status.isClean ? "clean" : `${status.changedFiles.length} changed`}
               </span>
             </div>
             {status.changedFiles.length > 0 && (
@@ -149,7 +150,11 @@ export function GitHubTab(_props: TabProps) {
             value={branchName}
             onChange={(e) => setBranchName(e.target.value)}
           />
-          <button onClick={doCreateBranch} disabled={!branchName.trim() || busy !== null}>
+          <button
+            type="button"
+            onClick={doCreateBranch}
+            disabled={!branchName.trim() || busy !== null}
+          >
             {busy === "branch" ? "Creating…" : "Create"}
           </button>
         </div>
@@ -167,7 +172,11 @@ export function GitHubTab(_props: TabProps) {
           rows={3}
         />
         <div className="mc-row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
-          <button onClick={doCommitAndPush} disabled={!commitMsg.trim() || busy !== null}>
+          <button
+            type="button"
+            onClick={doCommitAndPush}
+            disabled={!commitMsg.trim() || busy !== null}
+          >
             {busy === "commit" ? "Committing…" : "Commit + push"}
           </button>
         </div>
@@ -192,7 +201,7 @@ export function GitHubTab(_props: TabProps) {
           style={{ marginTop: 8 }}
         />
         <div className="mc-row" style={{ marginTop: 8, justifyContent: "flex-end" }}>
-          <button onClick={doCreatePR} disabled={!prTitle.trim() || busy !== null}>
+          <button type="button" onClick={doCreatePR} disabled={!prTitle.trim() || busy !== null}>
             {busy === "pr" ? "Creating…" : "Create PR"}
           </button>
         </div>

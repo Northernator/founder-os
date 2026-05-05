@@ -33,12 +33,13 @@ export function SkillsTab(_props: TabProps) {
     }
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     void refresh();
   }, []);
 
   async function toggle(s: SkillSummary): Promise<void> {
-    const key = s.source + "::" + s.id;
+    const key = `${s.source}::${s.id}`;
     if (expandedKey === key) {
       setExpandedKey(null);
       return;
@@ -80,7 +81,7 @@ export function SkillsTab(_props: TabProps) {
           <h3 className="mc-card-title" style={{ margin: 0 }}>
             Skills
           </h3>
-          <button className="secondary" onClick={refresh} disabled={busy}>
+          <button type="button" className="secondary" onClick={refresh} disabled={busy}>
             {busy ? "Scanning…" : "Refresh"}
           </button>
         </div>
@@ -114,14 +115,14 @@ export function SkillsTab(_props: TabProps) {
         return (
           <div className="mc-card" key={source}>
             <h3 className="mc-card-title">
-              <span className={"mc-pill " + sourceClass(source)}>{source}</span>
+              <span className={`mc-pill ${sourceClass(source)}`}>{source}</span>
               <span style={{ marginLeft: 8 }}>
                 {list.length} {list.length === 1 ? "skill" : "skills"}
               </span>
             </h3>
             <div className="mc-grid">
               {list.map((s) => {
-                const key = s.source + "::" + s.id;
+                const key = `${s.source}::${s.id}`;
                 const isOpen = expandedKey === key;
                 const body = bodyCache[key];
                 return (
@@ -149,7 +150,7 @@ export function SkillsTab(_props: TabProps) {
                         )}
                       </div>
                       <div className="mc-row" style={{ gap: 6 }}>
-                        <button className="secondary" onClick={() => void toggle(s)}>
+                        <button type="button" className="secondary" onClick={() => void toggle(s)}>
                           {isOpen ? "Hide" : "View"}
                         </button>
                       </div>
@@ -162,12 +163,14 @@ export function SkillsTab(_props: TabProps) {
                             style={{ justifyContent: "flex-end", gap: 6, marginBottom: 6 }}
                           >
                             <button
+                              type="button"
                               className="secondary"
                               onClick={() => void copyToClipboard(body.body)}
                             >
                               Copy body
                             </button>
                             <button
+                              type="button"
                               className="secondary"
                               onClick={() => void copyToClipboard(buildPromptPrefix(body))}
                             >
@@ -224,12 +227,5 @@ function groupBySource(list: SkillSummary[]): Map<SkillSource, SkillSummary[]> {
 
 function buildPromptPrefix(body: SkillBodyResponse): string {
   const name = body.frontmatter.name ?? body.id;
-  return (
-    "Use the following skill (" +
-    name +
-    ") for this task.\n\n" +
-    "---\n" +
-    body.body.trim() +
-    "\n---\n\n"
-  );
+  return `Use the following skill (${name}) for this task.\n\n---\n${body.body.trim()}\n---\n\n`;
 }

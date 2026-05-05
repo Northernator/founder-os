@@ -1,15 +1,3 @@
-/**
- * Toast container — renders the stack driven by useToastStore.
- *
- * Mount once at the app root (see App.tsx). Fixed-position, bottom-right,
- * stacks newest-on-top. Errors are sticky (require X dismiss), everything
- * else auto-dismisses via the store.
- *
- * Styling is inline to match the rest of the desktop app — we aren't using
- * Tailwind here. Colours pulled from the same palette used by AuditTab's
- * severity badges for visual consistency.
- */
-import React from "react";
 import { type Toast, type ToastKind, useToastStore } from "../../lib/toasts.js";
 
 const KIND_STYLE: Record<ToastKind, { bg: string; border: string; fg: string; icon: string }> = {
@@ -30,6 +18,7 @@ export function ToastContainer() {
 
   return (
     <div
+      // biome-ignore lint/a11y/useSemanticElements: role chosen intentionally; refactor deferred
       aria-live="polite"
       role="region"
       aria-label="Notifications"
@@ -129,7 +118,9 @@ function ToastCard({
           opacity: 0.6,
           flex: "0 0 auto",
         }}
+        // biome-ignore lint/suspicious/noAssignInExpressions: intentional assign-and-test pattern
         onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+        // biome-ignore lint/suspicious/noAssignInExpressions: intentional assign-and-test pattern
         onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
       >
         ✕

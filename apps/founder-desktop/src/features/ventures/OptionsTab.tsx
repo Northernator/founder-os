@@ -25,7 +25,6 @@ import { invoke } from "@tauri-apps/api/core";
  *    providers so a user can't pick one that will fail on first send.
  */
 import React, { useEffect, useState } from "react";
-import { ThemeToggle } from "../chrome/ThemeToggle.js";
 import * as db from "../../lib/db.js";
 import { streamChat } from "../../lib/llm-client.js";
 import {
@@ -35,6 +34,7 @@ import {
 } from "../../lib/prompt-master-config.js";
 import { useTheme } from "../../lib/theme.js";
 import { pushToast } from "../../lib/toasts.js";
+import { ThemeToggle } from "../chrome/ThemeToggle.js";
 import { SubscriptionsSection } from "./SubscriptionsSection.js";
 
 /** Wire payload for `pm_event_stats` in src-tauri/src/cache.rs.
@@ -210,6 +210,7 @@ export function OptionsTab() {
     const catalog = getProvider(id);
     setForms((prev) => ({
       ...prev,
+      // biome-ignore lint/style/noNonNullAssertion: value asserted non-null by surrounding logic
       [id]: prev[id].saved ? hydrateForm(catalog, prev[id].saved!) : emptyForm(catalog),
     }));
   };
@@ -291,7 +292,9 @@ export function OptionsTab() {
       <div style={{ height: 20 }} />
 
       <div style={{ marginBottom: 20 }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px", color: "var(--text-primary)" }}>
+        <h3
+          style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px", color: "var(--text-primary)" }}
+        >
           AI providers
         </h3>
         <p style={{ margin: 0, fontSize: 13, color: "var(--text-tertiary)", lineHeight: 1.5 }}>
@@ -1379,7 +1382,9 @@ function OptimisationStatsPanel({
                   >
                     {formatNumber(c.tokensSaved)} ({c.count})
                     {dollars && (
-                      <span style={{ marginLeft: 6, fontSize: 10, color: "#059669" }}>{dollars}</span>
+                      <span style={{ marginLeft: 6, fontSize: 10, color: "#059669" }}>
+                        {dollars}
+                      </span>
                     )}
                   </span>
                 </li>
@@ -1448,7 +1453,9 @@ function OptimisationStatsPanel({
                   >
                     {formatNumber(v.tokensSaved)} ({v.events})
                     {dollars && (
-                      <span style={{ marginLeft: 6, fontSize: 10, color: "#059669" }}>{dollars}</span>
+                      <span style={{ marginLeft: 6, fontSize: 10, color: "#059669" }}>
+                        {dollars}
+                      </span>
                     )}
                   </span>
                 </li>
@@ -1516,7 +1523,9 @@ function OptimisationStatsPanel({
                   >
                     {formatNumber(m.tokensSaved)} ({m.events})
                     {dollars && (
-                      <span style={{ marginLeft: 6, fontSize: 10, color: "#059669" }}>{dollars}</span>
+                      <span style={{ marginLeft: 6, fontSize: 10, color: "#059669" }}>
+                        {dollars}
+                      </span>
                     )}
                   </span>
                 </li>

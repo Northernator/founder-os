@@ -144,4 +144,3 @@ export interface IcpResult {
   input_count: number;
   personas: IcpPersonaSummary[];
 }
-

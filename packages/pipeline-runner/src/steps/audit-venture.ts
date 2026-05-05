@@ -570,10 +570,7 @@ export async function auditVentureStep(ctx: AuditVentureContext): Promise<AuditV
               ruleId: "uk-setup.utr-format-invalid",
               severity: "low",
               title: "UTR format looks off",
-              message:
-                `HMRC UTRs are exactly 10 digits — got ${utrDigits.length} ` +
-                `(recorded value: "${utrRaw}"). Check your HMRC welcome ` +
-                `letter or Self Assessment statement.`,
+              message: `HMRC UTRs are exactly 10 digits — got ${utrDigits.length} (recorded value: "${utrRaw}"). Check your HMRC welcome letter or Self Assessment statement.`,
               evidence: [{ filePath: ukCanvasPath }],
             });
           }
@@ -602,11 +599,7 @@ export async function auditVentureStep(ctx: AuditVentureContext): Promise<AuditV
                 ruleId: "uk-setup.vat-format-invalid",
                 severity: "low",
                 title: "VAT number format looks off",
-                message:
-                  `UK VAT numbers are 9 digits (or 12 with a branch ` +
-                  `suffix) — got ${vatDigits.length} (recorded value: ` +
-                  `"${vatRaw}"). The "GB" prefix is fine; the digit count ` +
-                  `is what matters.`,
+                message: `UK VAT numbers are 9 digits (or 12 with a branch suffix) — got ${vatDigits.length} (recorded value: "${vatRaw}"). The "GB" prefix is fine; the digit count is what matters.`,
                 evidence: [{ filePath: ukCanvasPath }],
               });
             }
@@ -637,12 +630,7 @@ export async function auditVentureStep(ctx: AuditVentureContext): Promise<AuditV
                 ruleId: "uk-setup.company-number-format-invalid",
                 severity: "low",
                 title: "Company number format looks off",
-                message:
-                  `Companies House numbers are 8 characters — either 8 ` +
-                  `digits or a 2-letter prefix (SC / NI / OC / FC / NF / ` +
-                  `etc.) followed by 6 digits. Got "${cnRaw}" (${cnClean.length} ` +
-                  `chars after stripping whitespace). Check the ` +
-                  `incorporation certificate.`,
+                message: `Companies House numbers are 8 characters — either 8 digits or a 2-letter prefix (SC / NI / OC / FC / NF / etc.) followed by 6 digits. Got "${cnRaw}" (${cnClean.length} chars after stripping whitespace). Check the incorporation certificate.`,
                 evidence: [{ filePath: ukCanvasPath }],
               });
             }
@@ -671,11 +659,7 @@ export async function auditVentureStep(ctx: AuditVentureContext): Promise<AuditV
                 ruleId: "uk-setup.postcode-format-invalid",
                 severity: "low",
                 title: "Postcode format looks off",
-                message:
-                  `Doesn't match the standard UK postcode shape ` +
-                  `(e.g. "SW1A 1AA", "M1 1AE"). Got "${pcRaw}". If this ` +
-                  `is a GIR / BFPO address, ignore — the rule's regex ` +
-                  `intentionally skips those edge cases.`,
+                message: `Doesn't match the standard UK postcode shape (e.g. "SW1A 1AA", "M1 1AE"). Got "${pcRaw}". If this is a GIR / BFPO address, ignore — the rule's regex intentionally skips those edge cases.`,
                 evidence: [{ filePath: ukCanvasPath }],
               });
             }
@@ -793,12 +777,7 @@ export async function auditVentureStep(ctx: AuditVentureContext): Promise<AuditV
             ruleId: "spec.endpoint-path-format-invalid",
             severity: "low",
             title: `${badPaths.length} endpoint path(s) look malformed`,
-            message:
-              `Paths should be either a REST path starting with "/" ` +
-              `(e.g. "/api/projects") or an RPC operation name ` +
-              `(e.g. "createProject"). Drop any leading "http(s)://" ` +
-              `— this field is a path, not a full URL. Flagged: ` +
-              `${badPaths.join("; ")}.`,
+            message: `Paths should be either a REST path starting with "/" (e.g. "/api/projects") or an RPC operation name (e.g. "createProject"). Drop any leading "http(s)://" — this field is a path, not a full URL. Flagged: ${badPaths.join("; ")}.`,
             evidence: [{ filePath: specCanvasPath }],
           });
         }
@@ -842,13 +821,7 @@ export async function auditVentureStep(ctx: AuditVentureContext): Promise<AuditV
                 ruleId: "spec.persona-feature-linkage",
                 severity: "low",
                 title: `${uncovered.length} persona(s) without Must-feature coverage`,
-                message:
-                  `Every named persona should have at least one ` +
-                  `Must-priority feature targeting them via personaId. ` +
-                  `Personas with no coverage: ${uncovered.join("; ")}. ` +
-                  `Either add a Must feature with this persona's id, ` +
-                  `or leave a Must feature's persona empty (which ` +
-                  `means "serves all personas equally").`,
+                message: `Every named persona should have at least one Must-priority feature targeting them via personaId. Personas with no coverage: ${uncovered.join("; ")}. Either add a Must feature with this persona's id, or leave a Must feature's persona empty (which means "serves all personas equally").`,
                 evidence: [{ filePath: specCanvasPath }],
               });
             }
@@ -993,21 +966,17 @@ export async function auditVentureStep(ctx: AuditVentureContext): Promise<AuditV
       ruleId: "audit.meta.deferred-rules",
       severity: "low",
       title: `${skippedForStage} rule(s) deferred until later stages`,
-      message:
-        `Stage ${currentStage} runs ${findings.length} rule(s); ` +
-        `${skippedForStage} more activate as the venture advances. ` +
-        `This is informational, not a failure — the deferred rules ` +
-        `target artifacts (brand, UK setup, spec, build) that don't ` +
-        `exist yet.`,
+      message: `Stage ${currentStage} runs ${findings.length} rule(s); ${skippedForStage} more activate as the venture advances. This is informational, not a failure — the deferred rules target artifacts (brand, UK setup, spec, build) that don't exist yet.`,
       evidence: [],
     });
   }
 
   log.info(
-    `Audit produced ${findings.length} finding(s) at stage ${currentStage}` +
-      (skippedForStage > 0
+    `Audit produced ${findings.length} finding(s) at stage ${currentStage}${
+      skippedForStage > 0
         ? ` · ${skippedForStage} rule(s) deferred (minStage ahead of current)`
-        : "")
+        : ""
+    }`
   );
   return {
     status: "done",

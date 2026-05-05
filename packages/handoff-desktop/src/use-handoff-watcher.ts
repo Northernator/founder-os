@@ -49,7 +49,7 @@ export function useHandoffWatcher(ventureRoot: string | null | undefined): void 
       try {
         await invoke("start_handoff_watcher", { ventureRoot });
       } catch (err) {
-        log.warn("start_handoff_watcher failed: " + String(err));
+        log.warn(`start_handoff_watcher failed: ${String(err)}`);
         return;
       }
       if (cancelled) {
@@ -64,10 +64,10 @@ export function useHandoffWatcher(ventureRoot: string | null | undefined): void 
           const r = safeParseResult(raw);
           parsed = r.success ? { success: true, data: r.data } : { success: false };
           if (!r.success) {
-            log.warn("Bad HandoffResult from " + evt.payload.runId + ": " + r.error.message);
+            log.warn(`Bad HandoffResult from ${evt.payload.runId}: ${r.error.message}`);
           }
         } catch (e) {
-          log.warn("Bad JSON in handoff:result for " + evt.payload.runId + ": " + String(e));
+          log.warn(`Bad JSON in handoff:result for ${evt.payload.runId}: ${String(e)}`);
           return;
         }
         if (parsed.success) applyResult(parsed.data);
@@ -89,20 +89,20 @@ export function useHandoffWatcher(ventureRoot: string | null | undefined): void 
           ) {
             applyProgress(raw);
           } else {
-            log.warn("Bad HandoffProgressEvent shape for " + evt.payload.runId);
+            log.warn(`Bad HandoffProgressEvent shape for ${evt.payload.runId}`);
           }
         } catch (e) {
-          log.warn("Bad JSON in handoff:progress for " + evt.payload.runId + ": " + String(e));
+          log.warn(`Bad JSON in handoff:progress for ${evt.payload.runId}: ${String(e)}`);
         }
       });
       unsubs.push(onProgress);
 
       const onError = await listen<string>("handoff:watcher-error", (evt) => {
-        log.warn("watcher: " + evt.payload);
+        log.warn(`watcher: ${evt.payload}`);
       });
       unsubs.push(onError);
 
-      log.info("Handoff watcher attached for " + ventureRoot);
+      log.info(`Handoff watcher attached for ${ventureRoot}`);
     })();
 
     return () => {

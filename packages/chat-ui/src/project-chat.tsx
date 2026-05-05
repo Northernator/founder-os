@@ -61,6 +61,7 @@ export type ProjectChatProps = {
 };
 
 export function ProjectChat({
+  // biome-ignore lint/correctness/noUnusedVariables: kept for future use / interface compatibility
   ventureId,
   ventureName,
   currentStage,
@@ -83,6 +84,7 @@ export function ProjectChat({
   const attachmentsEnabled = typeof onAttach === "function";
   const hasPendingExtraction = (attachments ?? []).some((a) => a.status === "pending");
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -227,7 +229,7 @@ export function ProjectChat({
             }}
             aria-label="Attachments"
           >
-            {attachments!.map((att) => (
+            {attachments?.map((att) => (
               <AttachmentChip
                 key={att.id}
                 attachment={att}
@@ -297,6 +299,7 @@ export function ProjectChat({
             }}
           />
           <button
+            type="button"
             onClick={handleSend}
             disabled={
               isLoading ||

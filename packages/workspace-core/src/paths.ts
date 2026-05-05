@@ -37,6 +37,51 @@ export function getLogsRoot(ventureRoot: string): string {
   return join(getFounderRoot(ventureRoot), "logs");
 }
 
+// --- Stage-runner state paths (slice 1 of stage-runners feature) ---
+// These files are written by the orchestrator + read by the desktop app.
+// The IO is performed via the per-environment Filesystem port (workspace-node
+// or workspace-tauri), this module only exposes the canonical paths.
+
+/** .founder/state/stage-progress.json — current/completed StageName tracking. */
+export function getStageProgressPath(ventureRoot: string): string {
+  return join(getStateRoot(ventureRoot), "stage-progress.json");
+}
+
+/** .founder/state/review-gates.json — pending/approved review gates. */
+export function getReviewGatesPath(ventureRoot: string): string {
+  return join(getStateRoot(ventureRoot), "review-gates.json");
+}
+
+/**
+ * .founder/state/failed-runs.json — queryable index of failed
+ * StageRunResults. Each entry points to a per-run dump under
+ * .founder/handoffs/failed/ via resultPath. Slice 5 of stage-runners.
+ */
+export function getFailedRunsIndexPath(ventureRoot: string): string {
+  return join(getStateRoot(ventureRoot), "failed-runs.json");
+}
+
+/**
+ * .founder/logs/{stageName}-{runId}.jsonl — append-only structured run log.
+ * One file per (stage, run) pair so failed runs keep their own trace.
+ */
+export function getStageRunLogPath(ventureRoot: string, stageName: string, runId: string): string {
+  return join(getLogsRoot(ventureRoot), `${stageName}-${runId}.jsonl`);
+}
+
+/**
+ * .founder/handoffs/failed/{stageName}-{runId}.result.json — full
+ * StageRunResult JSON dropped here when a stage fails. Resume/retry
+ * (slice 5) will read these to surface a "retry" action in the desktop UI.
+ */
+export function getFailedStageResultPath(
+  ventureRoot: string,
+  stageName: string,
+  runId: string
+): string {
+  return join(getHandoffFailedPath(ventureRoot), `${stageName}-${runId}.result.json`);
+}
+
 // --- Handoff paths ---
 export function getHandoffsRoot(ventureRoot: string): string {
   return join(getFounderRoot(ventureRoot), "handoffs");

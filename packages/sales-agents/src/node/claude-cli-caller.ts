@@ -64,12 +64,20 @@ export function createClaudeCliCallLlm(opts: ClaudeCliCallerOpts = {}): CallLlm 
       const timer = setTimeout(() => {
         if (settled) return;
         settled = true;
-        try { child.kill("SIGTERM"); } catch { /* already dead */ }
+        try {
+          child.kill("SIGTERM");
+        } catch {
+          /* already dead */
+        }
         reject(new Error(`claude-cli: timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
-      child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
-      child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
+      child.stdout.on("data", (chunk: Buffer) => {
+        stdout += chunk.toString("utf8");
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString("utf8");
+      });
 
       child.on("error", (err: Error & { code?: string }) => {
         if (settled) return;
@@ -115,10 +123,20 @@ export async function isClaudeCliAvailable(binary = "claude"): Promise<boolean> 
   return new Promise((resolve) => {
     const child = spawn(binary, ["--version"], { stdio: ["ignore", "ignore", "ignore"] });
     const timer = setTimeout(() => {
-      try { child.kill("SIGTERM"); } catch { /* ignore */ }
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        /* ignore */
+      }
       resolve(false);
     }, 5_000);
-    child.on("error", () => { clearTimeout(timer); resolve(false); });
-    child.on("close", (code) => { clearTimeout(timer); resolve(code === 0); });
+    child.on("error", () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve(code === 0);
+    });
   });
 }

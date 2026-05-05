@@ -34,7 +34,7 @@ export function watchInbox(
   const paths = ventureHandoffPaths(ventureRoot);
   fs.mkdirSync(paths.inbox, { recursive: true });
 
-  log.info("Watching inbox (chokidar): " + paths.inbox);
+  log.info(`Watching inbox (chokidar): ${paths.inbox}`);
 
   const seen = new Map<string, number>();
 
@@ -46,7 +46,7 @@ export function watchInbox(
     } catch {
       return; // file vanished between event and stat
     }
-    const key = filePath + "@" + stat.mtimeMs;
+    const key = `${filePath}@${stat.mtimeMs}`;
     if (seen.has(key)) return;
     seen.set(key, Date.now());
     pruneSeen(seen);
@@ -55,13 +55,13 @@ export function watchInbox(
       const raw = JSON.parse(fs.readFileSync(filePath, "utf-8"));
       const parsed = safeParseBundle(raw);
       if (!parsed.success) {
-        log.warn("Invalid bundle at " + filePath + ": " + parsed.error.message);
+        log.warn(`Invalid bundle at ${filePath}: ${parsed.error.message}`);
         return;
       }
-      log.info("Picked up bundle " + parsed.data.runId + " from inbox");
+      log.info(`Picked up bundle ${parsed.data.runId} from inbox`);
       await onBundle(parsed.data);
     } catch (err) {
-      log.warn("Failed to process inbox file " + filePath + ": " + String(err));
+      log.warn(`Failed to process inbox file ${filePath}: ${String(err)}`);
     }
   };
 
@@ -82,10 +82,10 @@ export function watchInbox(
     void processFile(filePath);
   });
   watcher.on("error", (err) => {
-    log.warn("chokidar error: " + String(err));
+    log.warn(`chokidar error: ${String(err)}`);
   });
   watcher.on("ready", () => {
-    log.info("chokidar ready on " + paths.inbox);
+    log.info(`chokidar ready on ${paths.inbox}`);
   });
 
   return () => {

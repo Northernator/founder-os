@@ -11,7 +11,7 @@
  * directories on the real fs. We use a per-test tmpdir so tests are
  * isolated and self-cleaning.
  */
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -30,19 +30,15 @@ afterEach(() => {
 
 function shapingLlm(): CallLlm {
   return async ({ system }) => {
-    if (system.includes("B2B sales researcher"))
-      return JSON.stringify({ company: { name: "X" } });
+    if (system.includes("B2B sales researcher")) return JSON.stringify({ company: { name: "X" } });
     if (system.includes("BANT"))
       return JSON.stringify({
         scores: { budget: 3, authority: 3, need: 3, timeline: 3 },
         reasoning: "ok",
       });
-    if (system.includes("decision-maker ROLES"))
-      return JSON.stringify({ contacts: [] });
-    if (system.includes("competitive intelligence"))
-      return JSON.stringify({ competitors: [] });
-    if (system.includes("outreach sequence"))
-      return JSON.stringify({ emails: [] });
+    if (system.includes("decision-maker ROLES")) return JSON.stringify({ contacts: [] });
+    if (system.includes("competitive intelligence")) return JSON.stringify({ competitors: [] });
+    if (system.includes("outreach sequence")) return JSON.stringify({ emails: [] });
     throw new Error("unknown agent");
   };
 }
@@ -113,7 +109,7 @@ describe("runBatch", () => {
         fs: new NodeFsAdapter(),
         callLlm: shapingLlm(),
         skipPdf: true,
-      }),
+      })
     ).rejects.toThrow(/no prospect URLs/);
   });
 
@@ -123,7 +119,7 @@ describe("runBatch", () => {
       file,
       JSON.stringify({
         prospects: ["https://a.com", "https://b.com", "https://c.com", "https://d.com"],
-      }),
+      })
     );
     const tracker = { inflight: 0, max: 0, delayMs: 30 };
     await runBatch({
@@ -144,10 +140,7 @@ describe("runBatch", () => {
 
   it("partial failure does not abort the batch", async () => {
     const file = join(workDir, "targets.json");
-    writeFileSync(
-      file,
-      JSON.stringify({ prospects: ["https://good.com", "https://bad.com"] }),
-    );
+    writeFileSync(file, JSON.stringify({ prospects: ["https://good.com", "https://bad.com"] }));
     let calls = 0;
     const callLlm: CallLlm = async (p) => {
       calls++;

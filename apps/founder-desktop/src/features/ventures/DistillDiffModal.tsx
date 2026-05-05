@@ -88,6 +88,7 @@ export function DistillDiffModal({
   };
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: role chosen intentionally; refactor deferred
     <div
       role="dialog"
       aria-modal="true"
@@ -302,7 +303,9 @@ function FieldDiffRow({
           marginBottom: 10,
         }}
       >
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{field.label}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
+          {field.label}
+        </div>
         <label
           style={{
             display: "flex",

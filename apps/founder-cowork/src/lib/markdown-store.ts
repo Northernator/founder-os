@@ -63,9 +63,9 @@ export function listEntries(baseDir: string): MdEntry[] {
 }
 
 export function readEntry(baseDir: string, id: string): MdEntryWithBody {
-  const filePath = path.join(baseDir, sanitizeId(id) + ".md");
+  const filePath = path.join(baseDir, `${sanitizeId(id)}.md`);
   if (!fs.existsSync(filePath)) {
-    throw new Error("Entry not found: " + id);
+    throw new Error(`Entry not found: ${id}`);
   }
   const text = fs.readFileSync(filePath, "utf8");
   const st = fs.statSync(filePath);
@@ -89,7 +89,7 @@ export function writeEntry(
   fs.mkdirSync(baseDir, { recursive: true });
   const safeId = sanitizeId(id);
   if (!safeId) throw new Error("entry id is empty after sanitisation");
-  const filePath = path.join(baseDir, safeId + ".md");
+  const filePath = path.join(baseDir, `${safeId}.md`);
   const text = renderFrontmatter(frontmatter) + body.replace(/\r\n/g, "\n");
   fs.writeFileSync(filePath, text, "utf8");
   const st = fs.statSync(filePath);
@@ -103,7 +103,7 @@ export function writeEntry(
 }
 
 export function deleteEntry(baseDir: string, id: string): void {
-  const filePath = path.join(baseDir, sanitizeId(id) + ".md");
+  const filePath = path.join(baseDir, `${sanitizeId(id)}.md`);
   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 }
 
@@ -146,7 +146,7 @@ export function renderFrontmatter(frontmatter: Record<string, string>): string {
     const v = frontmatter[k] ?? "";
     // Quote if the value contains characters that confuse our parser.
     const needsQuote = /[:#'"\n]/.test(v);
-    lines.push(k + ": " + (needsQuote ? JSON.stringify(v) : v));
+    lines.push(`${k}: ${needsQuote ? JSON.stringify(v) : v}`);
   }
   lines.push("---", "");
   return lines.join("\n");
@@ -172,5 +172,5 @@ export function sanitizeId(raw: string): string {
 export function idFromTitle(title: string): string {
   const slug = sanitizeId(title);
   if (slug) return slug;
-  return "entry-" + Date.now().toString(36);
+  return `entry-${Date.now().toString(36)}`;
 }

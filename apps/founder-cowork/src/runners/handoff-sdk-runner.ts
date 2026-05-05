@@ -58,12 +58,12 @@ export async function runHandoffWithSdk(opts: RunHandoffOptions): Promise<Handof
     onProgress,
   } = opts;
 
-  log.info("runHandoffWithSdk(" + bundle.type + ") starting for run " + bundle.runId);
+  log.info(`runHandoffWithSdk(${bundle.type}) starting for run ${bundle.runId}`);
 
   emit(onProgress, bundle.runId, 10, "Preparing context...");
 
   const contextParts: string[] = [
-    "## Handoff Bundle\n```json\n" + JSON.stringify(bundle.payload, null, 2) + "\n```",
+    `## Handoff Bundle\n\`\`\`json\n${JSON.stringify(bundle.payload, null, 2)}\n\`\`\``,
   ];
 
   for (const ref of bundle.artifactRefs) {
@@ -71,11 +71,9 @@ export async function runHandoffWithSdk(opts: RunHandoffOptions): Promise<Handof
     if (fs.existsSync(absPath)) {
       try {
         const content = fs.readFileSync(absPath, "utf-8");
-        contextParts.push(
-          "## Artifact: " + ref.type + " (" + ref.path + ")\n```\n" + content + "\n```"
-        );
+        contextParts.push(`## Artifact: ${ref.type} (${ref.path})\n\`\`\`\n${content}\n\`\`\``);
       } catch (e) {
-        log.warn("Couldn't read artifact " + ref.path + ": " + String(e));
+        log.warn(`Couldn't read artifact ${ref.path}: ${String(e)}`);
       }
     }
   }
@@ -91,7 +89,7 @@ export async function runHandoffWithSdk(opts: RunHandoffOptions): Promise<Handof
     model,
   });
   if (tokensSaved > 0) {
-    log.info("prompt-master saved ~" + tokensSaved + " tokens on system prompt");
+    log.info(`prompt-master saved ~${tokensSaved} tokens on system prompt`);
   }
 
   const userPrompt = contextParts.join("\n\n");
@@ -108,8 +106,8 @@ export async function runHandoffWithSdk(opts: RunHandoffOptions): Promise<Handof
       onProgress: (pct, msg) => emit(onProgress, bundle.runId, pct, msg),
     });
   } catch (err) {
-    log.error("Claude CLI error: " + String(err));
-    return makeFailureResult(bundle, "Claude CLI error: " + String(err));
+    log.error(`Claude CLI error: ${String(err)}`);
+    return makeFailureResult(bundle, `Claude CLI error: ${String(err)}`);
   }
 
   emit(onProgress, bundle.runId, 95, "Writing artifacts...");
@@ -121,17 +119,11 @@ export async function runHandoffWithSdk(opts: RunHandoffOptions): Promise<Handof
   return makeSuccessResult(
     bundle,
     producedPaths.map((p) => ({
-      artifactId: bundle.ventureId + "::" + p,
+      artifactId: `${bundle.ventureId}::${p}`,
       path: p,
       type: "file",
     })),
-    "Run " +
-      bundle.runId +
-      " (" +
-      bundle.type +
-      ") complete. " +
-      producedPaths.length +
-      " files produced."
+    `Run ${bundle.runId} (${bundle.type}) complete. ${producedPaths.length} files produced.`
   );
 }
 
@@ -224,7 +216,7 @@ function spawnClaude(opts: SpawnClaudeOpts): Promise<string> {
       } catch {
         // already dead
       }
-      reject(new Error("claude CLI timed out after " + opts.timeoutMs + "ms"));
+      reject(new Error(`claude CLI timed out after ${opts.timeoutMs}ms`));
     }, opts.timeoutMs);
 
     child.stdout.on("data", (chunk: Buffer) => {
@@ -255,12 +247,12 @@ function spawnClaude(opts: SpawnClaudeOpts): Promise<string> {
     });
     child.on("error", (err: Error) => {
       clearTimeout(timer);
-      reject(new Error("claude CLI spawn failed: " + err.message));
+      reject(new Error(`claude CLI spawn failed: ${err.message}`));
     });
     child.on("close", (code: number | null) => {
       clearTimeout(timer);
       if (code !== 0) {
-        reject(new Error("claude CLI exit " + (code ?? "?") + " - " + stderr.slice(0, 240).trim()));
+        reject(new Error(`claude CLI exit ${code ?? "?"} - ${stderr.slice(0, 240).trim()}`));
         return;
       }
       // Streaming mode returns the parsed text; non-streaming returns raw stdout.
@@ -312,6 +304,7 @@ export function writeCodeBlocks(
 
   const fenceRegex = /```([^\s`]+)\s*\n([\s\S]*?)```/g;
   let match: RegExpExecArray | null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: intentional assign-and-test pattern
   while ((match = fenceRegex.exec(response)) !== null) {
     const tag = (match[1] ?? "").trim();
     const body = match[2] ?? "";
@@ -324,9 +317,9 @@ export function writeCodeBlocks(
       fs.mkdirSync(path.dirname(absPath), { recursive: true });
       fs.writeFileSync(absPath, body, "utf-8");
       written.push(relPath.split(path.sep).join("/"));
-      log.info("Wrote: " + absPath);
+      log.info(`Wrote: ${absPath}`);
     } catch (err) {
-      log.warn("Failed to write " + absPath + ": " + String(err));
+      log.warn(`Failed to write ${absPath}: ${String(err)}`);
     }
   }
   return written;

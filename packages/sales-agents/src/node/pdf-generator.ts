@@ -50,13 +50,14 @@ const FOOTER_HEIGHT = 40;
 export async function generateSalesReport(opts: GeneratePdfOpts): Promise<string> {
   let PDFDocument: new (opts?: Record<string, unknown>) => PdfDocLike;
   try {
-    PDFDocument = ((await import("pdfkit")) as unknown as {
-      default: new (opts?: Record<string, unknown>) => PdfDocLike;
-    }).default;
-  } catch (err) {
+    PDFDocument = (
+      (await import("pdfkit")) as unknown as {
+        default: new (opts?: Record<string, unknown>) => PdfDocLike;
+      }
+    ).default;
+  } catch (_err) {
     throw new Error(
-      "pdfkit is not installed.\n" +
-        "  Run: pnpm --filter @founder-os/sales-agents add pdfkit",
+      "pdfkit is not installed.\n" + "  Run: pnpm --filter @founder-os/sales-agents add pdfkit"
     );
   }
   const doc = new PDFDocument({ margin: PAGE.margin, bufferPages: true });
@@ -67,11 +68,21 @@ export async function generateSalesReport(opts: GeneratePdfOpts): Promise<string
   decorateTopBar(doc);
   renderCover(doc, opts);
 
-  doc.addPage(); decorateTopBar(doc); renderOverview(doc, opts.memory);
-  doc.addPage(); decorateTopBar(doc); renderBant(doc, opts.memory);
-  doc.addPage(); decorateTopBar(doc); renderDecisionMakers(doc, opts.memory);
-  doc.addPage(); decorateTopBar(doc); renderCompetitive(doc, opts.memory);
-  doc.addPage(); decorateTopBar(doc); renderOutreach(doc, opts.memory);
+  doc.addPage();
+  decorateTopBar(doc);
+  renderOverview(doc, opts.memory);
+  doc.addPage();
+  decorateTopBar(doc);
+  renderBant(doc, opts.memory);
+  doc.addPage();
+  decorateTopBar(doc);
+  renderDecisionMakers(doc, opts.memory);
+  doc.addPage();
+  decorateTopBar(doc);
+  renderCompetitive(doc, opts.memory);
+  doc.addPage();
+  decorateTopBar(doc);
+  renderOutreach(doc, opts.memory);
 
   // Footer pass after all content -- needs total page count.
   addFooters(doc, opts);
@@ -197,7 +208,11 @@ function renderDecisionMakers(doc: PdfDocLike, memory: SalesMemory): void {
   }
   for (const m of contacts) {
     drawCard(doc, () => {
-      doc.fillColor(COLORS.text).fontSize(13).font("Helvetica-Bold").text(m.title || "Unknown Role");
+      doc
+        .fillColor(COLORS.text)
+        .fontSize(13)
+        .font("Helvetica-Bold")
+        .text(m.title || "Unknown Role");
       doc.moveDown(0.2);
       doc.fillColor(COLORS.muted).fontSize(10).font("Helvetica");
       const meta = [m.department, m.location].filter(Boolean).join("  |  ");
@@ -253,7 +268,10 @@ function renderOutreach(doc: PdfDocLike, memory: SalesMemory): void {
       doc.moveDown(0.2);
       doc.fillColor(COLORS.text).fontSize(12).font("Helvetica-Bold").text(e.subject);
       doc.moveDown(0.3);
-      doc.fontSize(10).font("Helvetica").text(e.body, { width: PAGE.contentWidth - 32 });
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .text(e.body, { width: PAGE.contentWidth - 32 });
     });
   });
 }
@@ -306,7 +324,11 @@ function drawBantBar(doc: PdfDocLike, dim: string, score: number): void {
   const filledW = (score / 5) * barW;
   const color = score >= 4 ? COLORS.scoreHigh : score >= 2 ? COLORS.scoreMid : COLORS.scoreLow;
 
-  doc.fillColor(COLORS.text).fontSize(11).font("Helvetica-Bold").text(labelText, PAGE.margin, y + 2);
+  doc
+    .fillColor(COLORS.text)
+    .fontSize(11)
+    .font("Helvetica-Bold")
+    .text(labelText, PAGE.margin, y + 2);
   doc.save();
   doc.rect(barX, y, barW, barH).fill(COLORS.border);
   doc.rect(barX, y, filledW, barH).fill(color);
@@ -345,7 +367,12 @@ interface PdfDocLike {
   pipe(stream: NodeJS.WritableStream): unknown;
   fontSize(size: number): PdfDocLike;
   font(name: string): PdfDocLike;
-  text(content: string, x?: number | Record<string, unknown>, y?: number, opts?: Record<string, unknown>): PdfDocLike;
+  text(
+    content: string,
+    x?: number | Record<string, unknown>,
+    y?: number,
+    opts?: Record<string, unknown>
+  ): PdfDocLike;
   moveDown(lines?: number): PdfDocLike;
   addPage(): PdfDocLike;
   switchToPage(n: number): PdfDocLike;

@@ -34,16 +34,16 @@ const result = await optimize({
 
 console.log("");
 console.log("Original prompt:");
-console.log("  " + SAMPLE_PROMPT);
+console.log(`  ${SAMPLE_PROMPT}`);
 console.log("");
 console.log("Optimized:");
-console.log("  " + result.optimized);
+console.log(`  ${result.optimized}`);
 console.log("");
-console.log("Tokens saved (estimate): " + result.tokensSaved);
-console.log("Cache hit:               " + result.cacheHit);
-console.log("Fallback used:           " + result.fallbackUsed);
-console.log("Transport:               " + result.trace.transport);
-console.log("Latency (ms):            " + result.trace.latencyMs);
+console.log(`Tokens saved (estimate): ${result.tokensSaved}`);
+console.log(`Cache hit:               ${result.cacheHit}`);
+console.log(`Fallback used:           ${result.fallbackUsed}`);
+console.log(`Transport:               ${result.trace.transport}`);
+console.log(`Latency (ms):            ${result.trace.latencyMs}`);
 
 if (result.fallbackUsed) {
   console.log("");

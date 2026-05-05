@@ -34,7 +34,7 @@ export class WorktreeManager {
 
   async create(opts: CreateWorktreeOptions): Promise<WorktreeRef> {
     const safe = sanitizeBranchForPath(opts.branch);
-    const path = this.repoRoot + "--wt-" + safe;
+    const path = `${this.repoRoot}--wt-${safe}`;
 
     try {
       const git = await this.ensureGit();

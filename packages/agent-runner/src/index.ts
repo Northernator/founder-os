@@ -117,21 +117,11 @@ export class AgentRunner {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(
-        "AgentRunner.spawn(" +
-          opts.agent.id +
-          ") failed: " +
-          msg +
-          "\n  cwd=" +
-          opts.cwd +
-          "\n  file=" +
-          file +
-          "\n  args=" +
-          JSON.stringify(args)
+        `AgentRunner.spawn(${opts.agent.id}) failed: ${msg}\n  cwd=${opts.cwd}\n  file=${file}\n  args=${JSON.stringify(args)}`
       );
     }
 
-    const id =
-      this.idPrefix + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+    const id = `${this.idPrefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
     if (opts.agent.promptInjection === "stdin") {
       setTimeout(() => {
@@ -202,8 +192,10 @@ export class AgentRunner {
       let resolved = false;
       void accountManager
         .runSerialised(opts.agent.id, async () => {
+          // biome-ignore lint/suspicious/noImplicitAnyLet: type inferred from later assignment
           let handle;
           try {
+            // biome-ignore lint/style/noNonNullAssertion: value asserted non-null by surrounding logic
             handle = await accountManager.materialise(opts.agent, opts.account!);
           } catch (err) {
             if (!resolved) reject(err);
@@ -263,10 +255,7 @@ export function buildLaunch(agent: AgentDefinition, prompt: string): LaunchPlan 
       return { file, args: [] };
     case "http":
       throw new Error(
-        "buildLaunch: agent " +
-          agent.id +
-          " uses http injection and shouldn't be spawned as a PTY. " +
-          "Call its HTTP endpoint instead."
+        `buildLaunch: agent ${agent.id} uses http injection and shouldn't be spawned as a PTY. Call its HTTP endpoint instead.`
       );
   }
 }

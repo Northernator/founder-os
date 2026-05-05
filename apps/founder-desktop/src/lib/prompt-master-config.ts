@@ -58,6 +58,6 @@ export async function writeSharedConfig(update: Partial<SharedConfig>): Promise<
   };
   await invoke("write_file", {
     path: CONFIG_PATH,
-    content: JSON.stringify(next, null, 2) + "\n",
+    content: `${JSON.stringify(next, null, 2)}\n`,
   });
 }

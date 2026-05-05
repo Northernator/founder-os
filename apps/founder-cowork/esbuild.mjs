@@ -67,12 +67,7 @@ function copyNativeDeps() {
     }
     if (!src) {
       console.warn(
-        "[copyNativeDeps] " +
-          dep +
-          " not found - skipping. " +
-          "Run `pnpm install` from the repo root and ensure " +
-          dep +
-          " is in pnpm.onlyBuiltDependencies."
+        `[copyNativeDeps] ${dep} not found - skipping. Run \`pnpm install\` from the repo root and ensure ${dep} is in pnpm.onlyBuiltDependencies.`
       );
       continue;
     }
@@ -95,20 +90,11 @@ function copyNativeDeps() {
     if (fs.existsSync(releaseDir)) {
       const binaries = fs.readdirSync(releaseDir).filter((f) => f.endsWith(".node"));
       console.log(
-        "[copyNativeDeps] " +
-          dep +
-          ": " +
-          binaries.length +
-          " prebuilt binary(ies) - " +
-          (binaries.join(", ") || "(none)")
+        `[copyNativeDeps] ${dep}: ${binaries.length} prebuilt binary(ies) - ${binaries.join(", ") || "(none)"}`
       );
     } else {
       console.warn(
-        "[copyNativeDeps] " +
-          dep +
-          ": no build/Release/ directory found AND no prebuild matched. " +
-          "The extension will fail to load node-pty at runtime. Try " +
-          "`pnpm install --force` from the repo root."
+        `[copyNativeDeps] ${dep}: no build/Release/ directory found AND no prebuild matched. The extension will fail to load node-pty at runtime. Try \`pnpm install --force\` from the repo root.`
       );
     }
   }
@@ -127,7 +113,7 @@ function ensureNodePtyBuildRelease(destPkg) {
   const prebuildsDir = path.join(destPkg, "prebuilds");
   if (!fs.existsSync(prebuildsDir)) return;
 
-  const target = process.platform + "-" + process.arch;
+  const target = `${process.platform}-${process.arch}`;
   const candidate = path.join(prebuildsDir, target);
   let chosen = null;
   if (fs.existsSync(candidate)) {
@@ -167,16 +153,14 @@ function ensureNodePtyBuildRelease(destPkg) {
     }
   }
   if (!chosen) {
-    console.warn("[copyNativeDeps] node-pty: no prebuild for " + target + " under " + prebuildsDir);
+    console.warn(`[copyNativeDeps] node-pty: no prebuild for ${target} under ${prebuildsDir}`);
     return;
   }
 
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.copyFileSync(chosen, path.join(releaseDir, "pty.node"));
   console.log(
-    "[copyNativeDeps] node-pty: materialised " +
-      path.relative(destPkg, chosen) +
-      " -> build/Release/pty.node"
+    `[copyNativeDeps] node-pty: materialised ${path.relative(destPkg, chosen)} -> build/Release/pty.node`
   );
 }
 
@@ -194,7 +178,7 @@ function buildAndCopyUi() {
   const outUi = path.join(projectRoot, "out", "ui");
 
   if (!fs.existsSync(uiPkg)) {
-    console.warn("[buildUi] mission-control-ui package not found at " + uiPkg);
+    console.warn(`[buildUi] mission-control-ui package not found at ${uiPkg}`);
     return;
   }
 
@@ -207,16 +191,13 @@ function buildAndCopyUi() {
   });
   if (result.status !== 0) {
     console.error(
-      "[buildUi] vite build failed (exit " +
-        result.status +
-        ")" +
-        (result.error ? " :: " + String(result.error) : "")
+      `[buildUi] vite build failed (exit ${result.status})${result.error ? ` :: ${String(result.error)}` : ""}`
     );
     return;
   }
 
   if (!fs.existsSync(uiDist)) {
-    console.warn("[buildUi] vite produced no dist/ at " + uiDist);
+    console.warn(`[buildUi] vite produced no dist/ at ${uiDist}`);
     return;
   }
 
@@ -224,7 +205,7 @@ function buildAndCopyUi() {
   fs.cpSync(uiDist, outUi, { recursive: true });
   const indexExists = fs.existsSync(path.join(outUi, "index.html"));
   console.log(
-    "[buildUi] copied dist/ -> out/ui/" + (indexExists ? " (index.html OK)" : " (NO index.html!)")
+    `[buildUi] copied dist/ -> out/ui/${indexExists ? " (index.html OK)" : " (NO index.html!)"}`
   );
 }
 

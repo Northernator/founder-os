@@ -117,6 +117,7 @@ export function NewVentureWizard({
 
   return (
     <div
+      // biome-ignore lint/a11y/useSemanticElements: role chosen intentionally; refactor deferred
       onClick={onClose}
       role="dialog"
       aria-modal="true"

@@ -71,7 +71,7 @@ export async function ensureUkSetupStep(ctx: EnsureUkSetupContext): Promise<Ensu
   // else starts blank for the founder to fill via the UkSetupTab.
   const canvas = createEmptyUkSetupCanvas(ctx.manifest.id, ctx.manifest.entityType);
 
-  await ctx.fs.writeFile(canvasPath, JSON.stringify(canvas, null, 2) + "\n");
+  await ctx.fs.writeFile(canvasPath, `${JSON.stringify(canvas, null, 2)}\n`);
   log.info(`Created UK Setup canvas at ${canvasPath} (entityType: ${ctx.manifest.entityType})`);
 
   return { status: "done", producedArtifactIds: [], canvas };

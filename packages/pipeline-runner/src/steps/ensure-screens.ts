@@ -91,7 +91,7 @@ export async function ensureScreensStep(ctx: EnsureScreensContext): Promise<Ensu
     }
   } else {
     canvas = createEmptyScreensCanvas(ctx.manifest.id);
-    await ctx.fs.writeFile(canvasPath, JSON.stringify(canvas, null, 2) + "\n");
+    await ctx.fs.writeFile(canvasPath, `${JSON.stringify(canvas, null, 2)}\n`);
     log.info(`Created screens canvas at ${canvasPath}`);
   }
 

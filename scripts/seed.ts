@@ -48,7 +48,7 @@ async function main() {
   const manifestPath = path.join(DEMO_VENTURE_ROOT, "venture.yaml");
   fs.writeFileSync(
     manifestPath,
-    [
+    `${[
       "# Founder OS Venture Manifest",
       `id: ${VENTURE_MANIFEST.id}`,
       `name: ${VENTURE_MANIFEST.name}`,
@@ -63,7 +63,7 @@ async function main() {
       `monthlyBudgetCapGBP: ${VENTURE_MANIFEST.monthlyBudgetCapGBP}`,
       `currentStage: ${VENTURE_MANIFEST.currentStage}`,
       "blockers: []",
-    ].join("\n") + "\n",
+    ].join("\n")}\n`,
     "utf-8"
   );
   ok(`Written: ${manifestPath}`);
@@ -176,7 +176,7 @@ async function main() {
   }
 
   // ── 6. Summary ────────────────────────────────────
-  console.log("\n" + "═".repeat(50));
+  console.log(`\n${"═".repeat(50)}`);
   console.log(
     passed === expected.length
       ? "🎉 Full pipeline verified!"

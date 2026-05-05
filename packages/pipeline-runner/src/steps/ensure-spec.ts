@@ -86,7 +86,7 @@ export async function ensureSpecStep(ctx: EnsureSpecContext): Promise<EnsureSpec
     }
   } else {
     canvas = createEmptyProductSpecCanvas(ctx.manifest.id);
-    await ctx.fs.writeFile(canvasPath, JSON.stringify(canvas, null, 2) + "\n");
+    await ctx.fs.writeFile(canvasPath, `${JSON.stringify(canvas, null, 2)}\n`);
     log.info(`Created spec canvas at ${canvasPath}`);
   }
 

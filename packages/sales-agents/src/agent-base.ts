@@ -34,7 +34,7 @@ export abstract class BaseAgent {
   protected async callJson<T = Record<string, unknown>>(
     callLlm: CallLlm,
     system: string,
-    user: string,
+    user: string
   ): Promise<T> {
     const raw = await callLlm({ system, user });
     const trimmed = stripCodeFence(raw).trim();

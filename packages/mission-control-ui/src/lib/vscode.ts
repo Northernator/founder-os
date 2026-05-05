@@ -68,7 +68,7 @@ export function send(message: WebviewToHostMessage): void {
 export function request<TResult = unknown>(
   message: DistributiveOmit<WebviewToHostMessage, "requestId">
 ): Promise<TResult> {
-  const requestId = "req-" + Math.random().toString(36).slice(2, 10);
+  const requestId = `req-${Math.random().toString(36).slice(2, 10)}`;
   return new Promise<TResult>((resolve, reject) => {
     const handler = (ev: MessageEvent) => {
       const m = ev.data as HostToWebviewMessage;
@@ -83,7 +83,7 @@ export function request<TResult = unknown>(
     // Safety: time out after 30s so we don't leak handlers.
     setTimeout(() => {
       window.removeEventListener("message", handler);
-      reject(new Error("Mission Control RPC timeout: " + message.type));
+      reject(new Error(`Mission Control RPC timeout: ${message.type}`));
     }, 30_000);
   });
 }

@@ -1,7 +1,7 @@
 import { FounderQueryProvider } from "@founder-os/query";
 import { useVentureStore } from "@founder-os/state";
 import { AppShell, Sidebar } from "@founder-os/ui";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ThemeToggle } from "../features/chrome/ThemeToggle.js";
 import { ToastContainer } from "../features/toasts/ToastContainer.js";
 import {

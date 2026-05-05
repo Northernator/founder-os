@@ -45,6 +45,7 @@ export function MemoryTab(_props: TabProps) {
     }
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     void refresh();
   }, []);
@@ -100,7 +101,7 @@ export function MemoryTab(_props: TabProps) {
 
   async function deleteEntry(id: string): Promise<void> {
     if (!id) return;
-    if (typeof window !== "undefined" && !window.confirm("Delete '" + id + "'?")) return;
+    if (typeof window !== "undefined" && !window.confirm(`Delete '${id}'?`)) return;
     setBusy("delete");
     setError(null);
     try {
@@ -136,13 +137,18 @@ export function MemoryTab(_props: TabProps) {
             Memory
           </h3>
           <div className="mc-row" style={{ gap: 6 }}>
-            <button className="secondary" onClick={() => setDraft(EMPTY_DRAFT)}>
+            <button type="button" className="secondary" onClick={() => setDraft(EMPTY_DRAFT)}>
               New entry
             </button>
-            <button className="secondary" onClick={snapshotCurrent} disabled={busy !== null}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={snapshotCurrent}
+              disabled={busy !== null}
+            >
               {busy === "snap" ? "Snapshotting…" : "Snapshot active editor"}
             </button>
-            <button className="secondary" onClick={refresh} disabled={busy !== null}>
+            <button type="button" className="secondary" onClick={refresh} disabled={busy !== null}>
               {busy === "list" ? "Loading…" : "Refresh"}
             </button>
           </div>
@@ -171,6 +177,7 @@ export function MemoryTab(_props: TabProps) {
                 const active = e.id === draft.id;
                 return (
                   <button
+                    type="button"
                     key={e.id}
                     className="secondary"
                     onClick={() => void loadEntry(e.id)}
@@ -194,10 +201,11 @@ export function MemoryTab(_props: TabProps) {
         <div className="mc-card" style={{ marginBottom: 0 }}>
           <div className="mc-row" style={{ justifyContent: "space-between" }}>
             <h3 className="mc-card-title" style={{ margin: 0 }}>
-              {draft.id ? "Editing: " + draft.id : "New entry"}
+              {draft.id ? `Editing: ${draft.id}` : "New entry"}
             </h3>
             {draft.id && (
               <button
+                type="button"
                 className="secondary"
                 onClick={() => void deleteEntry(draft.id)}
                 disabled={busy !== null}
@@ -245,7 +253,11 @@ export function MemoryTab(_props: TabProps) {
             />
           </div>
           <div className="mc-row" style={{ marginTop: 10, justifyContent: "flex-end" }}>
-            <button onClick={saveDraft} disabled={!draft.name.trim() || busy !== null}>
+            <button
+              type="button"
+              onClick={saveDraft}
+              disabled={!draft.name.trim() || busy !== null}
+            >
               {busy === "save" ? "Saving…" : draft.id ? "Save" : "Create"}
             </button>
           </div>
