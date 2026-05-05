@@ -1,11 +1,13 @@
-import type { Venture, VentureManifest, VentureStage } from "@founder-os/domain";
+import type { FailedRunEntry, Venture, VentureManifest, VentureStage } from "@founder-os/domain";
 import { optimize } from "@founder-os/prompt-master";
 import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type AdvancePreflight, runAdvancePreflight } from "../../lib/advance-gate.js";
 import * as db from "../../lib/db.js";
+import { findLatestFailedRunForStage } from "../../lib/failed-runs.js";
 import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
+import { runValidationStage } from "../../lib/run-validation-stage.js";
 import { pushToast } from "../../lib/toasts.js";
 import {
   type DistilledValidationFields,
@@ -13,11 +15,8 @@ import {
 } from "../../lib/validation-distiller.js";
 import { joinPath } from "../../lib/venture-io.js";
 import { AdvanceConfirmModal } from "./AdvanceConfirmModal.js";
-import {
-  type DistillFieldConfig,
-  DistillDiffModal,
-  distillTextField,
-} from "./DistillDiffModal.js";
+import { DistillDiffModal, type DistillFieldConfig, distillTextField } from "./DistillDiffModal.js";
+import { FailedRunBanner } from "./FailedRunBanner.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -180,8 +179,16 @@ const DECISION_CONFIG: Record<
     sublabel: "Customers confirmed they'd pay",
   },
   pivot: { color: "var(--warning)", label: "🔄 Pivot", sublabel: "Core idea needs adjustment" },
-  invalidated: { color: "var(--danger)", label: "🛑 Invalidated", sublabel: "Not worth building as-is" },
-  undecided: { color: "var(--text-muted)", label: "⏳ Undecided", sublabel: "Still running experiments" },
+  invalidated: {
+    color: "var(--danger)",
+    label: "🛑 Invalidated",
+    sublabel: "Not worth building as-is",
+  },
+  undecided: {
+    color: "var(--text-muted)",
+    label: "⏳ Undecided",
+    sublabel: "Still running experiments",
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -230,6 +237,7 @@ export function ValidationTab({
   venture,
   manifest,
   onAdvanceStage,
+  // biome-ignore lint/correctness/noUnusedVariables: kept for future use / interface compatibility
   onManifestUpdate,
 }: {
   venture: Venture;
@@ -249,10 +257,16 @@ export function ValidationTab({
   const [distilling, setDistilling] = useState(false);
   const [distillDraft, setDistillDraft] = useState<DistilledValidationFields | null>(null);
   const [advanceModal, setAdvanceModal] = useState<AdvancePreflight | null>(null);
+  // Stage-runner adoption: VALIDATION. The runner only writes a
+  // skeletal checkpoint at 02_validation/validation-summary.json; the
+  // real canvas content is filled in via the form below.
+  const [runningValidationStage, setRunningValidationStage] = useState(false);
+  const [failedValidationRun, setFailedValidationRun] = useState<FailedRunEntry | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Load canvas from disk
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     let cancelled = false;
     invoke<string>("read_file", { path: canvasPath(venture.rootPath) })
@@ -282,8 +296,7 @@ export function ValidationTab({
         try {
           await invoke("write_file", {
             path: canvasPath(venture.rootPath),
-            content:
-              JSON.stringify({ ...next, updatedAt: new Date().toISOString() }, null, 2) + "\n",
+            content: `${JSON.stringify({ ...next, updatedAt: new Date().toISOString() }, null, 2)}\n`,
           });
         } catch (err) {
           pushToast({
@@ -325,6 +338,23 @@ export function ValidationTab({
       cancelled = true;
     };
   }, [venture.id, venture.stage]);
+
+  // Failed-run query for VALIDATION stage. Refreshes on mount, venture
+  // switch, and after each runningValidationStage cycle.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  useEffect(() => {
+    let cancelled = false;
+    findLatestFailedRunForStage(venture.rootPath, "VALIDATION")
+      .then((entry) => {
+        if (!cancelled) setFailedValidationRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedValidationRun(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.rootPath, runningValidationStage]);
 
   const handleDistill = async () => {
     if (distilling) return;
@@ -408,6 +438,7 @@ export function ValidationTab({
   };
 
   // Load uploaded docs
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     let cancelled = false;
     const dir = uploadsDir(venture.rootPath);
@@ -459,7 +490,7 @@ export function ValidationTab({
             }
             const saveName = file.name.replace(/\.pdf$/i, ".extracted.txt");
             content = `[Extracted from PDF: ${file.name}]\n\n${extracted}`;
-            await invoke("write_file", { path: joinPath(dir, saveName), content: content + "\n" });
+            await invoke("write_file", { path: joinPath(dir, saveName), content: `${content}\n` });
             setUploadedDocs((prev) => [
               ...prev.filter((d) => d.id !== saveName),
               {
@@ -484,7 +515,7 @@ export function ValidationTab({
           });
           continue;
         }
-        await invoke("write_file", { path: joinPath(dir, file.name), content: content + "\n" });
+        await invoke("write_file", { path: joinPath(dir, file.name), content: `${content}\n` });
         setUploadedDocs((prev) => [
           ...prev.filter((d) => d.id !== file.name),
           {
@@ -691,7 +722,7 @@ Omit any field where the document has no relevant info.`;
     try {
       await invoke("write_file", {
         path: canvasPath(venture.rootPath),
-        content: JSON.stringify({ ...canvas, updatedAt: new Date().toISOString() }, null, 2) + "\n",
+        content: `${JSON.stringify({ ...canvas, updatedAt: new Date().toISOString() }, null, 2)}\n`,
       });
     } catch (err) {
       pushToast({
@@ -725,6 +756,66 @@ Omit any field where the document has no relevant info.`;
     setAdvancing(false);
   };
 
+  // Run the VALIDATION stage via @founder-os/stage-runners.
+  // Backed by createValidationSummaryStep, which synthesises the
+  // canvas + saas research excerpts into validation-summary.{md,json}.
+  // LLM-enriches the markdown narrative when a provider is configured;
+  // falls back to a deterministic templated narrative otherwise.
+  const handleRunValidationStage = async () => {
+    if (runningValidationStage) return;
+    if (!manifest) {
+      pushToast({
+        kind: "warn",
+        message: "Venture manifest hasn't loaded yet -- try again in a moment",
+        ttlMs: 5000,
+      });
+      return;
+    }
+    setRunningValidationStage(true);
+    try {
+      const out = await runValidationStage({ venture, manifest });
+      if (out.kind === "no-provider") {
+        pushToast({
+          kind: "warn",
+          message: "No LLM provider configured",
+          detail:
+            "Configure a provider in Settings to get an LLM-written go/no-go narrative. The deterministic summary is still useful -- you can also wire a provider and re-run.",
+          ttlMs: 7000,
+        });
+        return;
+      }
+      const { result, steps, summarySource } = out;
+      if (result.success) {
+        const sourceSuffix =
+          summarySource === "llm"
+            ? " (LLM)"
+            : summarySource === "deterministic-fallback"
+              ? " (deterministic fallback)"
+              : "";
+        pushToast({
+          kind: "success",
+          message: `Validation stage complete${steps.validation === "ok" ? sourceSuffix : " (no work to do)"}`,
+          detail: "Saved under 02_validation/.",
+          ttlMs: 5000,
+        });
+      } else {
+        pushToast({
+          kind: "error",
+          message: "Validation stage failed",
+          detail: result.error?.message ?? "Unknown error",
+        });
+      }
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Couldn't run validation stage",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRunningValidationStage(false);
+    }
+  };
+
   return (
     <div
       style={{ height: "100%", overflow: "auto", padding: "24px 28px", boxSizing: "border-box" }}
@@ -749,6 +840,25 @@ Omit any field where the document has no relevant info.`;
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <SaveIndicator status={saveStatus} />
+          <button
+            type="button"
+            onClick={handleRunValidationStage}
+            disabled={runningValidationStage || !manifest}
+            title="Run validation stage via ValidationStageRunner (failed-runs index, idempotent)"
+            style={{
+              padding: "8px 14px",
+              background: runningValidationStage ? "var(--bg-elevated)" : "var(--accent-soft)",
+              border: `1px solid ${runningValidationStage ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+              color: runningValidationStage ? "var(--text-muted)" : "var(--accent-hover)",
+              borderRadius: 6,
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: runningValidationStage || !manifest ? "not-allowed" : "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {runningValidationStage ? "Running..." : "Run validation stage"}
+          </button>
           <button
             type="button"
             onClick={handleDistill}
@@ -804,6 +914,16 @@ Omit any field where the document has no relevant info.`;
         </div>
       </div>
 
+      {failedValidationRun && (
+        <FailedRunBanner
+          label="validation"
+          entry={failedValidationRun}
+          ventureRoot={venture.rootPath}
+          busy={runningValidationStage}
+          disabled={!manifest}
+          onRetry={handleRunValidationStage}
+        />
+      )}
       {/* Two-column layout */}
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
         {/* LEFT */}
@@ -899,7 +1019,9 @@ Omit any field where the document has no relevant info.`;
                       {doc.name}
                     </span>
                     {doc.sizeKb > 0 && (
-                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{doc.sizeKb} KB</span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        {doc.sizeKb} KB
+                      </span>
                     )}
                     <button
                       type="button"
@@ -1021,7 +1143,9 @@ Omit any field where the document has no relevant info.`;
               <Textarea
                 value={canvas.whatsIncluded}
                 onChange={(v) => update({ whatsIncluded: v })}
-                placeholder={`e.g.\n- Automated invoice reminders (3-email sequence, configurable timing)\n- Overdue dashboard with client health score\n- FreeAgent + Xero import\n- Email + SMS nudges`}
+                placeholder={
+                  "e.g.\n- Automated invoice reminders (3-email sequence, configurable timing)\n- Overdue dashboard with client health score\n- FreeAgent + Xero import\n- Email + SMS nudges"
+                }
                 rows={4}
               />
               <CharCount value={canvas.whatsIncluded} min={10} />
@@ -1034,7 +1158,9 @@ Omit any field where the document has no relevant info.`;
               <Textarea
                 value={canvas.whatsExcluded}
                 onChange={(v) => update({ whatsExcluded: v })}
-                placeholder={`e.g.\n- No full accounting module\n- No mobile app\n- No QuickBooks integration (v2)\n- No legal debt collection escalation`}
+                placeholder={
+                  "e.g.\n- No full accounting module\n- No mobile app\n- No QuickBooks integration (v2)\n- No legal debt collection escalation"
+                }
                 rows={3}
               />
             </Field>
@@ -1155,7 +1281,14 @@ Omit any field where the document has no relevant info.`;
             </Field>
 
             <div>
-              <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>
+              <p
+                style={{
+                  margin: "0 0 10px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--text-secondary)",
+                }}
+              >
                 Validation decision <span style={{ color: "var(--danger)" }}>*</span>
               </p>
               <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
@@ -1252,7 +1385,14 @@ Omit any field where the document has no relevant info.`;
                 }}
               />
             </div>
-            <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginBottom: 14, textAlign: "right" }}>
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text-tertiary)",
+                marginBottom: 14,
+                textAlign: "right",
+              }}
+            >
               {doneCount} / 6 complete
             </div>
 
@@ -1265,7 +1405,9 @@ Omit any field where the document has no relevant info.`;
               />
             ))}
 
-            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border-subtle)" }}>
+            <div
+              style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border-subtle)" }}
+            >
               <button
                 type="button"
                 onClick={handleAdvance}
@@ -1291,7 +1433,12 @@ Omit any field where the document has no relevant info.`;
               </button>
               {allDone && (
                 <p
-                  style={{ margin: "8px 0 0", fontSize: 11, color: "var(--success)", textAlign: "center" }}
+                  style={{
+                    margin: "8px 0 0",
+                    fontSize: 11,
+                    color: "var(--success)",
+                    textAlign: "center",
+                  }}
                 >
                   Validated! Moves you to BRAND_READY.
                 </p>
@@ -1502,7 +1649,9 @@ function Section({
         }}
       >
         <span style={{ fontSize: 16 }}>{icon}</span>
-        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{title}</h4>
+        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+          {title}
+        </h4>
       </div>
       <div style={{ padding: "18px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
         {children}
@@ -1530,7 +1679,9 @@ function Field({
         {label}
         {required && <span style={{ color: "var(--danger)", marginLeft: 4 }}>*</span>}
       </span>
-      {hint && <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -2 }}>{hint}</span>}
+      {hint && (
+        <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -2 }}>{hint}</span>
+      )}
       {children}
     </label>
   );
@@ -1574,7 +1725,9 @@ function CharCount({ value, min }: { value: string; min: number }) {
   const len = value.trim().length;
   const ok = len >= min;
   return (
-    <span style={{ fontSize: 11, color: ok ? "var(--success)" : "var(--text-muted)", marginTop: -2 }}>
+    <span
+      style={{ fontSize: 11, color: ok ? "var(--success)" : "var(--text-muted)", marginTop: -2 }}
+    >
       {len} / {min} chars {ok ? "✓" : ""}
     </span>
   );
@@ -1614,10 +1767,18 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
         )}
       </div>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "var(--text-primary)" : "var(--text-tertiary)" }}>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: done ? "var(--text-primary)" : "var(--text-tertiary)",
+          }}
+        >
           {label}
         </div>
-        {!done && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{hint}</div>}
+        {!done && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{hint}</div>
+        )}
       </div>
     </div>
   );

@@ -1,11 +1,11 @@
 import { ProjectChat } from "@founder-os/chat-ui";
 import type { ChatMessage } from "@founder-os/chat-ui";
 import type { ChatAttachment } from "@founder-os/chat-ui";
-import type { Venture, VentureManifest, VentureStage } from "@founder-os/domain";
+import type { StageName, Venture, VentureManifest, VentureStage } from "@founder-os/domain";
 import { VentureManifestSchema } from "@founder-os/domain";
 import { StageGraph } from "@founder-os/graph-ui";
 import { PROVIDER_CATALOG, getProvider } from "@founder-os/llm-providers";
-import { createSaasResearchReportsStep, runPipeline } from "@founder-os/pipeline-runner";
+import { runPipeline } from "@founder-os/pipeline-runner";
 import { optimize } from "@founder-os/prompt-master";
 import {
   STAGE_FIRST_MESSAGE,
@@ -34,6 +34,7 @@ import * as db from "../../lib/db.js";
 import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
 import { tauriFs } from "../../lib/pipeline-fs.js";
 import { buildPipelineLlmCaller } from "../../lib/pipeline-llm.js";
+import { runResearchStage } from "../../lib/run-research-stage.js";
 import { pushToast } from "../../lib/toasts.js";
 import { useAbortableTask } from "../../lib/use-abortable-task.js";
 import { deleteVentureDir, loadVentureManifest, openInFileManager } from "../../lib/venture-io.js";
@@ -42,7 +43,10 @@ import { AuditTab } from "./AuditTab.js";
 import { BrandTab } from "./BrandTab.js";
 import { IdeaTab } from "./IdeaTab.js";
 import { OptionsTab } from "./OptionsTab.js";
+import { PendingReviewsPanel } from "./PendingReviewsPanel.js";
+import { PipelineStatusPanel } from "./PipelineStatusPanel.js";
 import { ResearchTab } from "./ResearchTab.js";
+import { RunAllStagesButton } from "./RunAllStagesButton.js";
 import { SalesTab } from "./SalesTab.js";
 import { ScreensTab } from "./ScreensTab.js";
 import { SpecTab } from "./SpecTab.js";
@@ -302,7 +306,7 @@ function buildChatMarkdown(args: {
 
   // Stable trailing newline — makes diffs cleaner if the same thread
   // gets re-exported after more turns.
-  return lines.join("\n").trimEnd() + "\n";
+  return `${lines.join("\n").trimEnd()}\n`;
 }
 
 /**
@@ -336,6 +340,7 @@ function defaultChatExportFilename(ventureId: string, stage: VentureStage, now: 
   return `founder-os-chat-${short}-${stageSlug}-${date}.md`;
 }
 
+// biome-ignore lint/correctness/noUnusedVariables: kept for future use / interface compatibility
 export function VentureDashboard({ ventureId }: { ventureId: string }) {
   const { activeVenture, updateVentureStage, removeVenture, setError, error } = useVentureStore();
   const { activePlan, setActivePlan, updateActivePlan, setRunning, isRunning } = usePipelineStore();
@@ -600,6 +605,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   // Clear any stale error from a previous venture when switching.
   // Errors live in the global store, so a failed Open in Finder on
   // venture A would otherwise still show on venture B's dashboard.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     setError(null);
   }, [venture?.id, setError]);
@@ -609,6 +615,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   // A ref tracks the latest requested key so out-of-order responses
   // from a slow DB don't overwrite a newer thread.
   const latestThreadKey = useRef<string>("");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     if (!venture) {
       setMessages([]);
@@ -644,6 +651,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   // scoped to the current composer session, not the app.
   // Default to the stage-specific guided tab when switching ventures so the
   // walkthrough is the first thing the founder sees.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     setChatAttachments([]);
     setPromptMasterTokensSaved(0);
@@ -688,6 +696,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   // needs the full manifest — entityType, regulated flags, etc.) without
   // re-reading YAML on every keypress. A missing manifest isn't fatal:
   // handleSend falls back to a generic prompt when this is null.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     if (!venture) {
       setManifest(null);
@@ -1038,6 +1047,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
       (a) => a.status === "ready" && typeof a.text === "string"
     );
     const attachmentBlock = buildAttachmentBlock(
+      // biome-ignore lint/style/noNonNullAssertion: value asserted non-null by surrounding logic
       readyAttachments.map((a) => ({ name: a.name, text: a.text! }))
     );
     // Compose the user-visible message: attachment block first, then the
@@ -1363,10 +1373,11 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
    *  1. Verify prerequisites (manifest loaded, provider configured).
    *  2. Build the intake transcript from the current chat thread + any
    *     ready attachments.
-   *  3. Wrap streamChat into a sync-ish `callLlm` the step can call in
-   *     parallel for each report.
-   *  4. Invoke createSaasResearchReportsStep.
-   *  5. Surface outcome via toast + optional assistant-bubble summary in
+   *  3. Hand off to runResearchStage(), which wraps the underlying
+   *     createSaasResearchReportsStep with the stage-runner contract:
+   *     preflight validation, idempotency, failed-runs index, stage-
+   *     progress advancement, artifact index entries.
+   *  4. Surface outcome via toast + optional assistant-bubble summary in
    *     the chat so the founder has a receipt of what was written.
    */
   const handleGenerateResearchReports = async () => {
@@ -1404,29 +1415,6 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
     });
 
     try {
-      // pt.29: lift the inline callLlm closure into buildPipelineLlmCaller.
-      // Two notable opts vs the brand-pipeline call site: web-search is
-      // ON (capped at 5 per report — Core 4 reports need current data),
-      // and the signal flows into every parallel streamChat. Returns
-      // null when no provider is usable; we treat that the same as the
-      // previous "no provider" path — toast + bail to Options tab.
-      const llmCaller = await buildPipelineLlmCaller({
-        ventureId: venture.id,
-        signal: reportsController.signal,
-        enableWebSearch: true,
-        webSearchMaxUses: 5,
-      });
-      if (!llmCaller) {
-        pushToast({
-          kind: "warn",
-          message: "No AI provider configured",
-          detail: "Open the Options tab to paste an API key.",
-          ttlMs: 6000,
-        });
-        setTab("options");
-        return;
-      }
-
       // Build intake from the chat transcript + any still-ready
       // attachments the founder hasn't sent yet. Assistant turns are
       // included so the model sees the back-and-forth (clarifying
@@ -1442,59 +1430,69 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
         (a) => a.status === "ready" && typeof a.text === "string"
       );
       const attachmentBlock = buildAttachmentBlock(
+        // biome-ignore lint/style/noNonNullAssertion: value asserted non-null by surrounding logic
         readyAttachments.map((a) => ({ name: a.name, text: a.text! }))
       );
       const intake = [transcriptLines.join("\n\n"), attachmentBlock].filter(Boolean).join("\n\n");
 
-      const result = await createSaasResearchReportsStep({
-        fs: tauriFs,
+      // Adopt @founder-os/stage-runners. Wraps the same
+      // createSaasResearchReportsStep we used to call directly with
+      // preflight validation, idempotency, failed-runs bookkeeping,
+      // and stage-progress advancement. force=true (helper default)
+      // preserves "regenerate on every click" -- the underlying step
+      // is itself file-level idempotent so the LLM cost is bounded.
+      const out = await runResearchStage({
+        venture,
         manifest,
-        ventureRoot: venture.rootPath,
         intake,
-        callLlm: llmCaller.callLlm,
+        signal: reportsController.signal,
       });
-
-      // Summarise outcomes for the user. Written + skipped are both "ok"
-      // states; failed is the only bad one.
-      const written = result.outcomes.filter((o) => o.status === "written");
-      const skipped = result.outcomes.filter((o) => o.status === "skipped");
-      const failed = result.outcomes.filter((o) => o.status === "failed");
+      if (out.kind === "no-provider") {
+        pushToast({
+          kind: "warn",
+          message: "No AI provider configured",
+          detail: "Open the Options tab to paste an API key.",
+          ttlMs: 6000,
+        });
+        setTab("options");
+        return;
+      }
+      const { result, counts } = out;
 
       // pt.29: signal-aborted check, parallel to the pt.28 pipeline path.
       // The step's per-task try/catch converts AbortError into per-report
-      // `failed` outcomes, so result.status can be "partial" or "failed"
-      // even though the user just hit Stop. Treat that as a cancel
-      // (info toast, no error chrome) instead of a regular failure.
+      // `failed` outcomes inside result.logs, so the runner can still
+      // report success=true with a partial set even when the user hit
+      // Stop. Treat that as a cancel (info toast, no error chrome).
       const cancelled = reportsController.signal.aborted;
 
       if (cancelled) {
         console.info("[reports] cancelled by user", {
-          status: result.status,
-          written: written.length,
-          failed: failed.length,
+          success: result.success,
+          ...counts,
         });
         pushToast({
           kind: "info",
           message: "Reports generation stopped",
           detail:
-            written.length > 0
-              ? `${written.length} written before cancel — partial set under 01_research/saas/.`
+            counts.written > 0
+              ? `${counts.written} written before cancel -- partial set under 01_research/saas/.`
               : "No reports completed before cancel.",
           ttlMs: 5000,
         });
-        if (written.length > 0) {
+        if (counts.written > 0) {
           // Nudge the Artifacts tab so partial output shows up.
           setArtifactsRescanToken((n) => n + 1);
         }
-      } else if (result.status === "done" || result.status === "partial") {
+      } else if (result.success) {
         const bits: string[] = [];
-        if (written.length) bits.push(`${written.length} written`);
-        if (skipped.length) bits.push(`${skipped.length} skipped (already existed)`);
-        if (failed.length) bits.push(`${failed.length} failed`);
+        if (counts.written) bits.push(`${counts.written} written`);
+        if (counts.skipped) bits.push(`${counts.skipped} skipped (already existed)`);
+        if (counts.failed) bits.push(`${counts.failed} failed`);
         pushToast({
-          kind: failed.length > 0 ? "warn" : "success",
-          message: `Reports: ${bits.join(", ")}`,
-          detail: `Saved under 01_research/saas/ — open the Artifacts tab to view.`,
+          kind: counts.failed > 0 ? "warn" : "success",
+          message: bits.length ? `Reports: ${bits.join(", ")}` : "Reports stage complete",
+          detail: "Saved under 01_research/saas/ -- open the Artifacts tab to view.",
           ttlMs: 8000,
         });
         // Nudge the Artifacts tab so new files show up immediately if
@@ -1504,7 +1502,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
         pushToast({
           kind: "error",
           message: "All 4 reports failed to generate",
-          detail: failed[0]?.status === "failed" ? failed[0].error : undefined,
+          detail: result.error?.message,
         });
       }
     } catch (err) {
@@ -1756,23 +1754,22 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
         const numRows = Math.max(1, Math.ceil(tabKeys.length / MAX_PER_ROW));
         const perRow = Math.ceil(tabKeys.length / numRows);
         const rows: Tab[][] = Array.from({ length: numRows }, (_, i) =>
-          tabKeys.slice(i * perRow, (i + 1) * perRow),
+          tabKeys.slice(i * perRow, (i + 1) * perRow)
         );
         return rows.map((rowKeys, rowIdx) => (
           <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: static list, order does not change
             key={`tab-row-${rowIdx}`}
             style={{
               display: "flex",
               gap: 0,
-              borderBottom:
-                rowIdx === rows.length - 1
-                  ? "1px solid var(--border-subtle)"
-                  : "none",
+              borderBottom: rowIdx === rows.length - 1 ? "1px solid var(--border-subtle)" : "none",
               padding: "0 28px",
             }}
           >
             {rowKeys.map((t) => (
               <button
+                type="button"
                 key={t}
                 onClick={() => setTab(t)}
                 style={{
@@ -1782,8 +1779,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
                   color: tab === t ? "var(--accent)" : "var(--text-tertiary)",
                   background: "none",
                   border: "none",
-                  borderBottom:
-                    tab === t ? "2px solid var(--accent)" : "2px solid transparent",
+                  borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
                   cursor: "pointer",
                   marginBottom: rowIdx === rows.length - 1 ? -1 : 0,
                 }}
@@ -1811,6 +1807,8 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
             manifest={manifest}
             onAdvanceStage={handleStageChange}
             onManifestUpdate={handleManifestUpdate}
+            onRetryResearch={handleGenerateResearchReports}
+            reportsGenerating={reportsGenerating}
           />
         )}
         {tab === "validation" && (
@@ -2184,6 +2182,56 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
         )}
         {tab === "pipeline" && (
           <div style={{ padding: 28 }}>
+            {/* Pending review gates across all stages, with inline
+                Approve/Reject. Self-hides when there are none. */}
+            <PendingReviewsPanel
+              ventureRoot={venture.rootPath}
+              refreshToken={artifactsRescanToken}
+              onAdvanceStage={handleStageChange}
+            />
+            {/* Single-click "run every implemented stage" -- skips
+                already-complete stages, stops on first failure or
+                pending review. */}
+            <RunAllStagesButton
+              venture={venture}
+              manifest={manifest}
+              onAllDone={() => setArtifactsRescanToken((n) => n + 1)}
+            />
+            {/* Stage-runner status overview -- read-only, surfaces what
+                the 7 per-stage tabs only show one stage at a time. */}
+            <PipelineStatusPanel
+              ventureRoot={venture.rootPath}
+              refreshToken={artifactsRescanToken}
+              onSelectStage={(stage) => {
+                // Map StageName -> Tab. Stages with no dedicated tab fall
+                // back to a toast so the user knows clicking did something
+                // even though we couldn't navigate.
+                const TAB_FOR_STAGE: Partial<Record<StageName, Tab>> = {
+                  RESEARCH: "research",
+                  VALIDATION: "validation",
+                  BRAND: "brand",
+                  UK_SETUP: "uk-setup",
+                  PRODUCT_SPEC: "spec",
+                  WIREFRAME: "screens",
+                  STITCH: "screens",
+                  AUDIT: "audit",
+                  BUILD: "audit",
+                  // FINANCE + LAUNCH have no dedicated tab yet -- the
+                  // skeletal runners exist but the UI hasn't been built.
+                };
+                const dest = TAB_FOR_STAGE[stage];
+                if (dest) {
+                  setTab(dest);
+                } else {
+                  pushToast({
+                    kind: "info",
+                    message: `${stage} stage has no dedicated tab yet`,
+                    detail: "Skeletal runner exists; UI surface to come.",
+                    ttlMs: 4000,
+                  });
+                }
+              }}
+            />
             <div
               style={{
                 display: "flex",
@@ -2281,6 +2329,8 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
         {tab === "audit" && (
           <AuditTab
             key={venture.id}
+            venture={venture}
+            manifest={manifest}
             ventureId={venture.id}
             // pt.30d: needed by the export pipeline to read
             // 03_brand/names/name-candidates.json and derive brand
@@ -2529,6 +2579,7 @@ function DeleteVentureModal({
   busy: boolean;
 }) {
   return (
+    // biome-ignore lint/a11y/useSemanticElements: role chosen intentionally; refactor deferred
     <div
       role="dialog"
       aria-modal="true"

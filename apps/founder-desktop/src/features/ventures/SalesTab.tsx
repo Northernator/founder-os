@@ -21,9 +21,9 @@ import { useEffect, useState } from "react";
 
 import { tauriFs } from "../../lib/pipeline-fs.js";
 import { buildPipelineLlmCaller } from "../../lib/pipeline-llm.js";
-import { SalesChatPanel } from "./SalesChatPanel.js";
 import { pushToast } from "../../lib/toasts.js";
 import { joinPath, openInFileManager } from "../../lib/venture-io.js";
+import { SalesChatPanel } from "./SalesChatPanel.js";
 
 type LogLevel = "info" | "ok" | "err";
 
@@ -62,7 +62,9 @@ export function SalesTab({ venture }: { venture: Venture }) {
         if (!cancelled) setMemory(null);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [memoryPath]);
 
   function appendLog(level: LogLevel, text: string): void {
@@ -90,7 +92,7 @@ export function SalesTab({ venture }: { venture: Venture }) {
       const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const baseDir = joinPath(
         joinPath(joinPath(joinPath(venture.rootPath, ".founder"), "sales"), slug),
-        stamp,
+        stamp
       );
       const memPath = joinPath(baseDir, "memory.json");
 
@@ -108,7 +110,7 @@ export function SalesTab({ venture }: { venture: Venture }) {
             const ok = e.output?.status === "success";
             appendLog(
               ok ? "ok" : "err",
-              ok ? `done:  ${e.agent}` : `fail:  ${e.agent} -- ${e.output?.error ?? "?"}`,
+              ok ? `done:  ${e.agent}` : `fail:  ${e.agent} -- ${e.output?.error ?? "?"}`
             );
           }
         },
@@ -174,10 +176,9 @@ export function SalesTab({ venture }: { venture: Venture }) {
           <div style={{ marginTop: "0.75rem", fontSize: "0.9rem", lineHeight: 1.55 }}>
             <h4 style={{ margin: "0.5rem 0 0.25rem 0" }}>What you put in</h4>
             <p style={{ margin: "0 0 0.75rem 0" }}>
-              A company URL. That's it. Anything like{" "}
-              <code>https://acme.com</code> or <code>https://stripe.com/pricing</code> works
-              -- the pipeline only uses the domain to figure out who the company is, you
-              don't need a special format.
+              A company URL. That's it. Anything like <code>https://acme.com</code> or{" "}
+              <code>https://stripe.com/pricing</code> works -- the pipeline only uses the domain to
+              figure out who the company is, you don't need a special format.
             </p>
 
             <h4 style={{ margin: "0.5rem 0 0.25rem 0" }}>What the five agents do</h4>
@@ -187,44 +188,46 @@ export function SalesTab({ venture }: { venture: Venture }) {
                 (industry, size, products, recent news, what makes them different).
               </li>
               <li>
-                <strong>BANT scoring</strong> -- Rates the prospect 1-5 on Budget,
-                Authority, Need, Timeline. Combined into a 0-100 "fit score". Low scores
-                are good -- they tell you not to waste time.
+                <strong>BANT scoring</strong> -- Rates the prospect 1-5 on Budget, Authority, Need,
+                Timeline. Combined into a 0-100 "fit score". Low scores are good -- they tell you
+                not to waste time.
               </li>
               <li>
-                <strong>Decision Makers</strong> -- Lists 3-5 roles (not specific people)
-                you should target -- "VP of Engineering", "Head of Platform" -- plus tips
-                on where to find them on LinkedIn.
+                <strong>Decision Makers</strong> -- Lists 3-5 roles (not specific people) you should
+                target -- "VP of Engineering", "Head of Platform" -- plus tips on where to find them
+                on LinkedIn.
               </li>
               <li>
-                <strong>Competitive Intel</strong> -- Names the prospect's likely
-                competitors and where you'd slot in against them.
+                <strong>Competitive Intel</strong> -- Names the prospect's likely competitors and
+                where you'd slot in against them.
               </li>
               <li>
-                <strong>Outreach</strong> -- Writes a 5-email cold sequence specific to
-                what the other agents found.
+                <strong>Outreach</strong> -- Writes a 5-email cold sequence specific to what the
+                other agents found.
               </li>
             </ol>
             <p style={{ margin: "0.5rem 0 0.75rem 0", opacity: 0.8 }}>
-              Agents 2-4 run in parallel after Research finishes; Outreach runs last
-              because it consumes everything. End-to-end: ~30-60 seconds with a real LLM.
+              Agents 2-4 run in parallel after Research finishes; Outreach runs last because it
+              consumes everything. End-to-end: ~30-60 seconds with a real LLM.
             </p>
 
             <h4 style={{ margin: "0.5rem 0 0.25rem 0" }}>What you get back</h4>
             <p style={{ margin: "0 0 0.5rem 0" }}>
               Two files in{" "}
-              <code>&lt;your-venture&gt;/.founder/sales/&lt;company-slug&gt;/&lt;timestamp&gt;/</code>:
+              <code>
+                &lt;your-venture&gt;/.founder/sales/&lt;company-slug&gt;/&lt;timestamp&gt;/
+              </code>
+              :
             </p>
             <ul style={{ margin: "0 0 0.5rem 1.25rem", padding: 0 }}>
               <li>
-                <code>memory.json</code> -- Raw structured data from all 5 agents. Useful
-                if you want to feed it into something else, or hand-edit before
-                regenerating the PDF.
+                <code>memory.json</code> -- Raw structured data from all 5 agents. Useful if you
+                want to feed it into something else, or hand-edit before regenerating the PDF.
               </li>
               <li>
-                <code>report.pdf</code> -- 6-page sales briefing: cover, company overview,
-                BANT score with bar chart, decision makers, competitive analysis, outreach
-                sequence with all 5 emails inline.
+                <code>report.pdf</code> -- 6-page sales briefing: cover, company overview, BANT
+                score with bar chart, decision makers, competitive analysis, outreach sequence with
+                all 5 emails inline.
               </li>
             </ul>
           </div>
@@ -234,8 +237,7 @@ export function SalesTab({ venture }: { venture: Venture }) {
       <Card>
         <h2 style={{ margin: "0 0 0.75rem 0" }}>Run Pipeline</h2>
         <p style={{ marginTop: 0, opacity: 0.8, fontSize: "0.9rem" }}>
-          Paste a prospect URL. Outputs land under <code>.founder/sales/</code> in this
-          venture.
+          Paste a prospect URL. Outputs land under <code>.founder/sales/</code> in this venture.
         </p>
         <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
           <input
@@ -307,13 +309,23 @@ export function SalesTab({ venture }: { venture: Venture }) {
 
       {memory?.outreach?.emails?.length ? (
         <Card>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.75rem",
+            }}
+          >
             <h3 style={{ margin: 0 }}>Outreach Emails ({memory.outreach.emails.length})</h3>
-            <Button onClick={() => handleCopyAllEmails(memory.outreach!.emails)}>Copy all</Button>
+            <Button onClick={() => handleCopyAllEmails(memory?.outreach?.emails ?? [])}>
+              Copy all
+            </Button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             {memory.outreach.emails.map((e, i) => (
               <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: static list, order does not change
                 key={`email-${i}`}
                 style={{
                   border: "1px solid var(--border-subtle, #e2e8f0)",
@@ -321,7 +333,14 @@ export function SalesTab({ venture }: { venture: Venture }) {
                   padding: "0.75rem",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                    gap: "0.5rem",
+                  }}
+                >
                   <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>
                     {i + 1}. {e.subject}
                   </div>
@@ -374,9 +393,8 @@ export function SalesTab({ venture }: { venture: Venture }) {
               <li>"Suggest 2 more decision-maker roles I should target."</li>
             </ul>
             <p style={{ margin: "0.25rem 0 0 0", opacity: 0.85 }}>
-              Each turn embeds the full intel in the system prompt, so the assistant can
-              reference specific competitors, the fit score, or quote-back the drafted
-              emails.
+              Each turn embeds the full intel in the system prompt, so the assistant can reference
+              specific competitors, the fit score, or quote-back the drafted emails.
             </p>
           </div>
         </details>
@@ -417,7 +435,8 @@ function handleMailtoEmail(e: { subject: string; body: string }): void {
   if (href.length > MAILTO_LIMIT) {
     pushToast({
       kind: "error",
-      message: "Email too long for mailto -- copy to clipboard instead and paste into your mail client.",
+      message:
+        "Email too long for mailto -- copy to clipboard instead and paste into your mail client.",
     });
     return;
   }

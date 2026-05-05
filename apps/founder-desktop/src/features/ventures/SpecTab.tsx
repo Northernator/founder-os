@@ -2,6 +2,7 @@ import {
   type ApiEndpoint,
   type Entity,
   type EntityField,
+  type FailedRunEntry,
   type Feature,
   type FeaturePriority,
   FeaturePrioritySchema,
@@ -47,15 +48,14 @@ import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type AdvancePreflight, runAdvancePreflight } from "../../lib/advance-gate.js";
+import { findLatestFailedRunForStage } from "../../lib/failed-runs.js";
+import { runProductStage } from "../../lib/run-product-stage.js";
 import { type DistilledSpecFields, distillSpec } from "../../lib/spec-distiller.js";
 import { type SpecDraftResult, draftSpecCanvas } from "../../lib/spec-drafter.js";
 import { pushToast } from "../../lib/toasts.js";
 import { AdvanceConfirmModal } from "./AdvanceConfirmModal.js";
-import {
-  type DistillFieldConfig,
-  DistillDiffModal,
-  distillTextField,
-} from "./DistillDiffModal.js";
+import { DistillDiffModal, type DistillFieldConfig, distillTextField } from "./DistillDiffModal.js";
+import { FailedRunBanner } from "./FailedRunBanner.js";
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -107,6 +107,7 @@ function renderStringList(value: unknown): React.ReactNode {
   return (
     <ul style={{ margin: 0, paddingLeft: 18 }}>
       {(value as unknown[]).map((entry, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: static list, order does not change
         <li key={`spec-list-${i}`} style={{ marginBottom: 4 }}>
           {typeof entry === "string" ? entry : JSON.stringify(entry)}
         </li>
@@ -197,6 +198,11 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
   // spinner; `advanceModal` holds the preflight result while the
   // AdvanceConfirmModal is open.
   const [advancing, setAdvancing] = useState(false);
+  // Stage-runner adoption: PRODUCT_SPEC stage. Both SpecTab and
+  // ScreensTab share this stage so the failed-run banner reflects
+  // whichever tab last triggered a run.
+  const [runningProductStage, setRunningProductStage] = useState(false);
+  const [failedProductRun, setFailedProductRun] = useState<FailedRunEntry | null>(null);
   const [advanceModal, setAdvanceModal] = useState<AdvancePreflight | null>(null);
 
   /** Reset the draft surface back to closed/idle — used by Discard,
@@ -217,6 +223,7 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
 
   // Reset the draft panel when the founder switches venture — a draft
   // for venture A shouldn't survive into venture B's view.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     resetDraft();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -272,7 +279,7 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
         const next = { ...canvas, updatedAt: new Date().toISOString() };
         await invoke("write_file", {
           path: canvasPath,
-          content: JSON.stringify(next, null, 2) + "\n",
+          content: `${JSON.stringify(next, null, 2)}\n`,
         });
         setSaveStatus("saved");
       } catch (err) {
@@ -308,6 +315,76 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
     setAdvanceModal(null);
     setAdvancing(false);
   };
+
+  // Run the PRODUCT_SPEC stage via @founder-os/stage-runners. The
+  // runner has no LLM dependency (all three steps are deterministic
+  // and idempotent), so this works regardless of provider config.
+  const handleRunProductStage = async () => {
+    if (runningProductStage) return;
+    if (!manifest) {
+      pushToast({
+        kind: "warn",
+        message: "Venture manifest hasn't loaded yet -- try again in a moment",
+        ttlMs: 5000,
+      });
+      return;
+    }
+    setRunningProductStage(true);
+    pushToast({
+      kind: "info",
+      message: "Running product stage (brief + spec + screens)...",
+      detail: "3 deterministic steps via ProductStageRunner. Existing files are skipped.",
+      ttlMs: 4000,
+    });
+    try {
+      const out = await runProductStage({ venture, manifest });
+      const { result, steps } = out;
+      if (result.success) {
+        const done = [
+          steps.brief === "ok" ? "brief" : null,
+          steps.spec === "ok" ? "spec" : null,
+          steps.screens === "ok" ? "screens" : null,
+        ].filter(Boolean) as string[];
+        pushToast({
+          kind: "success",
+          message: `Product stage complete (${done.length}/3)`,
+          detail: done.length
+            ? `Steps: ${done.join(", ")}. Saved under 06_product/.`
+            : "Stage already complete -- no work to do.",
+          ttlMs: 8000,
+        });
+      } else {
+        pushToast({
+          kind: "error",
+          message: "Product stage failed",
+          detail: result.error?.message ?? "Unknown error",
+        });
+      }
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Couldn't run product stage",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRunningProductStage(false);
+    }
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  useEffect(() => {
+    let cancelled = false;
+    findLatestFailedRunForStage(venture.rootPath, "PRODUCT_SPEC")
+      .then((entry) => {
+        if (!cancelled) setFailedProductRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedProductRun(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.rootPath, runningProductStage]);
 
   const handleAdvance = async () => {
     if (!onAdvanceStage || !specComplete || advancing) return;
@@ -904,6 +981,17 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
         gap: 24,
       }}
     >
+      {failedProductRun && (
+        <FailedRunBanner
+          label="product"
+          entry={failedProductRun}
+          ventureRoot={venture.rootPath}
+          busy={runningProductStage}
+          disabled={!manifest}
+          onRetry={handleRunProductStage}
+          gridSpan
+        />
+      )}
       {/* Main canvas column */}
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <div
@@ -956,6 +1044,28 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
                 }
               }}
             />
+            <button
+              type="button"
+              onClick={handleRunProductStage}
+              disabled={runningProductStage || !manifest}
+              title="Run brief + spec + screens via ProductStageRunner (failed-runs index, idempotent)"
+              style={{
+                padding: "8px 14px",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: runningProductStage ? "var(--bg-elevated)" : "var(--accent-soft)",
+                border: `1px solid ${runningProductStage ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+                color: runningProductStage ? "var(--text-muted)" : "var(--accent-hover)",
+                borderRadius: 6,
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: runningProductStage || !manifest ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {runningProductStage ? "Running stage..." : "Run product stage"}
+            </button>
             {onAdvanceStage && (
               <button
                 type="button"
@@ -1236,7 +1346,9 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
                   >
                     {rule.label}
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{rule.description}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+                    {rule.description}
+                  </div>
                 </div>
               </div>
             ))}
@@ -1263,6 +1375,8 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
         <AdvanceConfirmModal
           blockers={advanceModal.blockers}
           warnings={advanceModal.warnings}
+          pendingReviewGate={advanceModal.pendingReviewGate}
+          ventureRoot={venture.rootPath}
           currentStage={venture.stage}
           nextStage="SPEC_READY"
           onAdvance={commitAdvance}
@@ -1600,6 +1714,7 @@ function EntityCard({
         <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 600 }}>Fields</span>
         {entity.fields.map((f, idx) => (
           <div
+            // biome-ignore lint/suspicious/noArrayIndexKey: static list, order does not change
             key={idx}
             style={{
               display: "grid",
@@ -2362,7 +2477,11 @@ function DraftSectionRow({
               fontSize: 10,
               fontWeight: 600,
               color:
-                state === "skipped" ? "var(--text-tertiary)" : state === "applied-merge" ? "var(--success)" : "var(--success)",
+                state === "skipped"
+                  ? "var(--text-tertiary)"
+                  : state === "applied-merge"
+                    ? "var(--success)"
+                    : "var(--success)",
             }}
           >
             {state === "skipped"

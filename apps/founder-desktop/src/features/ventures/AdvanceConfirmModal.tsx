@@ -1,8 +1,8 @@
-import type { VentureStage } from "@founder-os/domain";
+import type { ReviewGate, VentureStage } from "@founder-os/domain";
 import { invoke } from "@tauri-apps/api/core";
-import type React from "react";
 import { useState } from "react";
 import * as db from "../../lib/db.js";
+import { approveReviewGate, rejectReviewGate } from "../../lib/review-gates.js";
 import { pushToast } from "../../lib/toasts.js";
 
 /**
@@ -31,10 +31,30 @@ const SEVERITY_COLORS: Record<
   db.FindingRow["severity"],
   { bg: string; border: string; text: string; label: string }
 > = {
-  critical: { bg: "var(--danger-soft)", border: "var(--danger-border)", text: "var(--danger)", label: "Critical" },
-  high: { bg: "var(--warning-soft)", border: "var(--warning-soft)", text: "var(--warning)", label: "High" },
-  medium: { bg: "var(--accent-soft)", border: "var(--accent)", text: "var(--accent)", label: "Medium" },
-  low: { bg: "var(--bg-hover)", border: "var(--border-input)", text: "var(--text-secondary)", label: "Low" },
+  critical: {
+    bg: "var(--danger-soft)",
+    border: "var(--danger-border)",
+    text: "var(--danger)",
+    label: "Critical",
+  },
+  high: {
+    bg: "var(--warning-soft)",
+    border: "var(--warning-soft)",
+    text: "var(--warning)",
+    label: "High",
+  },
+  medium: {
+    bg: "var(--accent-soft)",
+    border: "var(--accent)",
+    text: "var(--accent)",
+    label: "Medium",
+  },
+  low: {
+    bg: "var(--bg-hover)",
+    border: "var(--border-input)",
+    text: "var(--text-secondary)",
+    label: "Low",
+  },
 };
 
 const SEVERITY_ORDER: db.FindingRow["severity"][] = ["critical", "high", "medium", "low"];
@@ -50,6 +70,8 @@ export function AdvanceConfirmModal({
   nextStage,
   onAdvance,
   onClose,
+  pendingReviewGate = null,
+  ventureRoot,
 }: {
   blockers: db.FindingRow[];
   warnings: db.FindingRow[];
@@ -57,8 +79,21 @@ export function AdvanceConfirmModal({
   nextStage: VentureStage;
   onAdvance: () => void;
   onClose: () => void;
+  /**
+   * Pending review gate for the StageName whose STAGE_PRODUCES marker
+   * matches `nextStage`. When non-null the modal renders a "Pending
+   * review" section and the primary CTA label changes to
+   * "Approve and advance" -- click first writes the approval to
+   * .founder/state/review-gates.json then triggers onAdvance.
+   */
+  pendingReviewGate?: ReviewGate | null;
+  /** Required when pendingReviewGate is non-null -- absolute venture root path. */
+  ventureRoot?: string;
 }) {
   const [advancing, setAdvancing] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
+  const [approveError, setApproveError] = useState<string | null>(null);
+  const [rejectError, setRejectError] = useState<string | null>(null);
   const [openErrors, setOpenErrors] = useState<Record<string, string>>({});
 
   const hasBlockers = blockers.length > 0;
@@ -88,10 +123,75 @@ export function AdvanceConfirmModal({
     }
   };
 
-  const handleAdvance = () => {
+  const handleAdvance = async () => {
     if (advancing || hasBlockers) return;
     setAdvancing(true);
+    setApproveError(null);
+
+    if (pendingReviewGate && ventureRoot) {
+      try {
+        await approveReviewGate(
+          ventureRoot,
+          pendingReviewGate.gateId,
+          // No logged-in user concept yet; "desktop-user" is the placeholder
+          // the seed/UI surfaces use elsewhere. Replace when auth lands.
+          "desktop-user"
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setApproveError(msg);
+        setAdvancing(false);
+        pushToast({
+          kind: "warn",
+          message: "Couldn't approve review gate",
+          detail: msg,
+        });
+        return;
+      }
+    }
+
     onAdvance();
+  };
+
+  /**
+   * Reject the pending review gate and close the modal without
+   * advancing. Mirrors handleAdvance's error surfacing -- a thrown
+   * write surfaces inline + as a toast, the modal stays open for
+   * retry. Successful rejection closes via onClose so the caller can
+   * decide what to do (typically nothing -- the gate is now in
+   * "rejected" state and a future stage re-run produces a fresh one).
+   */
+  const handleReject = async () => {
+    if (advancing || rejecting) return;
+    if (!pendingReviewGate || !ventureRoot) return;
+    setRejecting(true);
+    setRejectError(null);
+    try {
+      await rejectReviewGate(
+        ventureRoot,
+        pendingReviewGate.gateId,
+        // Same placeholder actor as handleAdvance -- replace when auth
+        // lands.
+        "desktop-user"
+      );
+      pushToast({
+        kind: "info",
+        message: "Review gate rejected",
+        detail: "Stage was not advanced. Re-run the stage to produce a fresh review.",
+        ttlMs: 5000,
+      });
+      onClose();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setRejectError(msg);
+      pushToast({
+        kind: "warn",
+        message: "Couldn't reject review gate",
+        detail: msg,
+      });
+    } finally {
+      setRejecting(false);
+    }
   };
 
   const groupedBlockers = groupBySeverity(blockers);
@@ -112,6 +212,7 @@ export function AdvanceConfirmModal({
       : `Currently at ${formatStage(currentStage)}.`;
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: role chosen intentionally; refactor deferred
     <div
       role="dialog"
       aria-modal="true"
@@ -167,6 +268,13 @@ export function AdvanceConfirmModal({
             paddingRight: 4,
           }}
         >
+          {pendingReviewGate && (
+            <ReviewGateSection
+              gate={pendingReviewGate}
+              approveError={approveError}
+              rejectError={rejectError}
+            />
+          )}
           {hasBlockers && (
             <FindingGroup
               heading="Blockers"
@@ -197,7 +305,7 @@ export function AdvanceConfirmModal({
           <button
             type="button"
             onClick={onClose}
-            disabled={advancing}
+            disabled={advancing || rejecting}
             style={{
               padding: "9px 16px",
               background: "var(--bg-panel)",
@@ -206,16 +314,36 @@ export function AdvanceConfirmModal({
               borderRadius: 6,
               fontWeight: 600,
               fontSize: 13,
-              cursor: advancing ? "not-allowed" : "pointer",
+              cursor: advancing || rejecting ? "not-allowed" : "pointer",
             }}
           >
             {hasBlockers ? "Close" : "Cancel"}
           </button>
+          {pendingReviewGate && (
+            <button
+              type="button"
+              onClick={handleReject}
+              disabled={advancing || rejecting}
+              title="Mark this review gate as rejected. The stage will NOT advance; re-run the stage to produce a fresh review."
+              style={{
+                padding: "9px 16px",
+                background: "var(--bg-panel)",
+                color: "var(--danger)",
+                border: "1px solid var(--danger-border)",
+                borderRadius: 6,
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: advancing || rejecting ? "not-allowed" : "pointer",
+              }}
+            >
+              {rejecting ? "Rejecting…" : "Reject"}
+            </button>
+          )}
           {!hasBlockers && (
             <button
               type="button"
               onClick={handleAdvance}
-              disabled={advancing}
+              disabled={advancing || rejecting}
               style={{
                 padding: "9px 18px",
                 background: advancing ? "var(--accent)" : "var(--accent)",
@@ -224,17 +352,101 @@ export function AdvanceConfirmModal({
                 borderRadius: 6,
                 fontWeight: 700,
                 fontSize: 13,
-                cursor: advancing ? "not-allowed" : "pointer",
+                cursor: advancing || rejecting ? "not-allowed" : "pointer",
               }}
             >
               {advancing
-                ? "Advancing…"
-                : hasWarnings
-                  ? "Advance anyway"
-                  : `Advance to ${formatStage(nextStage)}`}
+                ? pendingReviewGate
+                  ? "Approving & advancing…"
+                  : "Advancing…"
+                : pendingReviewGate
+                  ? hasWarnings
+                    ? "Approve and advance anyway"
+                    : `Approve and advance to ${formatStage(nextStage)}`
+                  : hasWarnings
+                    ? "Advance anyway"
+                    : `Advance to ${formatStage(nextStage)}`}
             </button>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ReviewGateSection({
+  gate,
+  approveError,
+  rejectError,
+}: {
+  gate: ReviewGate;
+  approveError: string | null;
+  rejectError: string | null;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: "var(--text-tertiary)",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+        }}
+      >
+        Pending review
+      </div>
+      <div
+        style={{
+          background: "var(--accent-soft)",
+          border: "1px solid var(--accent)",
+          borderRadius: 8,
+          padding: "10px 12px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--accent)" }}>
+          {gate.stageName} stage requires {gate.requiredApproval} review
+        </div>
+        <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45 }}>
+          {gate.artifactsForReview.length} artifact
+          {gate.artifactsForReview.length === 1 ? "" : "s"} produced this run. Approving will record
+          the decision and advance the stage. Cancel to review the artifacts in their tab first.
+        </div>
+        {gate.artifactsForReview.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {gate.artifactsForReview.map((a) => (
+              <span
+                key={a.path}
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: 11,
+                  color: "var(--text-secondary)",
+                  background: "rgba(255,255,255,0.65)",
+                  border: "1px solid var(--border-input)",
+                  padding: "2px 6px",
+                  borderRadius: 4,
+                  wordBreak: "break-all",
+                }}
+                title={a.path}
+              >
+                {a.type}: {a.path}
+              </span>
+            ))}
+          </div>
+        )}
+        {approveError && (
+          <span style={{ fontSize: 11, color: "var(--danger)" }}>
+            Approval failed: {approveError}
+          </span>
+        )}
+        {rejectError && (
+          <span style={{ fontSize: 11, color: "var(--danger)" }}>
+            Rejection failed: {rejectError}
+          </span>
+        )}
       </div>
     </div>
   );

@@ -1,10 +1,11 @@
-import type { Venture, VentureManifest, VentureStage } from "@founder-os/domain";
+import type { FailedRunEntry, Venture, VentureManifest, VentureStage } from "@founder-os/domain";
 import { optimize } from "@founder-os/prompt-master";
 import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type AdvancePreflight, runAdvancePreflight } from "../../lib/advance-gate.js";
 import * as db from "../../lib/db.js";
+import { findLatestFailedRunForStage } from "../../lib/failed-runs.js";
 import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
 import {
   type DistilledCompetitor,
@@ -14,12 +15,9 @@ import {
 import { pushToast } from "../../lib/toasts.js";
 import { joinPath } from "../../lib/venture-io.js";
 import { AdvanceConfirmModal } from "./AdvanceConfirmModal.js";
+import { DistillDiffModal, type DistillFieldConfig, distillTextField } from "./DistillDiffModal.js";
+import { FailedRunBanner } from "./FailedRunBanner.js";
 import { ResearchChatPanel } from "./ResearchChatPanel.js";
-import {
-  type DistillFieldConfig,
-  DistillDiffModal,
-  distillTextField,
-} from "./DistillDiffModal.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -228,12 +226,29 @@ export function ResearchTab({
   venture,
   manifest,
   onAdvanceStage,
+  // biome-ignore lint/correctness/noUnusedVariables: kept for future use / interface compatibility
   onManifestUpdate,
+  onRetryResearch,
+  reportsGenerating = false,
 }: {
   venture: Venture;
   manifest: VentureManifest | null;
   onAdvanceStage: (stage: VentureStage) => void;
   onManifestUpdate: (m: VentureManifest) => void;
+  /**
+   * Optional callback wired from VentureDashboard so the failed-run
+   * retry banner can re-invoke the canonical "Generate Reports" flow
+   * (handleGenerateResearchReports). Omitted -> retry banner falls
+   * back to a disabled state.
+   */
+  onRetryResearch?: () => void;
+  /**
+   * True while VentureDashboard is in the middle of a research-stage
+   * run. Used as a refresh trigger for the failed-runs query: the
+   * orchestrator clears the index entry on a successful retry, so we
+   * re-read after each true -> false transition.
+   */
+  reportsGenerating?: boolean;
 }) {
   const [canvas, setCanvas] = useState<ResearchCanvas>(DEFAULT_CANVAS);
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
@@ -245,10 +260,15 @@ export function ResearchTab({
   const [distilling, setDistilling] = useState(false);
   const [distillDraft, setDistillDraft] = useState<DistilledFields | null>(null);
   const [advanceModal, setAdvanceModal] = useState<AdvancePreflight | null>(null);
+  // Most recent failed RESEARCH run, if any. Refreshes on mount and on
+  // each reportsGenerating cycle (the orchestrator clears the index
+  // on a successful retry, so a green run hides the banner).
+  const [failedResearchRun, setFailedResearchRun] = useState<FailedRunEntry | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Load canvas from disk on venture change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     let cancelled = false;
     const path = canvasPath(venture.rootPath);
@@ -271,6 +291,7 @@ export function ResearchTab({
   }, [venture.id, venture.rootPath]);
 
   // Load uploaded docs list from disk
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     let cancelled = false;
     const dir = uploadsDir(venture.rootPath);
@@ -323,7 +344,7 @@ export function ResearchTab({
         try {
           await invoke("write_file", {
             path: canvasPath(venture.rootPath),
-            content: JSON.stringify(toSave, null, 2) + "\n",
+            content: `${JSON.stringify(toSave, null, 2)}\n`,
           });
         } catch (err) {
           pushToast({
@@ -410,7 +431,7 @@ export function ResearchTab({
             }
             const saveName = file.name.replace(/\.pdf$/i, ".extracted.txt");
             content = `[Extracted from PDF: ${file.name}]\n\n${extracted}`;
-            await invoke("write_file", { path: joinPath(dir, saveName), content: content + "\n" });
+            await invoke("write_file", { path: joinPath(dir, saveName), content: `${content}\n` });
             setUploadedDocs((prev) => [
               ...prev.filter((d) => d.id !== saveName),
               {
@@ -436,7 +457,7 @@ export function ResearchTab({
           continue;
         }
 
-        await invoke("write_file", { path: joinPath(dir, file.name), content: content + "\n" });
+        await invoke("write_file", { path: joinPath(dir, file.name), content: `${content}\n` });
         setUploadedDocs((prev) => [
           ...prev.filter((d) => d.id !== file.name),
           {
@@ -476,7 +497,7 @@ export function ResearchTab({
       const toSave: ResearchCanvas = { ...canvas, updatedAt: new Date().toISOString() };
       await invoke("write_file", {
         path: canvasPath(venture.rootPath),
-        content: JSON.stringify(toSave, null, 2) + "\n",
+        content: `${JSON.stringify(toSave, null, 2)}\n`,
       });
     } catch (err) {
       pushToast({
@@ -737,10 +758,35 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
     }
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  useEffect(() => {
+    let cancelled = false;
+    findLatestFailedRunForStage(venture.rootPath, "RESEARCH")
+      .then((entry) => {
+        if (!cancelled) setFailedResearchRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedResearchRun(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.rootPath, reportsGenerating]);
+
   return (
     <div
       style={{ height: "100%", overflow: "auto", padding: "24px 28px", boxSizing: "border-box" }}
     >
+      {failedResearchRun && (
+        <FailedRunBanner
+          label="research"
+          entry={failedResearchRun}
+          ventureRoot={venture.rootPath}
+          busy={reportsGenerating}
+          disabled={!onRetryResearch}
+          onRetry={() => onRetryResearch?.()}
+        />
+      )}
       {/* Header */}
       <div
         style={{
@@ -824,10 +870,11 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
           {/* AI Research Chat -- v0.1, fires research-py jobs and watches them complete. */}
           <Section title="0. AI Research Chat" icon="*">
             <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-tertiary)" }}>
-              Conversational driver for the research-py sidecar.
-              Slash commands fire deep-research and competitor-scan jobs and stream their progress here.
-              Outputs land under <code>01_research/market-gaps/</code> and
-              <code> 01_research/competitors/</code>. Type <code>/help</code> in the chat for the full list.
+              Conversational driver for the research-py sidecar. Slash commands fire deep-research
+              and competitor-scan jobs and stream their progress here. Outputs land under{" "}
+              <code>01_research/market-gaps/</code> and
+              <code> 01_research/competitors/</code>. Type <code>/help</code> in the chat for the
+              full list.
             </p>
             <ResearchChatPanel venture={venture} />
           </Section>
@@ -921,7 +968,9 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                       {doc.name}
                     </span>
                     {doc.sizeKb > 0 && (
-                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{doc.sizeKb} KB</span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        {doc.sizeKb} KB
+                      </span>
                     )}
                     <button
                       type="button"
@@ -1147,7 +1196,14 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
             </Field>
 
             <div>
-              <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>
+              <p
+                style={{
+                  margin: "0 0 10px",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--text-secondary)",
+                }}
+              >
                 Go / No-Go decision <span style={{ color: "var(--danger)" }}>*</span>
               </p>
               <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
@@ -1233,7 +1289,14 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
                 }}
               />
             </div>
-            <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginBottom: 14, textAlign: "right" }}>
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text-tertiary)",
+                marginBottom: 14,
+                textAlign: "right",
+              }}
+            >
               {doneCount} / 6 complete
             </div>
 
@@ -1246,7 +1309,9 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               />
             ))}
 
-            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border-subtle)" }}>
+            <div
+              style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border-subtle)" }}
+            >
               <button
                 type="button"
                 onClick={handleAdvance}
@@ -1272,7 +1337,12 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               </button>
               {allDone && (
                 <p
-                  style={{ margin: "8px 0 0", fontSize: 11, color: "var(--success)", textAlign: "center" }}
+                  style={{
+                    margin: "8px 0 0",
+                    fontSize: 11,
+                    color: "var(--success)",
+                    textAlign: "center",
+                  }}
                 >
                   Research complete! Moves you to VALIDATED.
                 </p>
@@ -1285,6 +1355,8 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
         <AdvanceConfirmModal
           blockers={advanceModal.blockers}
           warnings={advanceModal.warnings}
+          pendingReviewGate={advanceModal.pendingReviewGate}
+          ventureRoot={venture.rootPath}
           currentStage={venture.stage}
           nextStage="VALIDATED"
           onAdvance={commitAdvance}
@@ -1350,7 +1422,9 @@ function CompetitorRow({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-tertiary)", minWidth: 70 }}>
+        <span
+          style={{ fontSize: 12, fontWeight: 700, color: "var(--text-tertiary)", minWidth: 70 }}
+        >
           Competitor {index}
         </span>
         <input
@@ -1457,7 +1531,9 @@ function Section({
         }}
       >
         <span style={{ fontSize: 16 }}>{icon}</span>
-        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{title}</h4>
+        <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+          {title}
+        </h4>
       </div>
       <div style={{ padding: "18px 18px", display: "flex", flexDirection: "column", gap: 16 }}>
         {children}
@@ -1485,7 +1561,9 @@ function Field({
         {label}
         {required && <span style={{ color: "var(--danger)", marginLeft: 4 }}>*</span>}
       </span>
-      {hint && <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -2 }}>{hint}</span>}
+      {hint && (
+        <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -2 }}>{hint}</span>
+      )}
       {children}
     </label>
   );
@@ -1529,7 +1607,9 @@ function CharCount({ value, min }: { value: string; min: number }) {
   const len = value.trim().length;
   const ok = len >= min;
   return (
-    <span style={{ fontSize: 11, color: ok ? "var(--success)" : "var(--text-muted)", marginTop: -2 }}>
+    <span
+      style={{ fontSize: 11, color: ok ? "var(--success)" : "var(--text-muted)", marginTop: -2 }}
+    >
       {len} / {min} chars {ok ? "✓" : ""}
     </span>
   );
@@ -1569,10 +1649,18 @@ function ChecklistItem({ done, label, hint }: { done: boolean; label: string; hi
         )}
       </div>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: done ? "var(--text-primary)" : "var(--text-tertiary)" }}>
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: done ? "var(--text-primary)" : "var(--text-tertiary)",
+          }}
+        >
           {label}
         </div>
-        {!done && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{hint}</div>}
+        {!done && (
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{hint}</div>
+        )}
       </div>
     </div>
   );

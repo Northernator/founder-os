@@ -1,4 +1,5 @@
 import {
+  type FailedRunEntry,
   type ProductSpecCanvas,
   ProductSpecCanvasSchema,
   SHELL_TYPE_DESCRIPTIONS,
@@ -49,19 +50,20 @@ import { invoke } from "@tauri-apps/api/core";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type AdvancePreflight, runAdvancePreflight } from "../../lib/advance-gate.js";
-import { type ScreensDraftResult, draftScreensCanvas } from "../../lib/screens-drafter.js";
+import { findLatestFailedRunForStage } from "../../lib/failed-runs.js";
+import { runProductStage } from "../../lib/run-product-stage.js";
+import { runStitchStage } from "../../lib/run-stitch-stage.js";
+import { runWireframeStage } from "../../lib/run-wireframe-stage.js";
 import {
   type DistilledScreen,
   type DistilledScreensFields,
   distillScreens,
 } from "../../lib/screens-distiller.js";
+import { type ScreensDraftResult, draftScreensCanvas } from "../../lib/screens-drafter.js";
 import { pushToast } from "../../lib/toasts.js";
 import { AdvanceConfirmModal } from "./AdvanceConfirmModal.js";
-import {
-  type DistillFieldConfig,
-  DistillDiffModal,
-  distillTextField,
-} from "./DistillDiffModal.js";
+import { DistillDiffModal, type DistillFieldConfig, distillTextField } from "./DistillDiffModal.js";
+import { FailedRunBanner } from "./FailedRunBanner.js";
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -139,11 +141,14 @@ function renderScreensList(value: unknown): React.ReactNode {
         const desc = typeof e.description === "string" ? e.description : "";
         const notes = typeof e.notes === "string" ? e.notes : "";
         return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static list, order does not change
           <li key={`screens-list-${i}`} style={{ marginBottom: 6 }}>
             <strong>{name}</strong>
             {desc ? ` — ${desc}` : ""}
             {notes ? (
-              <div style={{ marginTop: 2, color: "var(--text-tertiary)", fontSize: 12 }}>{notes}</div>
+              <div style={{ marginTop: 2, color: "var(--text-tertiary)", fontSize: 12 }}>
+                {notes}
+              </div>
             ) : null}
           </li>
         );
@@ -153,8 +158,8 @@ function renderScreensList(value: unknown): React.ReactNode {
 }
 
 function screensListEquals(current: unknown, proposed: unknown): boolean {
-  const a = (Array.isArray(current) ? current : []) as Array<Record<string, unknown>>;
-  const b = (Array.isArray(proposed) ? proposed : []) as Array<Record<string, unknown>>;
+  const a = (Array.isArray(current) ? current : []) as Record<string, unknown>[];
+  const b = (Array.isArray(proposed) ? proposed : []) as Record<string, unknown>[];
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     const an = typeof a[i].name === "string" ? (a[i].name as string).trim() : "";
@@ -233,6 +238,22 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
   // spinner; `advanceModal` holds the preflight result while the
   // AdvanceConfirmModal is open.
   const [advancing, setAdvancing] = useState(false);
+  // Stage-runner adoption: PRODUCT_SPEC stage. Both SpecTab and
+  // ScreensTab share this stage so the failed-run banner reflects
+  // whichever tab last triggered a run.
+  const [runningProductStage, setRunningProductStage] = useState(false);
+  const [failedProductRun, setFailedProductRun] = useState<FailedRunEntry | null>(null);
+  // Stage-runner adoption: STITCH stage (separate from PRODUCT_SPEC).
+  // Generates the design-AI handoff (Stitch / v0 / Figma Make prompts)
+  // from the BrandBrief. Reads from 03_brand/brand-kit/brand-brief.json.
+  const [runningStitchStage, setRunningStitchStage] = useState(false);
+  const [failedStitchRun, setFailedStitchRun] = useState<FailedRunEntry | null>(null);
+  // Stage-runner adoption: WIREFRAME stage (skeletal). Currently a
+  // placeholder that writes 06_product/wireframes/wireframe-checkpoint.json
+  // after asserting screens-canvas.json exists. Will upgrade in place
+  // when a real wireframe-generation step lands.
+  const [runningWireframeStage, setRunningWireframeStage] = useState(false);
+  const [failedWireframeRun, setFailedWireframeRun] = useState<FailedRunEntry | null>(null);
   const [advanceModal, setAdvanceModal] = useState<AdvancePreflight | null>(null);
 
   /** Reset the draft surface back to closed/idle — used by Discard,
@@ -253,6 +274,7 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
 
   // Reset the draft panel when the founder switches venture — a
   // draft for venture A shouldn't survive into venture B's view.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     resetDraft();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -338,7 +360,7 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
         const next = { ...canvas, updatedAt: new Date().toISOString() };
         await invoke("write_file", {
           path: canvasPath,
-          content: JSON.stringify(next, null, 2) + "\n",
+          content: `${JSON.stringify(next, null, 2)}\n`,
         });
         setSaveStatus("saved");
       } catch (err) {
@@ -357,7 +379,9 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
   }, [canvas, canvasPath]);
 
   if (loading || !canvas || !manifest) {
-    return <div style={{ padding: 28, color: "var(--text-tertiary)" }}>Loading Screens canvas…</div>;
+    return (
+      <div style={{ padding: 28, color: "var(--text-tertiary)" }}>Loading Screens canvas…</div>
+    );
   }
 
   const rules = deriveScreensRules(canvas, specSnapshot);
@@ -374,6 +398,214 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
     setAdvanceModal(null);
     setAdvancing(false);
   };
+
+  // Run the PRODUCT_SPEC stage via @founder-os/stage-runners. The
+  // runner has no LLM dependency (all three steps are deterministic
+  // and idempotent), so this works regardless of provider config.
+  const handleRunProductStage = async () => {
+    if (runningProductStage) return;
+    if (!manifest) {
+      pushToast({
+        kind: "warn",
+        message: "Venture manifest hasn't loaded yet -- try again in a moment",
+        ttlMs: 5000,
+      });
+      return;
+    }
+    setRunningProductStage(true);
+    pushToast({
+      kind: "info",
+      message: "Running product stage (brief + spec + screens)...",
+      detail: "3 deterministic steps via ProductStageRunner. Existing files are skipped.",
+      ttlMs: 4000,
+    });
+    try {
+      const out = await runProductStage({ venture, manifest });
+      const { result, steps } = out;
+      if (result.success) {
+        const done = [
+          steps.brief === "ok" ? "brief" : null,
+          steps.spec === "ok" ? "spec" : null,
+          steps.screens === "ok" ? "screens" : null,
+        ].filter(Boolean) as string[];
+        pushToast({
+          kind: "success",
+          message: `Product stage complete (${done.length}/3)`,
+          detail: done.length
+            ? `Steps: ${done.join(", ")}. Saved under 06_product/.`
+            : "Stage already complete -- no work to do.",
+          ttlMs: 8000,
+        });
+      } else {
+        pushToast({
+          kind: "error",
+          message: "Product stage failed",
+          detail: result.error?.message ?? "Unknown error",
+        });
+      }
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Couldn't run product stage",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRunningProductStage(false);
+    }
+  };
+
+  const handleRunStitchStage = async () => {
+    if (runningStitchStage) return;
+    if (!manifest) {
+      pushToast({
+        kind: "warn",
+        message: "Venture manifest hasn't loaded yet -- try again in a moment",
+        ttlMs: 5000,
+      });
+      return;
+    }
+    setRunningStitchStage(true);
+    pushToast({
+      kind: "info",
+      message: "Generating stitch handoff...",
+      detail: "Reads 03_brand/brand-kit/brand-brief.json, writes 06_product/stitch/.",
+      ttlMs: 4000,
+    });
+    try {
+      const out = await runStitchStage({ venture, manifest });
+      const { result, steps } = out;
+      if (result.success) {
+        pushToast({
+          kind: "success",
+          message: `Stitch handoff ready${steps.stitch === "ok" ? "" : " (no work to do)"}`,
+          detail: "Saved under 06_product/stitch/.",
+          ttlMs: 6000,
+        });
+      } else {
+        pushToast({
+          kind: "error",
+          message: "Stitch stage failed",
+          detail: result.error?.message ?? "Unknown error",
+        });
+      }
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Couldn't run stitch stage",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRunningStitchStage(false);
+    }
+  };
+
+  // Run the WIREFRAME stage. Backed by createWireframesStep, which
+  // turns screens-canvas + spec-canvas into per-screen wireframes
+  // (wireframe-checkpoint.json + wireframes.md). LLM-enriches each
+  // screen narrative when a provider is configured; falls back to
+  // deterministic templates otherwise. If screens-canvas.json is
+  // missing the orchestrator returns VALIDATION_FAILED with a
+  // "run PRODUCT_SPEC stage first" message; the failed-runs banner
+  // surfaces that unchanged.
+  const handleRunWireframeStage = async () => {
+    if (runningWireframeStage) return;
+    if (!manifest) {
+      pushToast({
+        kind: "warn",
+        message: "Venture manifest hasn't loaded yet -- try again in a moment",
+        ttlMs: 5000,
+      });
+      return;
+    }
+    setRunningWireframeStage(true);
+    try {
+      const out = await runWireframeStage({ venture, manifest });
+      if (out.kind === "no-provider") {
+        pushToast({
+          kind: "warn",
+          message: "No LLM provider configured",
+          detail:
+            "Configure a provider in Settings to get LLM-written per-screen wireframe narratives. The deterministic templates are still useful -- you can also wire a provider and re-run.",
+          ttlMs: 7000,
+        });
+        return;
+      }
+      const { result, steps, generationSource } = out;
+      if (result.success) {
+        const sourceSuffix =
+          generationSource === "llm"
+            ? " (LLM)"
+            : generationSource === "deterministic-fallback"
+              ? " (deterministic fallback)"
+              : "";
+        pushToast({
+          kind: "success",
+          message: `Wireframe stage complete${steps.wireframe === "ok" ? sourceSuffix : " (no work to do)"}`,
+          detail: "Saved under 06_product/wireframes/.",
+          ttlMs: 6000,
+        });
+      } else {
+        pushToast({
+          kind: "error",
+          message: "Wireframe stage failed",
+          detail: result.error?.message ?? "Unknown error",
+        });
+      }
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Couldn't run wireframe stage",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRunningWireframeStage(false);
+    }
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  useEffect(() => {
+    let cancelled = false;
+    findLatestFailedRunForStage(venture.rootPath, "WIREFRAME")
+      .then((entry) => {
+        if (!cancelled) setFailedWireframeRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedWireframeRun(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.rootPath, runningWireframeStage]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  useEffect(() => {
+    let cancelled = false;
+    findLatestFailedRunForStage(venture.rootPath, "STITCH")
+      .then((entry) => {
+        if (!cancelled) setFailedStitchRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedStitchRun(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.rootPath, runningStitchStage]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  useEffect(() => {
+    let cancelled = false;
+    findLatestFailedRunForStage(venture.rootPath, "PRODUCT_SPEC")
+      .then((entry) => {
+        if (!cancelled) setFailedProductRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedProductRun(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.rootPath, runningProductStage]);
 
   const handleAdvance = async () => {
     if (!onAdvanceStage || !complete || advancing) return;
@@ -652,6 +884,39 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
         gap: 24,
       }}
     >
+      {failedProductRun && (
+        <FailedRunBanner
+          label="product"
+          entry={failedProductRun}
+          ventureRoot={venture.rootPath}
+          busy={runningProductStage}
+          disabled={!manifest}
+          onRetry={handleRunProductStage}
+          gridSpan
+        />
+      )}
+      {failedStitchRun && (
+        <FailedRunBanner
+          label="stitch"
+          entry={failedStitchRun}
+          ventureRoot={venture.rootPath}
+          busy={runningStitchStage}
+          disabled={!manifest}
+          onRetry={handleRunStitchStage}
+          gridSpan
+        />
+      )}
+      {failedWireframeRun && (
+        <FailedRunBanner
+          label="wireframe"
+          entry={failedWireframeRun}
+          ventureRoot={venture.rootPath}
+          busy={runningWireframeStage}
+          disabled={!manifest}
+          onRetry={handleRunWireframeStage}
+          gridSpan
+        />
+      )}
       {/* Main canvas column */}
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <div
@@ -662,7 +927,9 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
           }}
         >
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>Screens</h2>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
+              Screens
+            </h2>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-tertiary)" }}>
               Inventory of product screens — name, shell shape, mapped features and entities. Stitch
               / v0 / Figma Make handle the visual layout downstream. Saved to{" "}
@@ -702,6 +969,66 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
                 }
               }}
             />
+            <button
+              type="button"
+              onClick={handleRunProductStage}
+              disabled={runningProductStage || !manifest}
+              title="Run brief + spec + screens via ProductStageRunner (failed-runs index, idempotent)"
+              style={{
+                padding: "8px 14px",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: runningProductStage ? "var(--bg-elevated)" : "var(--accent-soft)",
+                border: `1px solid ${runningProductStage ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+                color: runningProductStage ? "var(--text-muted)" : "var(--accent-hover)",
+                borderRadius: 6,
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: runningProductStage || !manifest ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {runningProductStage ? "Running stage..." : "Run product stage"}
+            </button>
+            <button
+              type="button"
+              onClick={handleRunStitchStage}
+              disabled={runningStitchStage || !manifest}
+              title="Generate Stitch / v0 / Figma Make handoff prompts from brand-brief.json"
+              style={{
+                padding: "8px 14px",
+                background: runningStitchStage ? "var(--bg-elevated)" : "var(--accent-soft)",
+                border: `1px solid ${runningStitchStage ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+                color: runningStitchStage ? "var(--text-muted)" : "var(--accent-hover)",
+                borderRadius: 6,
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: runningStitchStage || !manifest ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {runningStitchStage ? "Generating..." : "Generate stitch handoff"}
+            </button>
+            <button
+              type="button"
+              onClick={handleRunWireframeStage}
+              disabled={runningWireframeStage || !manifest}
+              title="Run wireframe stage via WireframeStageRunner (requires screens-canvas.json)"
+              style={{
+                padding: "8px 14px",
+                background: runningWireframeStage ? "var(--bg-elevated)" : "var(--accent-soft)",
+                border: `1px solid ${runningWireframeStage ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+                color: runningWireframeStage ? "var(--text-muted)" : "var(--accent-hover)",
+                borderRadius: 6,
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: runningWireframeStage || !manifest ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {runningWireframeStage ? "Running..." : "Run wireframe stage"}
+            </button>
             {onAdvanceStage && (
               <button
                 type="button"
@@ -858,7 +1185,9 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
                   >
                     {rule.label}
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{rule.description}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+                    {rule.description}
+                  </div>
                 </div>
               </div>
             ))}
@@ -902,6 +1231,8 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
         <AdvanceConfirmModal
           blockers={advanceModal.blockers}
           warnings={advanceModal.warnings}
+          pendingReviewGate={advanceModal.pendingReviewGate}
+          ventureRoot={venture.rootPath}
           currentStage={venture.stage}
           nextStage="WIREFRAME_READY"
           onAdvance={commitAdvance}
@@ -1638,13 +1969,19 @@ function ScreensDraftPanel(props: ScreensDraftPanelProps) {
             <div
               style={{
                 padding: 8,
-                background: mustCoverage.hits === mustCoverage.total ? "var(--success-soft)" : "var(--warning-soft)",
+                background:
+                  mustCoverage.hits === mustCoverage.total
+                    ? "var(--success-soft)"
+                    : "var(--warning-soft)",
                 border: `1px solid ${
-                  mustCoverage.hits === mustCoverage.total ? "var(--success-soft)" : "var(--warning-soft)"
+                  mustCoverage.hits === mustCoverage.total
+                    ? "var(--success-soft)"
+                    : "var(--warning-soft)"
                 }`,
                 borderRadius: 6,
                 fontSize: 11,
-                color: mustCoverage.hits === mustCoverage.total ? "var(--success)" : "var(--warning)",
+                color:
+                  mustCoverage.hits === mustCoverage.total ? "var(--success)" : "var(--warning)",
                 fontWeight: 600,
               }}
             >
@@ -1769,7 +2106,11 @@ function DraftSectionRow({
               fontSize: 10,
               fontWeight: 600,
               color:
-                state === "skipped" ? "var(--text-tertiary)" : state === "applied-merge" ? "var(--success)" : "var(--success)",
+                state === "skipped"
+                  ? "var(--text-tertiary)"
+                  : state === "applied-merge"
+                    ? "var(--success)"
+                    : "var(--success)",
             }}
           >
             {state === "skipped"

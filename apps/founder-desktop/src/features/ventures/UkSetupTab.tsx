@@ -1,6 +1,7 @@
 import {
   type EntityType,
   EntityTypeSchema,
+  type FailedRunEntry,
   type UkSetupCanvas,
   UkSetupCanvasSchema,
   type Venture,
@@ -30,7 +31,10 @@ import { invoke } from "@tauri-apps/api/core";
  */
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { findLatestFailedRunForStage } from "../../lib/failed-runs.js";
+import { runUkSetupStage } from "../../lib/run-uk-setup-stage.js";
 import { pushToast } from "../../lib/toasts.js";
+import { FailedRunBanner } from "./FailedRunBanner.js";
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -45,6 +49,10 @@ export function UkSetupTab({ venture, manifest }: Props) {
   const [canvas, setCanvas] = useState<UkSetupCanvas | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
+  // Stage-runner adoption: UK_SETUP. The runner only ensures the
+  // canvas file exists; founder fills it in via the form below.
+  const [runningUkSetupStage, setRunningUkSetupStage] = useState(false);
+  const [failedUkSetupRun, setFailedUkSetupRun] = useState<FailedRunEntry | null>(null);
 
   // Debounce ref — cancelled on every edit, fires SAVE_DEBOUNCE_MS
   // after the last keystroke. Same pattern as BrandTab's autosave.
@@ -53,6 +61,23 @@ export function UkSetupTab({ venture, manifest }: Props) {
   // initial load from disk). Without this, every venture switch would
   // trigger a no-op write.
   const hydratedRef = useRef(false);
+
+  // Failed-run query for UK_SETUP stage. Refreshes on mount, venture
+  // switch, and after each runningUkSetupStage cycle.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  useEffect(() => {
+    let cancelled = false;
+    findLatestFailedRunForStage(venture.rootPath, "UK_SETUP")
+      .then((entry) => {
+        if (!cancelled) setFailedUkSetupRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedUkSetupRun(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.rootPath, runningUkSetupStage]);
 
   // Load on mount / venture switch.
   useEffect(() => {
@@ -107,7 +132,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
         const next = { ...canvas, updatedAt: new Date().toISOString() };
         await invoke("write_file", {
           path: canvasPath,
-          content: JSON.stringify(next, null, 2) + "\n",
+          content: `${JSON.stringify(next, null, 2)}\n`,
         });
         setSaveStatus("saved");
       } catch (err) {
@@ -126,7 +151,9 @@ export function UkSetupTab({ venture, manifest }: Props) {
   }, [canvas, canvasPath]);
 
   if (loading || !canvas || !manifest) {
-    return <div style={{ padding: 28, color: "var(--text-tertiary)" }}>Loading UK Setup canvas…</div>;
+    return (
+      <div style={{ padding: 28, color: "var(--text-tertiary)" }}>Loading UK Setup canvas…</div>
+    );
   }
 
   const rules = deriveUkSetupRules(canvas, {
@@ -199,9 +226,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
       });
       return;
     }
-    const url =
-      "https://find-and-update.company-information.service.gov.uk/search/companies?q=" +
-      encodeURIComponent(name);
+    const url = `https://find-and-update.company-information.service.gov.uk/search/companies?q=${encodeURIComponent(name)}`;
     try {
       await invoke("open_url", { url });
       // pt.40d — Stamp `nameLastCheckedAt` on successful launch so the
@@ -223,19 +248,95 @@ export function UkSetupTab({ venture, manifest }: Props) {
 
   const isLtd = canvas.entityType === "ltd";
 
+  // Run the UK_SETUP stage via @founder-os/stage-runners. Deterministic
+  // (no LLM). Mostly useful for picking up the failed-runs index +
+  // artifact entry; the actual canvas content is filled in below.
+  const handleRunUkSetupStage = async () => {
+    if (runningUkSetupStage) return;
+    if (!manifest) {
+      pushToast({
+        kind: "warn",
+        message: "Venture manifest hasn't loaded yet -- try again in a moment",
+        ttlMs: 5000,
+      });
+      return;
+    }
+    setRunningUkSetupStage(true);
+    try {
+      const out = await runUkSetupStage({ venture, manifest });
+      const { result, steps } = out;
+      if (result.success) {
+        pushToast({
+          kind: "success",
+          message: `UK setup stage complete${steps.setup === "ok" ? "" : " (no work to do)"}`,
+          detail: "Saved under 04_uk_business/.",
+          ttlMs: 5000,
+        });
+      } else {
+        pushToast({
+          kind: "error",
+          message: "UK setup stage failed",
+          detail: result.error?.message ?? "Unknown error",
+        });
+      }
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Couldn't run UK setup stage",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRunningUkSetupStage(false);
+    }
+  };
+
   return (
     <div style={{ padding: 28, display: "grid", gridTemplateColumns: "1fr 320px", gap: 24 }}>
+      {failedUkSetupRun && (
+        <FailedRunBanner
+          label="UK setup"
+          entry={failedUkSetupRun}
+          ventureRoot={venture.rootPath}
+          busy={runningUkSetupStage}
+          disabled={!manifest}
+          onRetry={handleRunUkSetupStage}
+          gridSpan
+        />
+      )}
       {/* ── Main column ─────────────────────────────────────────── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>UK Setup</h2>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
+              UK Setup
+            </h2>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-tertiary)" }}>
               Entity → registrations → banking → insurance → IP. Saved to{" "}
               <code>04_uk_business/uk-setup.json</code>.
             </p>
           </div>
-          <SaveIndicator status={saveStatus} />
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <SaveIndicator status={saveStatus} />
+            <button
+              type="button"
+              onClick={handleRunUkSetupStage}
+              disabled={runningUkSetupStage || !manifest}
+              title="Run UK setup stage via UkSetupStageRunner (failed-runs index, idempotent)"
+              style={{
+                padding: "8px 14px",
+                background: runningUkSetupStage ? "var(--bg-elevated)" : "var(--accent-soft)",
+                border: `1px solid ${runningUkSetupStage ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+                color: runningUkSetupStage ? "var(--text-muted)" : "var(--accent-hover)",
+                borderRadius: 6,
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: runningUkSetupStage || !manifest ? "not-allowed" : "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {runningUkSetupStage ? "Running..." : "Run UK setup stage"}
+            </button>
+          </div>
         </div>
 
         {/* 1. Entity type ──────────────────────────────────────── */}
@@ -292,7 +393,10 @@ export function UkSetupTab({ venture, manifest }: Props) {
                     padding: "0 14px",
                     border: "1px solid var(--border-input)",
                     borderRadius: 4,
-                    background: canvas.company.name.trim().length === 0 ? "var(--bg-hover)" : "var(--bg-panel)",
+                    background:
+                      canvas.company.name.trim().length === 0
+                        ? "var(--bg-hover)"
+                        : "var(--bg-panel)",
                     cursor: canvas.company.name.trim().length === 0 ? "not-allowed" : "pointer",
                     fontSize: 12,
                     fontWeight: 600,
@@ -558,7 +662,9 @@ export function UkSetupTab({ venture, manifest }: Props) {
             marginBottom: 12,
           }}
         >
-          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>Must-haves</h3>
+          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+            Must-haves
+          </h3>
           <span
             style={{
               fontSize: 12,
@@ -591,7 +697,9 @@ export function UkSetupTab({ venture, manifest }: Props) {
                 >
                   {rule.label}
                 </div>
-                <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{rule.description}</div>
+                <div style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+                  {rule.description}
+                </div>
               </div>
             </div>
           ))}
@@ -698,7 +806,9 @@ function Checkbox({
       />
       <div>
         <div style={{ fontSize: 13, color: "var(--text-primary)", fontWeight: 500 }}>{label}</div>
-        {hint && <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>{hint}</div>}
+        {hint && (
+          <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>{hint}</div>
+        )}
       </div>
     </label>
   );

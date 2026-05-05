@@ -4,6 +4,7 @@ import {
   NamingScanSchema,
   deriveBrandConfidence,
 } from "@founder-os/branding-core";
+import type { FailedRunEntry, Venture, VentureManifest } from "@founder-os/domain";
 import { optimize } from "@founder-os/prompt-master";
 import { invoke } from "@tauri-apps/api/core";
 import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
@@ -20,10 +21,16 @@ import { save as saveFileDialog } from "@tauri-apps/plugin-dialog";
  * it after a pipeline run so the tab lights up with new findings without
  * the user having to click anything.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as db from "../../lib/db.js";
+import { findLatestFailedRunForStage } from "../../lib/failed-runs.js";
 import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
+import { runAuditStage } from "../../lib/run-audit-stage.js";
+import { runBuildStage } from "../../lib/run-build-stage.js";
+import { runFinanceStage } from "../../lib/run-finance-stage.js";
+import { runLaunchStage } from "../../lib/run-launch-stage.js";
 import { pushToast } from "../../lib/toasts.js";
+import { FailedRunBanner } from "./FailedRunBanner.js";
 import { renderMarkdown } from "./markdown.js";
 
 // Local error stringifier — matches db.ts / venture-io.ts. Kept inline
@@ -40,6 +47,16 @@ function errDetail(err: unknown): string {
 }
 
 type Props = {
+  /**
+   * Full venture row -- needed by the AuditStageRunner / BuildStageRunner
+   * adoption helpers which take a Venture (id + rootPath) plus a
+   * VentureManifest. Optional so callers that only need history
+   * rendering (no run buttons) can omit it; the run/retry CTAs
+   * disable themselves when missing.
+   */
+  venture?: Venture;
+  /** Same story: optional, gates the run buttons. */
+  manifest?: VentureManifest | null;
   ventureId: string;
   /**
    * pt.30d: optional venture root path. When provided, the export
@@ -56,10 +73,30 @@ type Props = {
 type Severity = "low" | "medium" | "high" | "critical";
 
 const SEVERITY_META: Record<Severity, { label: string; bg: string; fg: string; border: string }> = {
-  critical: { label: "Critical", bg: "var(--danger-soft)", fg: "var(--danger)", border: "var(--danger-border)" },
-  high: { label: "High", bg: "var(--warning-soft)", fg: "var(--warning)", border: "var(--warning-soft)" },
-  medium: { label: "Medium", bg: "var(--accent-soft)", fg: "var(--accent-hover)", border: "var(--accent)" },
-  low: { label: "Low", bg: "var(--bg-hover)", fg: "var(--text-secondary)", border: "var(--border-input)" },
+  critical: {
+    label: "Critical",
+    bg: "var(--danger-soft)",
+    fg: "var(--danger)",
+    border: "var(--danger-border)",
+  },
+  high: {
+    label: "High",
+    bg: "var(--warning-soft)",
+    fg: "var(--warning)",
+    border: "var(--warning-soft)",
+  },
+  medium: {
+    label: "Medium",
+    bg: "var(--accent-soft)",
+    fg: "var(--accent-hover)",
+    border: "var(--accent)",
+  },
+  low: {
+    label: "Low",
+    bg: "var(--bg-hover)",
+    fg: "var(--text-secondary)",
+    border: "var(--border-input)",
+  },
 };
 
 function severityRank(s: string): number {
@@ -328,8 +365,8 @@ function buildExportCsv(payload: ExportPayload): string {
       "findingId",
     ].join(",");
     const lines = [
-      `# Founder OS audit export`,
-      `# scope,selected`,
+      "# Founder OS audit export",
+      "# scope,selected",
       `# ventureId,${csvEscape(ventureId)}`,
       `# runId,${csvEscape(run.runId)}`,
       `# runStatus,${csvEscape(run.status)}`,
@@ -353,7 +390,7 @@ function buildExportCsv(payload: ExportPayload): string {
       );
     }
     // CRLF line endings — matches the CSV spec and what Excel writes on Windows.
-    return lines.join("\r\n") + "\r\n";
+    return `${lines.join("\r\n")}\r\n`;
   }
   // scope === "all" — prepend runId/runCreatedAt columns so you can pivot
   // by run in a spreadsheet. Metadata block lists the per-run summary so
@@ -372,8 +409,8 @@ function buildExportCsv(payload: ExportPayload): string {
     "findingId",
   ].join(",");
   const lines = [
-    `# Founder OS audit export`,
-    `# scope,all`,
+    "# Founder OS audit export",
+    "# scope,all",
     `# ventureId,${csvEscape(ventureId)}`,
     `# exportedAt,${csvEscape(exportedAt)}`,
     `# runCount,${blocks.length}`,
@@ -398,7 +435,7 @@ function buildExportCsv(payload: ExportPayload): string {
       );
     }
   }
-  return lines.join("\r\n") + "\r\n";
+  return `${lines.join("\r\n")}\r\n`;
 }
 
 function defaultExportFilename(payload: ExportPayload, ext: "json" | "csv"): string {
@@ -428,7 +465,7 @@ type FixState = {
 const SYSTEM_PROMPT =
   "You are Founder OS's audit remediation assistant. The user runs an automated audit against generated venture artifacts (brand briefs, build handoffs, design tokens, etc). You are shown one finding at a time, along with the offending file's contents when available. Respond with a concise, concrete fix: (1) a 1-sentence diagnosis, (2) the exact change to make — show a full corrected snippet if the fix is a small edit, (3) a short rationale. Do not hedge. Do not recommend ignoring the finding. If the fix requires the user to make a product decision, state the decision and give your recommended default.";
 
-export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
+export function AuditTab({ venture, manifest, ventureId, ventureRoot, refreshToken = 0 }: Props) {
   const [runs, setRuns] = useState<db.RunRow[]>([]);
   const [findingsByRun, setFindingsByRun] = useState<Record<string, db.FindingRow[]>>({});
   const [loading, setLoading] = useState(false);
@@ -436,6 +473,16 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [fixState, setFixState] = useState<Record<string, FixState>>({});
   const [openErrors, setOpenErrors] = useState<Record<string, string>>({});
+  const [runningAuditStage, setRunningAuditStage] = useState(false);
+  const [runningBuildStage, setRunningBuildStage] = useState(false);
+  const [failedAuditRun, setFailedAuditRun] = useState<FailedRunEntry | null>(null);
+  const [failedBuildRun, setFailedBuildRun] = useState<FailedRunEntry | null>(null);
+  // Stage-runner adoption: FINANCE + LAUNCH (skeletal). No dedicated
+  // tab today; AuditTab hosts them in the existing "Stage runners:" row.
+  const [runningFinanceStage, setRunningFinanceStage] = useState(false);
+  const [runningLaunchStage, setRunningLaunchStage] = useState(false);
+  const [failedFinanceRun, setFailedFinanceRun] = useState<FailedRunEntry | null>(null);
+  const [failedLaunchRun, setFailedLaunchRun] = useState<FailedRunEntry | null>(null);
   // Export menu: open/close flag, plus a transient status line that shows
   // "Copied JSON", "Saved to …", or an error for ~2s after the action runs.
   // Anchor ref is used for outside-click detection on the dropdown.
@@ -472,6 +519,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
       ]);
       const grouped: Record<string, db.FindingRow[]> = {};
       for (const f of findingRows) {
+        // biome-ignore lint/suspicious/noAssignInExpressions: intentional assign-and-test pattern
         (grouped[f.runId] ||= []).push(f);
       }
       // Severity-order within each run (DB already orders but we re-sort
@@ -508,6 +556,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
     }
   }, [ventureId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   useEffect(() => {
     void refresh();
   }, [refresh, refreshToken]);
@@ -610,7 +659,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
               path: finding.filePath,
             });
             const MAX = 6000;
-            fileExcerpt = content.length > MAX ? content.slice(0, MAX) + "\n…[truncated]" : content;
+            fileExcerpt = content.length > MAX ? `${content.slice(0, MAX)}\n…[truncated]` : content;
           } catch (readErr) {
             console.warn("[audit] read_file failed", readErr);
             fileExcerpt = `(could not read file: ${String(readErr)})`;
@@ -965,6 +1014,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
     return `${findings} finding${findings === 1 ? "" : "s"} across ${runs} run${runs === 1 ? "" : "s"}`;
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   const copyExport = useCallback(
     async (format: "json" | "csv") => {
       const payload = await buildExportPayload(exportScope);
@@ -992,6 +1042,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
     [buildExportPayload, exportScope, flashExportStatus]
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
   const saveExport = useCallback(
     async (format: "json" | "csv") => {
       const payload = await buildExportPayload(exportScope);
@@ -1139,8 +1190,359 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
     return () => window.removeEventListener("keydown", handler, true);
   }, []);
 
+  const handleRunAuditStage = async () => {
+    if (runningAuditStage) return;
+    if (!venture || !manifest) {
+      pushToast({
+        kind: "warn",
+        message: "Venture context not ready",
+        detail: "Manifest hasn't loaded yet -- try again in a moment.",
+        ttlMs: 5000,
+      });
+      return;
+    }
+    setRunningAuditStage(true);
+    pushToast({
+      kind: "info",
+      message: "Running audit stage...",
+      detail: "Persists summary to 07_build/audits/.",
+      ttlMs: 4000,
+    });
+    try {
+      const out = await runAuditStage({
+        venture,
+        manifest,
+        ventureStage: venture.stage,
+      });
+      const { result } = out;
+      if (result.success) {
+        pushToast({
+          kind: "success",
+          message: "Audit stage complete",
+          detail: "Summary saved under 07_build/audits/.",
+          ttlMs: 6000,
+        });
+      } else {
+        pushToast({
+          kind: result.error?.recoverable ? "warn" : "error",
+          message: "Audit stage finished with blockers",
+          detail: result.error?.message ?? "See findings table for details.",
+        });
+      }
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Couldn't run audit stage",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRunningAuditStage(false);
+    }
+  };
+
+  const handleRunBuildStage = async () => {
+    if (runningBuildStage) return;
+    if (!venture || !manifest) {
+      pushToast({
+        kind: "warn",
+        message: "Venture context not ready",
+        detail: "Manifest hasn't loaded yet -- try again in a moment.",
+        ttlMs: 5000,
+      });
+      return;
+    }
+    setRunningBuildStage(true);
+    pushToast({
+      kind: "info",
+      message: "Dropping build handoff...",
+      detail: "Bundle goes to .founder/handoffs/inbox/. The VS Code extension picks it up async.",
+      ttlMs: 4500,
+    });
+    try {
+      const out = await runBuildStage({ venture, manifest });
+      const { result } = out;
+      if (result.success) {
+        pushToast({
+          kind: "success",
+          message: "Build handoff dropped",
+          detail: "VS Code extension will process the bundle. Watch the Pipeline tab for progress.",
+          ttlMs: 7000,
+        });
+      } else {
+        pushToast({
+          kind: "error",
+          message: "Build handoff failed",
+          detail: result.error?.message ?? "Unknown error",
+        });
+      }
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Couldn't drop build handoff",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRunningBuildStage(false);
+    }
+  };
+
+  const handleRunFinanceStage = async () => {
+    if (runningFinanceStage) return;
+    if (!venture || !manifest) {
+      pushToast({
+        kind: "warn",
+        message: "Venture context not ready",
+        detail: "Manifest hasn't loaded yet -- try again in a moment.",
+        ttlMs: 5000,
+      });
+      return;
+    }
+    setRunningFinanceStage(true);
+    try {
+      const out = await runFinanceStage({ venture, manifest });
+      if (out.kind === "no-provider") {
+        pushToast({
+          kind: "warn",
+          message: "No LLM provider configured",
+          detail:
+            "Configure a provider in Settings to get an LLM-written strategic narrative for the finance plan. The deterministic narrative is still written -- you can also wire a provider and re-run.",
+          ttlMs: 7000,
+        });
+        return;
+      }
+      const { result, steps, canvasStatus, generationSource } = out;
+      if (result.success) {
+        const sourceSuffix =
+          generationSource === "llm"
+            ? " (LLM)"
+            : generationSource === "deterministic-fallback"
+              ? " (deterministic fallback)"
+              : "";
+        const canvasSuffix =
+          canvasStatus === "preserved" ? " - canvas preserved" : "";
+        pushToast({
+          kind: "success",
+          message: `Finance stage complete${steps.finance === "ok" ? sourceSuffix : " (no work to do)"}${canvasSuffix}`,
+          detail: "Saved under 05_finance/.",
+          ttlMs: 6000,
+        });
+      } else {
+        pushToast({
+          kind: "error",
+          message: "Finance stage failed",
+          detail: result.error?.message ?? "Unknown error",
+        });
+      }
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Couldn't run finance stage",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRunningFinanceStage(false);
+    }
+  };
+
+  const handleRunLaunchStage = async () => {
+    if (runningLaunchStage) return;
+    if (!venture || !manifest) {
+      pushToast({
+        kind: "warn",
+        message: "Venture context not ready",
+        detail: "Manifest hasn't loaded yet -- try again in a moment.",
+        ttlMs: 5000,
+      });
+      return;
+    }
+    setRunningLaunchStage(true);
+    try {
+      const out = await runLaunchStage({ venture, manifest });
+      if (out.kind === "no-provider") {
+        pushToast({
+          kind: "warn",
+          message: "No LLM provider configured",
+          detail:
+            "Configure a provider in Settings to get an LLM-written launch announcement. The deterministic announcement is still written -- you can also wire a provider and re-run.",
+          ttlMs: 7000,
+        });
+        return;
+      }
+      const { result, steps, receiptStatus, generationSource } = out;
+      if (result.success) {
+        const sourceSuffix =
+          generationSource === "llm"
+            ? " (LLM)"
+            : generationSource === "deterministic-fallback"
+              ? " (deterministic fallback)"
+              : "";
+        const statusSuffix =
+          receiptStatus === "ready-to-launch"
+            ? " - READY"
+            : receiptStatus === "needs-attention"
+              ? " - needs attention"
+              : "";
+        pushToast({
+          kind:
+            receiptStatus === "needs-attention" ? "warn" : "success",
+          message: `Launch stage complete${steps.launch === "ok" ? sourceSuffix : " (no work to do)"}${statusSuffix}`,
+          detail: "Saved under 08_launch/. Open launch-announcement.md for the founder-facing copy.",
+          ttlMs: 7000,
+        });
+      } else {
+        pushToast({
+          kind: "error",
+          message: "Launch stage failed",
+          detail: result.error?.message ?? "Unknown error",
+        });
+      }
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Couldn't run launch stage",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setRunningLaunchStage(false);
+    }
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  useEffect(() => {
+    if (!ventureRoot) return;
+    let cancelled = false;
+    findLatestFailedRunForStage(ventureRoot, "AUDIT")
+      .then((entry) => {
+        if (!cancelled) setFailedAuditRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedAuditRun(null);
+      });
+    findLatestFailedRunForStage(ventureRoot, "BUILD")
+      .then((entry) => {
+        if (!cancelled) setFailedBuildRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedBuildRun(null);
+      });
+    findLatestFailedRunForStage(ventureRoot, "FINANCE")
+      .then((entry) => {
+        if (!cancelled) setFailedFinanceRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedFinanceRun(null);
+      });
+    findLatestFailedRunForStage(ventureRoot, "LAUNCH")
+      .then((entry) => {
+        if (!cancelled) setFailedLaunchRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedLaunchRun(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ventureRoot, runningAuditStage, runningBuildStage, runningFinanceStage, runningLaunchStage]);
+
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      {failedAuditRun && (
+        <div style={{ padding: "0 28px" }}>
+          <FailedRunBanner
+            label="audit"
+            entry={failedAuditRun}
+            ventureRoot={ventureRoot}
+            busy={runningAuditStage}
+            disabled={!venture || !manifest}
+            onRetry={handleRunAuditStage}
+          />
+        </div>
+      )}
+      {failedBuildRun && (
+        <div style={{ padding: "0 28px" }}>
+          <FailedRunBanner
+            label="build"
+            entry={failedBuildRun}
+            ventureRoot={ventureRoot}
+            busy={runningBuildStage}
+            disabled={!venture || !manifest}
+            onRetry={handleRunBuildStage}
+          />
+        </div>
+      )}
+      {failedFinanceRun && (
+        <div style={{ padding: "0 28px" }}>
+          <FailedRunBanner
+            label="finance"
+            entry={failedFinanceRun}
+            ventureRoot={ventureRoot}
+            busy={runningFinanceStage}
+            disabled={!venture || !manifest}
+            onRetry={handleRunFinanceStage}
+          />
+        </div>
+      )}
+      {failedLaunchRun && (
+        <div style={{ padding: "0 28px" }}>
+          <FailedRunBanner
+            label="launch"
+            entry={failedLaunchRun}
+            ventureRoot={ventureRoot}
+            busy={runningLaunchStage}
+            disabled={!venture || !manifest}
+            onRetry={handleRunLaunchStage}
+          />
+        </div>
+      )}
+      <div
+        style={{
+          padding: "10px 28px",
+          borderBottom: "1px solid var(--bg-hover)",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          flexWrap: "wrap",
+        }}
+      >
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)" }}>
+          Stage runners:
+        </span>
+        <button
+          type="button"
+          onClick={handleRunAuditStage}
+          disabled={runningAuditStage || !venture || !manifest}
+          style={runnerBtnStyle(runningAuditStage, !venture || !manifest)}
+        >
+          {runningAuditStage ? "Running audit..." : "Run audit stage"}
+        </button>
+        <button
+          type="button"
+          onClick={handleRunBuildStage}
+          disabled={runningBuildStage || !venture || !manifest}
+          title="Drop a build handoff bundle. VS Code extension picks it up async."
+          style={runnerBtnStyle(runningBuildStage, !venture || !manifest)}
+        >
+          {runningBuildStage ? "Dropping..." : "Drop build handoff"}
+        </button>
+        <button
+          type="button"
+          onClick={handleRunFinanceStage}
+          disabled={runningFinanceStage || !venture || !manifest}
+          title="Run finance stage via FinanceStageRunner (skeletal: ensures finance-canvas.json)"
+          style={runnerBtnStyle(runningFinanceStage, !venture || !manifest)}
+        >
+          {runningFinanceStage ? "Running..." : "Run finance stage"}
+        </button>
+        <button
+          type="button"
+          onClick={handleRunLaunchStage}
+          disabled={runningLaunchStage || !venture || !manifest}
+          title="Run launch stage via LaunchStageRunner (skeletal: writes launch-receipt.json)"
+          style={runnerBtnStyle(runningLaunchStage, !venture || !manifest)}
+        >
+          {runningLaunchStage ? "Running..." : "Run launch stage"}
+        </button>
+      </div>
       <div
         style={{
           padding: "12px 28px",
@@ -1172,6 +1574,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                 fontSize: 11,
                 fontWeight: 600,
                 color: exportStatus.kind === "success" ? "var(--success)" : "var(--danger)",
+                // biome-ignore lint/a11y/useSemanticElements: role chosen intentionally; refactor deferred
               }}
               role="status"
             >
@@ -1269,7 +1672,11 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                         style={{
                           background: active ? "var(--accent-soft)" : "transparent",
                           border: active ? "1px solid var(--accent-soft)" : "1px solid transparent",
-                          color: opt.disabled ? "var(--text-muted)" : active ? "var(--accent-hover)" : "var(--text-secondary)",
+                          color: opt.disabled
+                            ? "var(--text-muted)"
+                            : active
+                              ? "var(--accent-hover)"
+                              : "var(--text-secondary)",
                           fontSize: 11,
                           fontWeight: active ? 600 : 500,
                           padding: "3px 8px",
@@ -1348,6 +1755,7 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                       onMouseEnter={(e) => {
                         if (!disabled) e.currentTarget.style.background = "var(--accent-soft)";
                       }}
+                      // biome-ignore lint/suspicious/noAssignInExpressions: intentional assign-and-test pattern
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
                       {item.label}
@@ -1770,7 +2178,9 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                 >
                   {f.title}
                 </div>
-                <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>{f.message}</div>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  {f.message}
+                </div>
                 {f.filePath && (
                   <div
                     style={{
@@ -1917,7 +2327,9 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
                         }}
                       >
                         {fix.text}
-                        {fix.status === "streaming" && <span style={{ color: "var(--accent)" }}>▍</span>}
+                        {fix.status === "streaming" && (
+                          <span style={{ color: "var(--accent)" }}>▍</span>
+                        )}
                         {fix.status === "stopping" && (
                           // Faded cursor while we wait for the cancel event —
                           // signals that the stream is winding down without
@@ -1935,4 +2347,22 @@ export function AuditTab({ ventureId, ventureRoot, refreshToken = 0 }: Props) {
       </div>
     </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Stage-runner helper components (audit + build adoption)
+// ---------------------------------------------------------------------------
+
+function runnerBtnStyle(busy: boolean, missingCtx: boolean): React.CSSProperties {
+  return {
+    padding: "6px 12px",
+    background: busy ? "var(--bg-elevated)" : "var(--accent-soft)",
+    border: `1px solid ${busy ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+    color: busy ? "var(--text-muted)" : "var(--accent-hover)",
+    borderRadius: 6,
+    fontWeight: 600,
+    fontSize: 12,
+    cursor: busy || missingCtx ? "not-allowed" : "pointer",
+    whiteSpace: "nowrap",
+  };
 }
