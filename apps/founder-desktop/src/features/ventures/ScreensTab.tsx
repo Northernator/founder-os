@@ -54,6 +54,7 @@ import { findLatestFailedRunForStage } from "../../lib/failed-runs.js";
 import { runProductStage } from "../../lib/run-product-stage.js";
 import { runStitchStage } from "../../lib/run-stitch-stage.js";
 import { runWireframeStage } from "../../lib/run-wireframe-stage.js";
+import { writeVentureManifest } from "../../lib/venture-io.js";
 import {
   type DistilledScreen,
   type DistilledScreensFields,
@@ -97,6 +98,10 @@ type Props = {
   /** Optional: when present, the header shows an "Advance" button that
    *  runs the pre-flight audit and gates the WIREFRAME_READY transition. */
   onAdvanceStage?: (stage: VentureStage) => void;
+  /** Bubble manifest updates to VentureDashboard so other tabs and the
+   *  chat-system-prompt builder see the latest config. Mirrors the
+   *  IdeaTab onManifestUpdate prop. */
+  onManifestUpdate?: (next: VentureManifest) => void;
 };
 
 /**
@@ -200,7 +205,7 @@ function buildSpecSnapshot(spec: ProductSpecCanvas | null): SpecSnapshot {
   };
 }
 
-export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
+export function ScreensTab({ venture, manifest, onAdvanceStage, onManifestUpdate }: Props) {
   const canvasPath = useMemo(() => getScreensCanvasPath(venture.rootPath), [venture.rootPath]);
   const specPath = useMemo(() => getSpecCanvasPath(venture.rootPath), [venture.rootPath]);
 
@@ -243,10 +248,18 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
   // whichever tab last triggered a run.
   const [runningProductStage, setRunningProductStage] = useState(false);
   const [failedProductRun, setFailedProductRun] = useState<FailedRunEntry | null>(null);
-  // Stage-runner adoption: STITCH stage (separate from PRODUCT_SPEC).
+  // Stage-runner adoption: HANDOFF stage (separate from PRODUCT_SPEC).
   // Generates the design-AI handoff (Stitch / v0 / Figma Make prompts)
   // from the BrandBrief. Reads from 03_brand/brand-kit/brand-brief.json.
   const [runningStitchStage, setRunningStitchStage] = useState(false);
+  // Slice 6 of dual-handoff arc: writing the manifest is async; this
+  // flag disables the selector + button while a write is mid-flight so
+  // the user doesn't double-submit between the disk write and the
+  // VentureDashboard rehydration.
+  const [savingHandoffSource, setSavingHandoffSource] = useState(false);
+  // Default fallback mirrors HandoffStageRunner.resolveProvider() --
+  // missing field means codesign. Keep these in sync.
+  const handoffSource: "stitch" | "codesign" = manifest?.handoffSource ?? "codesign";
   const [failedStitchRun, setFailedStitchRun] = useState<FailedRunEntry | null>(null);
   // Stage-runner adoption: WIREFRAME stage (skeletal). Currently a
   // placeholder that writes 06_product/wireframes/wireframe-checkpoint.json
@@ -378,6 +391,57 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
     };
   }, [canvas, canvasPath]);
 
+  // Failed-run lookups (3 stages this tab surfaces). Lifted above the
+  // early return so the hook order is stable -- React's rules-of-hooks
+  // tripped when these were below the loading/canvas/manifest gate
+  // because the gate flips between renders. Originals lived after
+  // handleRunWireframeStage; identical bodies, just earlier in the
+  // function.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  useEffect(() => {
+    let cancelled = false;
+    findLatestFailedRunForStage(venture.rootPath, "WIREFRAME")
+      .then((entry) => {
+        if (!cancelled) setFailedWireframeRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedWireframeRun(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.rootPath, runningWireframeStage]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  useEffect(() => {
+    let cancelled = false;
+    findLatestFailedRunForStage(venture.rootPath, "HANDOFF")
+      .then((entry) => {
+        if (!cancelled) setFailedStitchRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedStitchRun(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.rootPath, runningStitchStage]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  useEffect(() => {
+    let cancelled = false;
+    findLatestFailedRunForStage(venture.rootPath, "PRODUCT_SPEC")
+      .then((entry) => {
+        if (!cancelled) setFailedProductRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedProductRun(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.rootPath, runningProductStage]);
+
   if (loading || !canvas || !manifest) {
     return (
       <div style={{ padding: 28, color: "var(--text-tertiary)" }}>Loading Screens canvas…</div>
@@ -454,6 +518,39 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
     }
   };
 
+  /**
+   * Persist a new handoff provider choice. Writes venture.yaml and
+   * bubbles the updated manifest up to VentureDashboard so other tabs
+   * see it. No-op if the value is unchanged or the manifest hasn't
+   * loaded yet. Errors surface as a toast; the in-memory selector
+   * snaps back via the unchanged manifest prop.
+   */
+  const handleHandoffSourceChange = async (next: "stitch" | "codesign") => {
+    if (!manifest) return;
+    if ((manifest.handoffSource ?? "codesign") === next) return;
+    if (savingHandoffSource) return;
+    setSavingHandoffSource(true);
+    try {
+      const updated: VentureManifest = { ...manifest, handoffSource: next };
+      await writeVentureManifest(venture.rootPath, updated);
+      onManifestUpdate?.(updated);
+      pushToast({
+        kind: "info",
+        message: `Handoff provider set to ${next === "stitch" ? "Stitch" : "CoDesign"}`,
+        detail: "Next handoff run will use this provider.",
+        ttlMs: 4000,
+      });
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Couldn't update handoff provider",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setSavingHandoffSource(false);
+    }
+  };
+
   const handleRunStitchStage = async () => {
     if (runningStitchStage) return;
     if (!manifest) {
@@ -465,9 +562,10 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
       return;
     }
     setRunningStitchStage(true);
+    const providerLabel = handoffSource === "stitch" ? "Stitch" : "CoDesign";
     pushToast({
       kind: "info",
-      message: "Generating stitch handoff...",
+      message: `Generating ${providerLabel} handoff...`,
       detail: "Reads 03_brand/brand-kit/brand-brief.json, writes 06_product/stitch/.",
       ttlMs: 4000,
     });
@@ -477,21 +575,21 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
       if (result.success) {
         pushToast({
           kind: "success",
-          message: `Stitch handoff ready${steps.stitch === "ok" ? "" : " (no work to do)"}`,
-          detail: "Saved under 06_product/stitch/.",
+          message: `${providerLabel} handoff ready${steps.stitch === "ok" ? "" : " (no work to do)"}`,
+          detail: "Saved under 06_product/stitch/handoff-export.json.",
           ttlMs: 6000,
         });
       } else {
         pushToast({
           kind: "error",
-          message: "Stitch stage failed",
+          message: `${providerLabel} stage failed`,
           detail: result.error?.message ?? "Unknown error",
         });
       }
     } catch (err) {
       pushToast({
         kind: "error",
-        message: "Couldn't run stitch stage",
+        message: `Couldn't run ${providerLabel} handoff`,
         detail: err instanceof Error ? err.message : String(err),
       });
     } finally {
@@ -562,50 +660,9 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
     }
   };
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
-  useEffect(() => {
-    let cancelled = false;
-    findLatestFailedRunForStage(venture.rootPath, "WIREFRAME")
-      .then((entry) => {
-        if (!cancelled) setFailedWireframeRun(entry);
-      })
-      .catch(() => {
-        if (!cancelled) setFailedWireframeRun(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [venture.rootPath, runningWireframeStage]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
-  useEffect(() => {
-    let cancelled = false;
-    findLatestFailedRunForStage(venture.rootPath, "STITCH")
-      .then((entry) => {
-        if (!cancelled) setFailedStitchRun(entry);
-      })
-      .catch(() => {
-        if (!cancelled) setFailedStitchRun(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [venture.rootPath, runningStitchStage]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
-  useEffect(() => {
-    let cancelled = false;
-    findLatestFailedRunForStage(venture.rootPath, "PRODUCT_SPEC")
-      .then((entry) => {
-        if (!cancelled) setFailedProductRun(entry);
-      })
-      .catch(() => {
-        if (!cancelled) setFailedProductRun(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [venture.rootPath, runningProductStage]);
+  // (3 failed-run lookup useEffects moved above the early return -- see
+  // the note up there. Don't move them back here; that's the
+  // rules-of-hooks bug we just fixed.)
 
   const handleAdvance = async () => {
     if (!onAdvanceStage || !complete || advancing) return;
@@ -876,14 +933,28 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
   };
 
   return (
+    // Outer scrolling panel mirrors BrandTab's working layout. The
+    // VentureDashboard tab-content wrapper is `flex: 1, overflow: hidden`,
+    // so each tab has to provide its own height/overflow. data-fos-panel
+    // + bg-panel: rainbow theme triggers the frosted-glass selector in
+    // styles/themes.css; dark/grey themes just see a flat panel.
     <div
+      data-fos-panel
       style={{
-        padding: 28,
-        display: "grid",
-        gridTemplateColumns: "1fr 320px",
-        gap: 24,
+        height: "100%",
+        overflow: "auto",
+        background: "var(--bg-panel)",
+        boxSizing: "border-box",
       }}
     >
+      <div
+        style={{
+          padding: 28,
+          display: "grid",
+          gridTemplateColumns: "1fr 320px",
+          gap: 24,
+        }}
+      >
       {failedProductRun && (
         <FailedRunBanner
           label="product"
@@ -991,25 +1062,60 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
             >
               {runningProductStage ? "Running stage..." : "Run product stage"}
             </button>
-            <button
-              type="button"
-              onClick={handleRunStitchStage}
-              disabled={runningStitchStage || !manifest}
-              title="Generate Stitch / v0 / Figma Make handoff prompts from brand-brief.json"
-              style={{
-                padding: "8px 14px",
-                background: runningStitchStage ? "var(--bg-elevated)" : "var(--accent-soft)",
-                border: `1px solid ${runningStitchStage ? "var(--border-subtle)" : "var(--accent-soft)"}`,
-                color: runningStitchStage ? "var(--text-muted)" : "var(--accent-hover)",
-                borderRadius: 6,
-                fontWeight: 600,
-                fontSize: 13,
-                cursor: runningStitchStage || !manifest ? "not-allowed" : "pointer",
-                whiteSpace: "nowrap",
-              }}
+            <div
+              style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}
+              title="Pick which design-AI provider runs at the HANDOFF stage. Stitch produces a paste-into-Stitch prompt; CoDesign emits parametric HTML directly."
             >
-              {runningStitchStage ? "Generating..." : "Generate stitch handoff"}
-            </button>
+              <select
+                value={handoffSource}
+                onChange={(e) =>
+                  handleHandoffSourceChange(e.target.value as "stitch" | "codesign")
+                }
+                disabled={savingHandoffSource || !manifest}
+                aria-label="Handoff provider"
+                style={{
+                  padding: "8px 10px",
+                  background: "var(--bg-elevated)",
+                  border: "1px solid var(--border-subtle)",
+                  color: "var(--text-primary)",
+                  borderRadius: 6,
+                  fontWeight: 500,
+                  fontSize: 13,
+                  cursor: savingHandoffSource || !manifest ? "not-allowed" : "pointer",
+                }}
+              >
+                <option value="codesign">CoDesign</option>
+                <option value="stitch">Stitch</option>
+              </select>
+              <button
+                type="button"
+                onClick={handleRunStitchStage}
+                disabled={runningStitchStage || savingHandoffSource || !manifest}
+                title={
+                  handoffSource === "stitch"
+                    ? "Generate Stitch / v0 / Figma Make handoff prompt from brand-brief.json"
+                    : "Generate Open CoDesign-shaped HandoffExport (parametric sliders + HTML scaffold) from brand-brief.json"
+                }
+                style={{
+                  padding: "8px 14px",
+                  background: runningStitchStage ? "var(--bg-elevated)" : "var(--accent-soft)",
+                  border: `1px solid ${runningStitchStage ? "var(--border-subtle)" : "var(--accent-soft)"}`,
+                  color: runningStitchStage ? "var(--text-muted)" : "var(--accent-hover)",
+                  borderRadius: 6,
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor:
+                    runningStitchStage || savingHandoffSource || !manifest
+                      ? "not-allowed"
+                      : "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {runningStitchStage
+                  ? "Generating..."
+                  : `Run handoff (${handoffSource === "stitch" ? "Stitch" : "CoDesign"})`}
+              </button>
+            </div>
             <button
               type="button"
               onClick={handleRunWireframeStage}
@@ -1258,6 +1364,7 @@ export function ScreensTab({ venture, manifest, onAdvanceStage }: Props) {
           onClose={() => setDistillDraft(null)}
         />
       )}
+      </div>
     </div>
   );
 }

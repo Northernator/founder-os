@@ -1859,6 +1859,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
             venture={venture}
             manifest={manifest}
             onAdvanceStage={handleStageChange}
+            onManifestUpdate={handleManifestUpdate}
           />
         )}
         {tab === "overview" && (
@@ -2213,7 +2214,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
                   UK_SETUP: "uk-setup",
                   PRODUCT_SPEC: "spec",
                   WIREFRAME: "screens",
-                  STITCH: "screens",
+                  HANDOFF: "screens",
                   AUDIT: "audit",
                   BUILD: "audit",
                   // FINANCE + LAUNCH have no dedicated tab yet -- the

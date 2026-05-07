@@ -95,7 +95,7 @@ const STAGE_ORDER: StageName[] = [
   "WIREFRAME",
   "UK_SETUP",
   "FINANCE",
-  "STITCH",
+  "HANDOFF",
   "AUDIT",
   "BUILD",
   "LAUNCH",
@@ -180,7 +180,7 @@ async function runOne(stage: StageName, opts: RunAllStagesOpts): Promise<StageOu
       const out = await runUkSetupStage({ venture, manifest, force: false });
       return interpret(stage, out.result);
     }
-    case "STITCH": {
+    case "HANDOFF": {
       const out = await runStitchStage({ venture, manifest, force: false });
       return interpret(stage, out.result);
     }
