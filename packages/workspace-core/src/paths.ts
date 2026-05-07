@@ -160,6 +160,15 @@ export function getProductSpecMarkdownPath(ventureRoot: string): string {
 export function getStitchDir(ventureRoot: string): string {
   return join(ventureRoot, STAGE_DIRS.product, "stitch");
 }
+/**
+ * The normalized handoff export written by the HANDOFF stage,
+ * regardless of provider. Both Stitch and CoDesign emit a
+ * HandoffExport-shaped JSON here. BUILD reads this file in slice 7+
+ * of the dual-handoff arc.
+ */
+export function getHandoffExportPath(ventureRoot: string): string {
+  return join(getStitchDir(ventureRoot), "handoff-export.json");
+}
 export function getWireframesDir(ventureRoot: string): string {
   return join(ventureRoot, STAGE_DIRS.product, "wireframes");
 }

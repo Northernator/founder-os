@@ -20,6 +20,10 @@ interface PerTypeConfig {
 
 const CONFIG: Record<HandoffRequestType, PerTypeConfig> = {
   BUILD_FROM_BRIEF: { outputSubdir: "07_build" },
+  // Slice 7 of the dual-handoff arc -- bundle carries a normalized
+  // HandoffExport (Stitch or CoDesign). Same output subdir + token
+  // budget as the legacy stitch path.
+  BUILD_FROM_HANDOFF_EXPORT: { outputSubdir: "07_build", maxTokens: 16_000 },
   BUILD_FROM_STITCH_EXPORT: { outputSubdir: "07_build", maxTokens: 16_000 },
   GENERATE_CODE_WIKI: { outputSubdir: "" /* writes under docs/wiki/ from prompt */ },
   GENERATE_TRUTH_LAYER: { outputSubdir: "" },
@@ -43,6 +47,7 @@ function makeRunner(type: HandoffRequestType) {
 
 export const RUNNERS: HandoffRunnerMap = {
   BUILD_FROM_BRIEF: makeRunner("BUILD_FROM_BRIEF"),
+  BUILD_FROM_HANDOFF_EXPORT: makeRunner("BUILD_FROM_HANDOFF_EXPORT"),
   BUILD_FROM_STITCH_EXPORT: makeRunner("BUILD_FROM_STITCH_EXPORT"),
   GENERATE_CODE_WIKI: makeRunner("GENERATE_CODE_WIKI"),
   GENERATE_TRUTH_LAYER: makeRunner("GENERATE_TRUTH_LAYER"),

@@ -18,7 +18,7 @@
  *  - Stitch pack (preconditions) at 06_product/stitch/
  *  - Product spec (preconditions) at 06_product/specs/product-spec.md
  *  - All checked by validate(); missing prereqs short-circuit the run
- *    with a clear "run STITCH stage first" message.
+ *    with a clear "run HANDOFF stage first" message.
  *
  * BUILD is NOT in DEFAULT_REVIEW_GATES. When opted in, requiredApproval
  * is "security" -- the build is what's about to ship to users.
@@ -35,6 +35,7 @@ import type { Filesystem } from "@founder-os/pipeline-runner";
 import { createBuildHandoffStep } from "@founder-os/pipeline-runner";
 import {
   getBrandKitDir,
+  getHandoffExportPath,
   getHandoffInboxPath,
   getProductSpecMarkdownPath,
   getStitchDir,
@@ -71,9 +72,17 @@ export class BuildStageRunner extends BaseStageRunner implements StageRunner {
     if (!(await this.fs.exists(briefPath))) {
       missing.push(`brand-brief at ${briefPath} -- run BRAND stage first`);
     }
-    const stitchPromptPath = `${getStitchDir(this.ventureRoot)}/stitch-prompt.md`;
-    if (!(await this.fs.exists(stitchPromptPath))) {
-      missing.push(`stitch pack at ${getStitchDir(this.ventureRoot)} -- run STITCH stage first`);
+    // Slice 7 of dual-handoff arc: BUILD now requires the normalized
+    // handoff-export.json (written by both Stitch and CoDesign
+    // providers) instead of the Stitch-only stitch-prompt.md. Missing
+    // export means HANDOFF hasn't run yet -- the user picks the
+    // provider via manifest.handoffSource and runs HANDOFF, both of
+    // which now produce handoff-export.json.
+    const handoffExportPath = getHandoffExportPath(this.ventureRoot);
+    if (!(await this.fs.exists(handoffExportPath))) {
+      missing.push(
+        `handoff export at ${handoffExportPath} -- run HANDOFF stage first`
+      );
     }
     const specPath = getProductSpecMarkdownPath(this.ventureRoot);
     if (!(await this.fs.exists(specPath))) {

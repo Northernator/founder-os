@@ -44,6 +44,40 @@ spec. Convert the export into working app code:
 ${COMMON_OUTPUT_RULES}
 `.trim();
 
+export const PROMPT_BUILD_FROM_HANDOFF_EXPORT = `
+You are the Founder OS builder agent.
+The bundle (BUILD_FROM_HANDOFF_EXPORT) carries a normalized HandoffExport
+in payload.handoffExport. The export's "source" field tells you which
+provider produced it:
+
+- source === "codesign": payload.handoffExport.html holds a generated
+  HTML scaffold and payload.handoffExport.parameters is a record of
+  parametric sliders (each entry has label, type, value, optional
+  min/max/step, and a cssVar like "--color-primary"). Treat the sliders
+  as adjustable design knobs -- emit CSS variables matching their
+  cssVar names so a future UI can drive them at runtime. Use the html
+  scaffold as the structural starting point; flesh out interactions and
+  data-binding per the spec.
+
+- source === "stitch": payload.handoffExport.prompt holds a markdown
+  design-AI prompt the founder would normally paste into Stitch / v0 /
+  Figma Make. Treat the prompt as the design intent and produce code
+  that would satisfy it. payload.handoffExport.html may be undefined;
+  if so, generate the HTML yourself from the prompt + spec.
+
+Both branches: payload.handoffExport.tokens carries colors / typography
+(may include extra keys like surface/text/textMuted via passthrough).
+Keep these as the design tokens of record -- prefer them over anything
+inferred from the prompt or scaffold.
+
+The legacy payload keys (brandBriefPath, specPath, stitchConfigPath)
+are still present for compatibility with brief-only workflows; consult
+them if the handoffExport doesn't answer a question.
+
+Produce a runnable app skeleton + the implemented screens.
+${COMMON_OUTPUT_RULES}
+`.trim();
+
 export const PROMPT_GENERATE_CODE_WIKI = `
 You are the Founder OS Wiki agent.
 The bundle (GENERATE_CODE_WIKI) targets the venture's codebase. Walk it
@@ -105,6 +139,7 @@ import type { HandoffRequestType } from "@founder-os/handoff-contract";
 
 export const PROMPTS_BY_TYPE: Record<HandoffRequestType, string> = {
   BUILD_FROM_BRIEF: PROMPT_BUILD_FROM_BRIEF,
+  BUILD_FROM_HANDOFF_EXPORT: PROMPT_BUILD_FROM_HANDOFF_EXPORT,
   BUILD_FROM_STITCH_EXPORT: PROMPT_BUILD_FROM_STITCH_EXPORT,
   GENERATE_CODE_WIKI: PROMPT_GENERATE_CODE_WIKI,
   GENERATE_TRUTH_LAYER: PROMPT_GENERATE_TRUTH_LAYER,
