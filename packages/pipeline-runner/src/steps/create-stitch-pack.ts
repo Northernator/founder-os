@@ -6,6 +6,7 @@ import {
   ScreensCanvasSchema,
   type ShellType,
 } from "@founder-os/domain";
+import type { DesignTokens, HandoffExport } from "@founder-os/handoff-contract";
 /**
  * create-stitch-pack — emits the design-to-code prompt + config that
  * the founder feeds into Stitch / v0 / Figma Make to generate UI.
@@ -130,8 +131,54 @@ export async function createStitchPackStep(
   };
   await ctx.fs.writeFile(`${stitchDir}/stitch-config.json`, JSON.stringify(stitchConfig, null, 2));
 
+  // Normalized HandoffExport (slice 3 of dual-handoff arc) -- the
+  // file BUILD will eventually consume regardless of provider. For
+  // Stitch, html is undefined (the founder runs the prompt in an
+  // external tool); prompt carries the markdown, tokens are
+  // extracted from the brand brief so BUILD can theme without
+  // re-reading the brief.
+  const handoffExport: HandoffExport = {
+    source: "stitch",
+    schemaVersion: 1,
+    prompt: stitchPrompt,
+    tokens: extractDesignTokens(ctx.brief),
+    generatedAt: stitchConfig.generatedAt,
+    providerVersion: "stitch@v2",
+    notes: `Generated from ${screens.length} screen(s). Run the prompt in Stitch / v0 / Figma Make and paste the resulting HTML back into handoff-export.json.html when ready.`,
+  };
+  await ctx.fs.writeFile(
+    `${stitchDir}/handoff-export.json`,
+    JSON.stringify(handoffExport, null, 2)
+  );
+
   log.info(`Stitch pack created at ${stitchDir} with ${screens.length} screen(s)`);
   return { status: "done", producedArtifactIds: [] };
+}
+
+/**
+ * Extract DesignTokens from a BrandBrief so BUILD has a structured
+ * theme without re-reading the brief. Stitch doesn't generate tokens
+ * itself -- this is a brief-side extraction so both providers can
+ * surface tokens through the same HandoffExport.tokens field.
+ */
+function extractDesignTokens(brief: BrandBrief): DesignTokens {
+  return {
+    colors: {
+      primary: brief.colorPalette.primary,
+      secondary: brief.colorPalette.secondary,
+      accent: brief.colorPalette.accent,
+      background: brief.colorPalette.background,
+    },
+    typography: {
+      fontFamily: brief.typography.bodyFont,
+      scale: {
+        heading: brief.typography.headingFont,
+        headingWeight: brief.typography.headingWeight,
+        body: brief.typography.bodyFont,
+        bodyWeight: brief.typography.bodyWeight,
+      },
+    },
+  };
 }
 
 /**
