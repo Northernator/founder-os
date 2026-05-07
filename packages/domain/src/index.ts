@@ -76,6 +76,15 @@ export const VentureManifestSchema = z.object({
    * (see PipelineConfigSchema). Existing manifests parse unchanged.
    */
   pipeline: PipelineConfigSchema.optional(),
+  /**
+   * Which provider runs at the HANDOFF stage. "stitch" routes to the
+   * Google Stitch / v0 / Figma Make prompt+config flow; "codesign"
+   * routes to Open CoDesign's parametric output. Defaults to "codesign"
+   * for new ventures (see runner-side fallback) -- existing manifests
+   * without this field are treated as "codesign" too. Mirrored as
+   * HandoffSource in @founder-os/handoff-contract.
+   */
+  handoffSource: z.enum(["stitch", "codesign"]).optional(),
 });
 export type VentureManifest = z.infer<typeof VentureManifestSchema>;
 
