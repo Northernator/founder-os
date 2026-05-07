@@ -149,7 +149,7 @@ export function FailedRunBanner({
             wordBreak: "break-word",
           }}
         >
-          {entry.error.code}: {entry.error.message}
+          {entry.errorCode}: {entry.errorMessage}
           <span style={{ marginLeft: 8, color: "var(--text-tertiary)" }}>
             run {entry.runId} -- {new Date(entry.failedAt).toLocaleString()}
           </span>

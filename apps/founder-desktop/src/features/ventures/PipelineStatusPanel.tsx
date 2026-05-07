@@ -264,7 +264,7 @@ function PipelineStatusRow({
               fontWeight: 600,
               whiteSpace: "nowrap",
             }}
-            title={`${row.latestFailedRun.error.code}: ${row.latestFailedRun.error.message} (run ${row.latestFailedRun.runId} at ${row.latestFailedRun.failedAt})`}
+            title={`${row.latestFailedRun.errorCode}: ${row.latestFailedRun.errorMessage} (run ${row.latestFailedRun.runId} at ${row.latestFailedRun.failedAt})`}
           >
             last run failed
           </span>
@@ -326,7 +326,7 @@ function PipelineStatusRow({
               fontWeight: 600,
               whiteSpace: "nowrap",
             }}
-            title={`${row.latestFailedRun.error.code}: ${row.latestFailedRun.error.message} (run ${row.latestFailedRun.runId} at ${row.latestFailedRun.failedAt})`}
+            title={`${row.latestFailedRun.errorCode}: ${row.latestFailedRun.errorMessage} (run ${row.latestFailedRun.runId} at ${row.latestFailedRun.failedAt})`}
           >
             last run failed
           </span>

@@ -1446,7 +1446,7 @@ export function AuditTab({ venture, manifest, ventureId, ventureRoot, refreshTok
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      {failedAuditRun && (
+      {ventureRoot && failedAuditRun && (
         <div style={{ padding: "0 28px" }}>
           <FailedRunBanner
             label="audit"
@@ -1458,7 +1458,7 @@ export function AuditTab({ venture, manifest, ventureId, ventureRoot, refreshTok
           />
         </div>
       )}
-      {failedBuildRun && (
+      {ventureRoot && failedBuildRun && (
         <div style={{ padding: "0 28px" }}>
           <FailedRunBanner
             label="build"
@@ -1470,7 +1470,7 @@ export function AuditTab({ venture, manifest, ventureId, ventureRoot, refreshTok
           />
         </div>
       )}
-      {failedFinanceRun && (
+      {ventureRoot && failedFinanceRun && (
         <div style={{ padding: "0 28px" }}>
           <FailedRunBanner
             label="finance"
@@ -1482,7 +1482,7 @@ export function AuditTab({ venture, manifest, ventureId, ventureRoot, refreshTok
           />
         </div>
       )}
-      {failedLaunchRun && (
+      {ventureRoot && failedLaunchRun && (
         <div style={{ padding: "0 28px" }}>
           <FailedRunBanner
             label="launch"
