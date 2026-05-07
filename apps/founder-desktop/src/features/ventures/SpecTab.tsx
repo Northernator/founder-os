@@ -297,6 +297,25 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
     };
   }, [canvas, canvasPath]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  // Failed-run lookup. Lives above the early return so the hook order
+  // is stable -- the loading/canvas/manifest gate flips between
+  // renders and React's rules-of-hooks tripped when this useEffect was
+  // below the early return.
+  useEffect(() => {
+    let cancelled = false;
+    findLatestFailedRunForStage(venture.rootPath, "PRODUCT_SPEC")
+      .then((entry) => {
+        if (!cancelled) setFailedProductRun(entry);
+      })
+      .catch(() => {
+        if (!cancelled) setFailedProductRun(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venture.rootPath, runningProductStage]);
+
   if (loading || !canvas || !manifest) {
     return <div style={{ padding: 28, color: "var(--text-tertiary)" }}>Loading Spec canvas…</div>;
   }
@@ -371,20 +390,9 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
     }
   };
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
-  useEffect(() => {
-    let cancelled = false;
-    findLatestFailedRunForStage(venture.rootPath, "PRODUCT_SPEC")
-      .then((entry) => {
-        if (!cancelled) setFailedProductRun(entry);
-      })
-      .catch(() => {
-        if (!cancelled) setFailedProductRun(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [venture.rootPath, runningProductStage]);
+  // (failed-run lookup useEffect moved above the early return -- see
+  // the note up there. Keeping this comment so future-me doesn't try
+  // to re-add it here and reintroduce the rules-of-hooks violation.)
 
   const handleAdvance = async () => {
     if (!onAdvanceStage || !specComplete || advancing) return;
@@ -973,14 +981,32 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
   // ─────────────────────────────────────────────────────────────
 
   return (
+    // Outer scrolling panel mirrors BrandTab's working layout: the
+    // VentureDashboard tab-content wrapper is `flex: 1, overflow: hidden`,
+    // so each tab has to provide its own height/overflow. Without the
+    // outer panel, percentage heights on children don't resolve and the
+    // rainbow theme's conic-gradient paints through the grid gaps.
+    //
+    // data-fos-panel + bg-panel: under the rainbow theme this gets the
+    // frosted-glass backdrop-filter (selector lives in styles/themes.css).
+    // Under dark/grey themes it's just a normal panel background.
     <div
+      data-fos-panel
       style={{
-        padding: 28,
-        display: "grid",
-        gridTemplateColumns: "1fr 320px",
-        gap: 24,
+        height: "100%",
+        overflow: "auto",
+        background: "var(--bg-panel)",
+        boxSizing: "border-box",
       }}
     >
+      <div
+        style={{
+          padding: 28,
+          display: "grid",
+          gridTemplateColumns: "1fr 320px",
+          gap: 24,
+        }}
+      >
       {failedProductRun && (
         <FailedRunBanner
           label="product"
@@ -1400,6 +1426,7 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
           onClose={() => setDistillDraft(null)}
         />
       )}
+      </div>
     </div>
   );
 }

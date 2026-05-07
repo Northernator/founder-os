@@ -328,6 +328,43 @@ export async function streamChat(opts: StreamChatOptions): Promise<string> {
 }
 
 /**
+ * True if this LlmSetting row has working credentials.
+ *
+ *   - Subscription-mode providers (Claude Code, Gemini CLI, etc.) delegate
+ *     auth to a local CLI; we can't validate the CLI from here, so we
+ *     accept the row at provider-pick time and let `cli_agent_stream`
+ *     surface a clear error at send time if the CLI isn't installed or
+ *     signed in.
+ *   - API-key-mode providers need a non-empty key when their catalog
+ *     entry says one is required.
+ *
+ * Exported so callers that hard-pin a specific provider (e.g. BrandTab's
+ * Gemini-only concept handlers) can fail clearly before kicking off a
+ * stream rather than silently falling back to the active provider.
+ */
+export function isLlmSettingUsable(s: db.LlmSetting): boolean {
+  if (!s.enabled) return false;
+  if (s.mode === "subscription") {
+    return isCliSubscriptionProvider(s.provider);
+  }
+  const catalog = getProvider(s.provider as LlmProviderId);
+  if (catalog.requiresApiKey && (!s.apiKey || s.apiKey.trim().length === 0)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * True if a specific provider has working credentials right now.
+ * Pure read of the LLM settings table; no network calls.
+ */
+export async function isProviderUsable(provider: LlmProviderId): Promise<boolean> {
+  const settings = await db.listLlmSettings();
+  const setting = settings.find((s) => s.provider === provider);
+  return setting ? isLlmSettingUsable(setting) : false;
+}
+
+/**
  * Pick the provider to use for a given send. Returns null if none is usable.
  *
  * Preference order (first match wins):
@@ -352,23 +389,7 @@ export async function pickActiveProvider(ventureId?: string): Promise<LlmProvide
     db.getAppSetting(db.ACTIVE_PROVIDER_KEY),
     db.listLlmSettings(),
   ]);
-  const usable = (s: db.LlmSetting): boolean => {
-    if (!s.enabled) return false;
-    // Subscription mode delegates auth to the vendor CLI; there's no
-    // API key to validate here. `cli_agent_stream` will surface a
-    // clear error at send time if the CLI isn't installed or signed
-    // in, which is the right place for that diagnostic (we don't
-    // want to probe every CLI on every provider pick just to filter
-    // the list).
-    if (s.mode === "subscription") {
-      return isCliSubscriptionProvider(s.provider);
-    }
-    const catalog = getProvider(s.provider as LlmProviderId);
-    if (catalog.requiresApiKey && (!s.apiKey || s.apiKey.trim().length === 0)) {
-      return false;
-    }
-    return true;
-  };
+  const usable = isLlmSettingUsable;
 
   // 1. Per-venture override wins if it points at a usable provider.
   if (venturePref) {

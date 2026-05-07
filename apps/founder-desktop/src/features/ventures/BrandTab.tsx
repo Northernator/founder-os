@@ -79,7 +79,8 @@ import {
   brandNameUpsert,
 } from "../../lib/brand-names.js";
 import { findLatestFailedRunForStage } from "../../lib/failed-runs.js";
-import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
+import type { LlmProviderId } from "@founder-os/llm-providers";
+import { isProviderUsable, pickActiveProvider, streamChat } from "../../lib/llm-client.js";
 import {
   PRESET_BY_ID,
   PRESET_GROUPS,
@@ -1750,12 +1751,17 @@ Rules:
     }
     setGeneratingConcepts(true);
     try {
-      const providerId = await pickActiveProvider(venture.id);
-      if (!providerId) {
+      // Section 3 ("Logo Pack & Concepts") is hard-pinned to Gemini --
+      // matches BrandChatPanel which is also Gemini-pinned, so all the
+      // brand-stage AI output stays consistent regardless of the
+      // venture's active provider.
+      const providerId: LlmProviderId = "gemini";
+      if (!(await isProviderUsable(providerId))) {
         pushToast({
           kind: "warn",
-          message: "No AI provider configured",
-          detail: "Open Options to add an API key.",
+          message: "Gemini not configured",
+          detail:
+            "Concept briefs are pinned to Gemini for consistency with Brand Chat. Add a Gemini API key in Options to enable.",
         });
         return;
       }
@@ -1907,12 +1913,16 @@ Rules:
     const controller = regenTask.begin();
     setRegeneratingConcept(filename);
     try {
-      const providerId = await pickActiveProvider(venture.id);
-      if (!providerId) {
+      // Pinned to Gemini for parity with the bulk handleGenerateConcepts
+      // path -- both surfaces in section 3 use the same provider so
+      // re-runs don't drift in style.
+      const providerId: LlmProviderId = "gemini";
+      if (!(await isProviderUsable(providerId))) {
         pushToast({
           kind: "warn",
-          message: "No AI provider configured",
-          detail: "Open Options to add an API key.",
+          message: "Gemini not configured",
+          detail:
+            "Concept briefs are pinned to Gemini. Add a Gemini API key in Options to enable.",
         });
         return;
       }
