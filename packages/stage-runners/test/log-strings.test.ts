@@ -70,8 +70,11 @@ vi.mock("@founder-os/pipeline-runner", () => ({
   // Audit: returns clean findings so the "audit step finished" log
   // fires (success path -- no critical/high flagged).
   auditVentureStep: async () => ({ findings: [], status: "done" }),
-  // Stitch + Build: single step each.
-  createStitchPackStep: async () => ({ status: "done" }),
+  // Stitch + Build: single step each. CoDesign added in slice 4 of
+  // the dual-handoff arc -- HandoffStageRunner dispatches to one of
+  // the two depending on manifest.handoffSource.
+  createStitchPackStep: async () => ({ status: "done", producedArtifactIds: [] }),
+  createCodesignPackStep: async () => ({ status: "done", producedArtifactIds: [] }),
   createBuildHandoffStep: async () => ({
     status: "done",
     bundle: { runId: "test-bundle", type: "build" },
@@ -329,7 +332,7 @@ describe("AuditStageRunner emits 'audit step finished'", () => {
   });
 });
 
-describe("StitchStageRunner emits 'create-stitch-pack finished'", () => {
+describe("HandoffStageRunner (Stitch path) emits 'create-stitch-pack finished'", () => {
   it("the helper-parsed string appears in logs on success", async () => {
     const fs = new InMemoryFs();
     // Stitch's validate() checks brand-brief.json exists; we don't
@@ -337,12 +340,53 @@ describe("StitchStageRunner emits 'create-stitch-pack finished'", () => {
     // matches the precondition for completeness.
     fs.files.set("v/03_brand/brand-kit/brand-brief.json", "{}");
     const runner = new StitchStageRunner({
-      manifest: makeManifest(),
+      manifest: makeManifest({ handoffSource: "stitch" }),
       ventureRoot: "/v",
       fs,
     });
     const result = await runner.run();
     expect(messages(result.logs)).toContain("create-stitch-pack finished");
+  });
+});
+
+describe("HandoffStageRunner (CoDesign path) emits 'create-codesign-pack finished'", () => {
+  it("default provider is codesign and the helper-parsed string appears in logs", async () => {
+    const fs = new InMemoryFs();
+    fs.files.set("v/03_brand/brand-kit/brand-brief.json", "{}");
+    // No handoffSource override -- the runner defaults to "codesign".
+    const runner = new StitchStageRunner({
+      manifest: makeManifest(),
+      ventureRoot: "/v",
+      fs,
+    });
+    const result = await runner.run();
+    expect(messages(result.logs)).toContain("create-codesign-pack finished");
+  });
+});
+
+describe("HandoffStageRunner emits 'HANDOFF stage starting' on every run", () => {
+  it("the start-message fires regardless of provider so spinner state can key on it", async () => {
+    // Stitch path
+    const fsStitch = new InMemoryFs();
+    fsStitch.files.set("v/03_brand/brand-kit/brand-brief.json", "{}");
+    const stitchRunner = new StitchStageRunner({
+      manifest: makeManifest({ handoffSource: "stitch" }),
+      ventureRoot: "/v",
+      fs: fsStitch,
+    });
+    const stitchResult = await stitchRunner.run();
+    expect(messages(stitchResult.logs)).toContain("HANDOFF stage starting");
+
+    // CoDesign path (default)
+    const fsCodesign = new InMemoryFs();
+    fsCodesign.files.set("v/03_brand/brand-kit/brand-brief.json", "{}");
+    const codesignRunner = new StitchStageRunner({
+      manifest: makeManifest(),
+      ventureRoot: "/v",
+      fs: fsCodesign,
+    });
+    const codesignResult = await codesignRunner.run();
+    expect(messages(codesignResult.logs)).toContain("HANDOFF stage starting");
   });
 });
 

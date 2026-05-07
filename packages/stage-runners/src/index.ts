@@ -26,7 +26,17 @@ export { BrandStageRunner, type BrandStageRunnerOpts } from "./runners/brand-run
 export { ProductStageRunner, type ProductStageRunnerOpts } from "./runners/product-runner.js";
 export { UkSetupStageRunner, type UkSetupStageRunnerOpts } from "./runners/uk-setup-runner.js";
 export { AuditStageRunner, type AuditStageRunnerOpts } from "./runners/audit-runner.js";
-export { StitchStageRunner, type StitchStageRunnerOpts } from "./runners/stitch-runner.js";
+export {
+  HandoffStageRunner,
+  type HandoffStageRunnerOpts,
+} from "./runners/handoff-runner.js";
+// Back-compat alias for the pre-slice-5 name. Existing consumers
+// (apps/founder-desktop/src/lib/run-stitch-stage.ts, log-strings test)
+// continue to work; new code should import HandoffStageRunner.
+export {
+  HandoffStageRunner as StitchStageRunner,
+  type HandoffStageRunnerOpts as StitchStageRunnerOpts,
+} from "./runners/handoff-runner.js";
 export { BuildStageRunner, type BuildStageRunnerOpts } from "./runners/build-runner.js";
 export {
   ValidationStageRunner,
