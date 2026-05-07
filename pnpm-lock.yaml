@@ -517,6 +517,28 @@ importers:
         specifier: ^22.15.3
         version: 22.19.17
 
+  packages/media-core:
+    dependencies:
+      '@founder-os/domain':
+        specifier: workspace:*
+        version: link:../domain
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+
+  packages/media-providers:
+    dependencies:
+      '@founder-os/media-core':
+        specifier: workspace:*
+        version: link:../media-core
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@22.19.17)
+
   packages/mission-control-protocol:
     dependencies:
       '@founder-os/agent-registry':
