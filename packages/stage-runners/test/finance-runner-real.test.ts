@@ -31,6 +31,11 @@ const { PipelineOrchestrator } = await import("../src/orchestrator.js");
 const STATE = "v/.founder/state";
 
 function defaultStepResult(overrides: Record<string, unknown> = {}) {
+  // Overrides apply at the TOP level so callers can clobber
+  // canvasStatus / status / etc. The previous implementation spread
+  // overrides into `plan` which silently dropped any top-level
+  // override -- caught by typecheck-after-cache-bust during the
+  // dual-handoff arc.
   return {
     status: "done",
     canvasStatus: "scaffolded",
@@ -90,8 +95,8 @@ function defaultStepResult(overrides: Record<string, unknown> = {}) {
       assumptions: [],
       sources: ["finance-canvas.json"],
       generationSource: "deterministic",
-      ...overrides,
     },
+    ...overrides,
   };
 }
 

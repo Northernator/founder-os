@@ -1,9 +1,16 @@
 /**
  * run-stitch-stage.ts
  *
- * StitchStageRunner adoption helper. Wraps createStitchPackStep --
- * generates the design-AI handoff (Stitch / v0 / Figma Make prompts)
- * from the BrandBrief on disk. No LLM. Idempotent at the file level.
+ * HANDOFF stage adoption helper (kept under the "stitch" filename for
+ * back-compat with ScreensTab and any other call-site that imports
+ * `runStitchStage` -- slice 5/6 of the dual-handoff arc).
+ *
+ * Wraps HandoffStageRunner (exported from stage-runners as
+ * StitchStageRunner alias). The runner reads
+ * manifest.handoffSource ("stitch" | "codesign") and dispatches to
+ * createStitchPackStep or createCodesignPackStep accordingly. This
+ * helper doesn't need to know which provider ran -- it just inspects
+ * the resulting logs.
  *
  * Preconditions: 03_brand/brand-kit/brand-brief.json must exist
  * (written by BrandStageRunner). The runner's validate() surfaces
@@ -22,6 +29,10 @@ export type RunStitchStageOpts = {
 
 export type RunStitchStageResult = {
   result: StageRunResult;
+  // The "stitch" key is kept for back-compat with ScreensTab. Reads
+  // "ok" when EITHER provider's finished-log appeared, so the
+  // success-toast still fires whether the venture ran Stitch or
+  // CoDesign.
   steps: { stitch: "ok" | "missing" };
 };
 
@@ -40,7 +51,16 @@ export async function runStitchStage(opts: RunStitchStageOpts): Promise<RunStitc
   return { result, steps: deriveSteps(result.logs) };
 }
 
+// Either provider's finished-log counts as success. The exact strings
+// are pinned by the log-strings drift test in
+// packages/stage-runners/test/log-strings.test.ts so a silent rename
+// in the runner / step would fail CI.
+const HANDOFF_SUCCESS_LOGS = new Set([
+  "create-stitch-pack finished",
+  "create-codesign-pack finished",
+]);
+
 function deriveSteps(logs: LogEntry[]): { stitch: "ok" | "missing" } {
-  for (const e of logs) if (e.message === "create-stitch-pack finished") return { stitch: "ok" };
+  for (const e of logs) if (HANDOFF_SUCCESS_LOGS.has(e.message)) return { stitch: "ok" };
   return { stitch: "missing" };
 }

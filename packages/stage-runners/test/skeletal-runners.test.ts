@@ -1,5 +1,5 @@
 /**
- * skeletal-runners.test.ts -- intentionally empty.
+ * skeletal-runners.test.ts -- placeholder for future skeletal runners.
  *
  * All 4 originally-skeletal stage runners (Validation / Wireframe /
  * Finance / Launch) have been promoted to real pipeline-runner-backed
@@ -9,14 +9,20 @@
  *   - finance-runner-real.test.ts
  *   - launch-runner-real.test.ts
  *
- * This file is kept as an empty placeholder rather than deleted so
- * future regressions that re-introduce a skeletal runner know where
- * to land their tests. Vitest is happy with a file that has no
- * `describe` / `it` calls -- nothing to run.
+ * This file is kept as a placeholder rather than deleted so future
+ * regressions that re-introduce a skeletal runner know where to land
+ * their tests. Vitest 1.6.x fails files that have ZERO `describe`/`it`
+ * calls ("No test suite found") so we keep one `it.todo` to register
+ * a ghost test -- it shows up as "todo" in the output, doesn't run,
+ * and keeps the file from blowing up the suite.
  *
- * If you\'re adding a new stage runner that intentionally ships as a
+ * If you're adding a new stage runner that intentionally ships as a
  * placeholder before its underlying step lands, restore the
  * historical skeletal-runner test pattern here. Otherwise leave this
  * file alone.
  */
-export {};
+import { describe, it } from "vitest";
+
+describe("skeletal-runners (placeholder)", () => {
+  it.todo("re-add skeletal-runner tests if a new placeholder runner ships");
+});
