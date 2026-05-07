@@ -3,6 +3,15 @@ import { ArtifactRefSchema } from "@founder-os/domain";
 import { z } from "zod";
 
 export const HandoffRequestTypeSchema = z.enum([
+  // Provider-agnostic build handoff (slice 7 of dual-handoff arc).
+  // Bundle payload includes the parsed HandoffExport so VS Code sees
+  // adjustable knobs (parameters) when CoDesign produced the export,
+  // and the prompt when Stitch did. Prefer this over BUILD_FROM_STITCH_EXPORT
+  // for any new bundle.
+  "BUILD_FROM_HANDOFF_EXPORT",
+  // Pre-slice-7 alias. Kept so old bundles in handoffs/inbox/ still
+  // parse and so the cowork system-prompts registry (apps/founder-cowork)
+  // doesn't break. New bundles should use BUILD_FROM_HANDOFF_EXPORT.
   "BUILD_FROM_STITCH_EXPORT",
   "BUILD_FROM_BRIEF",
   "GENERATE_CODE_WIKI",
@@ -55,6 +64,73 @@ export const HandoffResultSchema = z.object({
 });
 export type HandoffResult = z.infer<typeof HandoffResultSchema>;
 
+// --- Handoff export (provider-emitted artifact consumed by BUILD) ---
+//
+// Both Stitch and Open CoDesign emit a single normalized shape so BUILD doesn't
+// have to know which provider produced the artifact. CoDesign populates
+// `parameters` (parametric sliders) and `tokens`; Stitch leaves them undefined.
+
+export const HandoffSourceSchema = z.enum(["stitch", "codesign"]);
+export type HandoffSource = z.infer<typeof HandoffSourceSchema>;
+
+export const SliderParamSchema = z.object({
+  label: z.string(),
+  description: z.string().optional(),
+  type: z.enum(["number", "color", "select"]).default("number"),
+  value: z.union([z.number(), z.string()]),
+  min: z.number().optional(),
+  max: z.number().optional(),
+  step: z.number().optional(),
+  options: z.array(z.string()).optional(),
+  // CSS variable this slider drives, e.g. "--brand-primary". Optional so
+  // non-CSS parameters (logical knobs) can also flow through.
+  cssVar: z.string().optional(),
+});
+export type SliderParam = z.infer<typeof SliderParamSchema>;
+
+export const DesignTokensSchema = z
+  .object({
+    colors: z.record(z.string()).optional(),
+    typography: z
+      .object({
+        fontFamily: z.string().optional(),
+        scale: z.record(z.union([z.number(), z.string()])).optional(),
+      })
+      .optional(),
+    spacing: z.record(z.union([z.number(), z.string()])).optional(),
+    radii: z.record(z.union([z.number(), z.string()])).optional(),
+    shadows: z.record(z.string()).optional(),
+  })
+  .passthrough();
+export type DesignTokens = z.infer<typeof DesignTokensSchema>;
+
+export const HandoffExportSchema = z
+  .object({
+    source: HandoffSourceSchema,
+    schemaVersion: z.literal(1).default(1),
+    // Generated UI markup (CoDesign emits this directly; Stitch leaves it
+    // undefined unless the founder pastes the result of running the prompt
+    // back into the venture). Optional so the artifact is well-formed even
+    // for prompt-only handoffs.
+    html: z.string().optional(),
+    // Design-AI prompt -- Stitch emits this; CoDesign may set it for
+    // generation notes / hint text but typically leaves it undefined.
+    prompt: z.string().optional(),
+    // Parametric sliders -- emitted by CoDesign, omitted by Stitch.
+    parameters: z.record(SliderParamSchema).optional(),
+    tokens: DesignTokensSchema.optional(),
+    generatedAt: z.string(),
+    // Provider tool version for diagnostics, e.g. "codesign@0.4.2" or "stitch@v2".
+    providerVersion: z.string().optional(),
+    notes: z.string().optional(),
+  })
+  // BUILD treats html-or-prompt as the minimum viable payload. A Stitch
+  // export with no prompt or a CoDesign export with no html is a bug.
+  .refine((e) => Boolean(e.html?.trim() || e.prompt?.trim()), {
+    message: "HandoffExport must have either html or prompt populated",
+  });
+export type HandoffExport = z.infer<typeof HandoffExportSchema>;
+
 // --- Validation helpers (the whole point of this package) ---
 
 export function parseBundle(raw: unknown): HandoffBundle {
@@ -71,6 +147,14 @@ export function parseResult(raw: unknown): HandoffResult {
 
 export function safeParseResult(raw: unknown) {
   return HandoffResultSchema.safeParse(raw);
+}
+
+export function parseHandoffExport(raw: unknown): HandoffExport {
+  return HandoffExportSchema.parse(raw);
+}
+
+export function safeParseHandoffExport(raw: unknown) {
+  return HandoffExportSchema.safeParse(raw);
 }
 
 export function generateRunId(): string {
