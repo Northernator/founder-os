@@ -110,6 +110,7 @@ const STAGE_LABELS: Record<VentureStage, string> = {
   BUILD_READY: "🔨 Build",
   AUDIT_READY: "🔒 Audit",
   LAUNCH_READY: "🚀 Launch",
+  MEDIA_READY: "🎬 Media",
   LIVE: "🌍 Live",
 };
 

@@ -30,6 +30,8 @@ export const STAGE_FIRST_MESSAGE: Record<VentureStage, string> = {
   AUDIT_READY:
     "Build complete. Running the audit — checking security, performance, and compliance.",
   LAUNCH_READY: "Audit passed! You're ready to launch. Let's go through the launch checklist.",
+  MEDIA_READY:
+    "Launch reel time. Let's turn the announcement into a short video -- script, storyboard, render.",
   LIVE: "You're live! 🚀 Let's talk about your first 30 days — growth, feedback loops, and what to build next.",
 };
 

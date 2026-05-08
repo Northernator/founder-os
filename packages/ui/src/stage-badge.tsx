@@ -12,6 +12,7 @@ const STAGE_COLOURS: Record<VentureStage, { bg: string; text: string }> = {
   BUILD_READY: { bg: "#EFF6FF", text: "#1E3A8A" },
   AUDIT_READY: { bg: "#FFF7ED", text: "#9A3412" },
   LAUNCH_READY: { bg: "#ECFDF5", text: "#064E3B" },
+  MEDIA_READY: { bg: "#FCE7F3", text: "#831843" },
   LIVE: { bg: "#6366F1", text: "#FFFFFF" },
 };
 
