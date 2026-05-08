@@ -21,6 +21,7 @@
     "@founder-os/handoff-contract": "workspace:*",
     "@founder-os/logger": "workspace:*",
     "@founder-os/pipeline-runner": "workspace:*",
+    "@founder-os/media-core": "workspace:*",
     "zod": "^3.23.8"
   },
   "devDependencies": {

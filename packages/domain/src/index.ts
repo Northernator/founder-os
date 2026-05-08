@@ -20,6 +20,7 @@ export const VentureStageSchema = z.enum([
   "BUILD_READY",
   "AUDIT_READY",
   "LAUNCH_READY",
+  "MEDIA_READY",
   "LIVE",
 ]);
 export type VentureStage = z.infer<typeof VentureStageSchema>;
@@ -36,6 +37,7 @@ export const VENTURE_STAGE_ORDER: VentureStage[] = [
   "BUILD_READY",
   "AUDIT_READY",
   "LAUNCH_READY",
+  "MEDIA_READY",
   "LIVE",
 ];
 

@@ -30,6 +30,7 @@ type VentureStageMarker =
   | "BUILD_READY"
   | "AUDIT_READY"
   | "LAUNCH_READY"
+  | "MEDIA_READY"
   | "LIVE";
 
 // --- Stage names (the running stage, not the post-completion state) ---
@@ -45,6 +46,7 @@ export const StageNameSchema = z.enum([
   "BUILD",
   "AUDIT",
   "LAUNCH",
+  "MEDIA",
 ]);
 export type StageName = z.infer<typeof StageNameSchema>;
 
@@ -60,6 +62,7 @@ export const STAGE_NAME_ORDER: StageName[] = [
   "BUILD",
   "AUDIT",
   "LAUNCH",
+  "MEDIA",
 ];
 
 /**
@@ -79,6 +82,7 @@ export const STAGE_PRODUCES = {
   BUILD: "BUILD_READY",
   AUDIT: "AUDIT_READY",
   LAUNCH: "LAUNCH_READY",
+  MEDIA: "MEDIA_READY",
 } as const satisfies Record<StageName, VentureStageMarker>;
 
 // --- Log entries (in-memory + JSONL on disk) ---

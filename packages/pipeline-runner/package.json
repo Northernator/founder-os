@@ -27,7 +27,8 @@
     "@founder-os/workspace-core": "workspace:*",
     "@founder-os/db": "workspace:*",
     "@founder-os/logger": "workspace:*",
-    "@founder-os/domain": "workspace:*"
+    "@founder-os/domain": "workspace:*",
+    "@founder-os/media-core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.15.3"

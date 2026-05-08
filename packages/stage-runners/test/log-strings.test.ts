@@ -79,6 +79,46 @@ vi.mock("@founder-os/pipeline-runner", () => ({
     status: "done",
     bundle: { runId: "test-bundle", type: "build" },
   }),
+  // Media: 4 steps. Each returns the minimal shape MediaStageRunner
+  // reads. Real-step coverage lives in media-runner-real.test.ts.
+  createMediaScriptStep: async () => ({
+    status: "done",
+    jsonPath: "v/10_media/scripts/media-script.json",
+    mdPath: "v/10_media/scripts/media-script.md",
+    generationSource: "deterministic",
+    sources: [],
+    script: {
+      schemaVersion: 1, ventureSlug: "test", intent: "IDEA_TO_VIDEO",
+      scenes: [{ id: "scene-1", durationSec: 5, voiceover: "v",
+                 onScreen: "o", visualBrief: "b" }],
+      generatedAt: "2026-05-07T00:00:00Z",
+    },
+  }),
+  createStoryboardStep: async () => ({
+    status: "done",
+    jsonPath: "v/10_media/storyboards/storyboard.json",
+    shotCount: 1,
+    storyboard: {
+      schemaVersion: 1, scriptId: "sb1", ventureSlug: "test",
+      shots: [{ sceneId: "scene-1", engineHint: "hyperframes",
+                prompt: "p", durationSec: 5 }],
+      generatedAt: "2026-05-07T00:00:00Z",
+    },
+  }),
+  createRenderShotsStep: async () => ({
+    status: "done",
+    rendersDir: "v/10_media/renders",
+    shotCount: 1, successCount: 1, failureCount: 0, pendingFlowCount: 0,
+    perShotResults: [
+      { sceneId: "scene-1", status: "rendered", engine: "hyperframes",
+        path: "v/10_media/renders/scene-1.mp4", durationSec: 5 },
+    ],
+  }),
+  createStitchStep: async () => ({
+    status: "done",
+    reelPath: "v/10_media/exports/launch-reel.mp4",
+    shotCount: 1,
+  }),
   // Validation: real step now backs the runner. Returns a minimal
   // success result; the runner builds the artifact-index entries from
   // the result.jsonPath / result.mdPath fields and emits the literal
@@ -245,6 +285,7 @@ const { ValidationStageRunner } = await import("../src/runners/validation-runner
 const { WireframeStageRunner } = await import("../src/runners/wireframe-runner.js");
 const { FinanceStageRunner } = await import("../src/runners/finance-runner.js");
 const { LaunchStageRunner } = await import("../src/runners/launch-runner.js");
+const { MediaStageRunner } = await import("../src/runners/media-runner.js");
 
 const noopLlm = async () => "stub";
 
@@ -476,5 +517,27 @@ describe("LaunchStageRunner emits 'launch receipt written'", () => {
     const result = await runner.run();
     // run-launch-stage.ts:deriveSteps looks for this literal string.
     expect(messages(result.logs)).toContain("launch receipt written");
+  });
+});
+
+describe("MediaStageRunner emits 5 drift-protected log strings on full success", () => {
+  it("MEDIA stage starting / media script written / storyboard written / render-shots finished / launch reel stitched", async () => {
+    const fs = new InMemoryFs();
+    const runner = new MediaStageRunner({
+      manifest: makeManifest(),
+      ventureRoot: "/v",
+      fs,
+    });
+    const result = await runner.run();
+    const msgs = messages(result.logs);
+    // run-media-stage.ts:deriveSteps (when the helper lands in the
+    // desktop adoption slice) will pattern-match these 5 literal
+    // strings to derive per-step status. Drift here would silently
+    // collapse the desktop toast counts to zero.
+    expect(msgs).toContain("MEDIA stage starting");
+    expect(msgs).toContain("media script written");
+    expect(msgs).toContain("storyboard written");
+    expect(msgs).toContain("render-shots finished");
+    expect(msgs).toContain("launch reel stitched");
   });
 });

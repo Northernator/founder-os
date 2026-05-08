@@ -17,3 +17,7 @@ export * from "./steps/create-launch-package";
 export * from "./steps/generate-naming-candidates";
 export * from "./steps/generate-logo-concepts";
 export * from "./steps/ensure-uk-setup";
+export * from "./steps/create-media-script";
+export * from "./steps/create-storyboard";
+export * from "./steps/create-render-shots";
+export * from "./steps/create-stitch";

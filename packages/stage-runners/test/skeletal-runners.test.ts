@@ -1,25 +1,22 @@
 /**
  * skeletal-runners.test.ts -- placeholder for future skeletal runners.
  *
- * All 4 originally-skeletal stage runners (Validation / Wireframe /
- * Finance / Launch) have been promoted to real pipeline-runner-backed
- * steps. Their dedicated tests now live in:
- *   - validation-runner-real.test.ts
- *   - wireframe-runner-real.test.ts
- *   - finance-runner-real.test.ts
- *   - launch-runner-real.test.ts
+ * History:
+ *   - 2026-05-03: original skeletal Validation/Wireframe/Finance/Launch
+ *     runners had their tests here.
+ *   - 2026-05-05: those 4 runners were promoted to real pipeline-runner-
+ *     backed steps; their dedicated tests moved to *-runner-real.test.ts
+ *     and this file became an it.todo placeholder.
+ *   - 2026-05-07: MediaStageRunner shipped here as a skeletal placeholder
+ *     (slice 3 of media arc) -- 4 real tests landed.
+ *   - 2026-05-07 (later): MediaStageRunner promoted to real (slice 4).
+ *     Tests moved to media-runner-real.test.ts. File reverts to
+ *     it.todo placeholder, mirroring the same lifecycle as the prior 4.
  *
- * This file is kept as a placeholder rather than deleted so future
- * regressions that re-introduce a skeletal runner know where to land
- * their tests. Vitest 1.6.x fails files that have ZERO `describe`/`it`
- * calls ("No test suite found") so we keep one `it.todo` to register
- * a ghost test -- it shows up as "todo" in the output, doesn't run,
- * and keeps the file from blowing up the suite.
- *
- * If you're adding a new stage runner that intentionally ships as a
- * placeholder before its underlying step lands, restore the
- * historical skeletal-runner test pattern here. Otherwise leave this
- * file alone.
+ * Pattern: when a future stage runner ships as a placeholder before
+ * its underlying step lands, its tests go here. On promotion, they
+ * move to *-runner-real.test.ts and this file goes back to a single
+ * it.todo so vitest 1.6.x doesn't reject the empty file.
  */
 import { describe, it } from "vitest";
 

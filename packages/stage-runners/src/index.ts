@@ -6,16 +6,19 @@
  * a uniform StageRunner contract: preflight validation, idempotent
  * run, structured logs, optional human review gate.
  *
- * Status (post-2026-05-03 sweep):
+ * Status (post-2026-05-07 sweep):
  *   shipped: ResearchStageRunner, BrandStageRunner, ProductStageRunner,
- *            UkSetupStageRunner, AuditStageRunner, StitchStageRunner,
- *            BuildStageRunner, ValidationStageRunner, WireframeStageRunner,
- *            FinanceStageRunner, LaunchStageRunner.
- *   note:    Validation, Wireframe, Finance, and Launch are skeletal
- *            checkpoint runners -- they emit a placeholder JSON
- *            artifact and mark the stage complete, because no
- *            underlying pipeline-runner step exists yet for those
- *            stages. They upgrade in place when real steps land.
+ *            UkSetupStageRunner, AuditStageRunner, StitchStageRunner /
+ *            HandoffStageRunner, BuildStageRunner, ValidationStageRunner,
+ *            WireframeStageRunner, FinanceStageRunner, LaunchStageRunner,
+ *            MediaStageRunner.
+ *   note:    MediaStageRunner is a SKELETAL placeholder (slice 3 of
+ *            media arc). It writes a media-checkpoint.json and
+ *            marks the stage complete, no underlying pipeline-runner
+ *            step yet. Slice 4+ promotes it to real (script + storyboard
+ *            + render-shots + stitch steps that drive the HyperFrames
+ *            provider in @founder-os/media-providers). The runner
+ *            contract does not change at that point.
  *
  * See uploads/moneyprinter_quick_reference.md for design rationale.
  */
@@ -51,6 +54,10 @@ export {
   type FinanceStageRunnerOpts,
 } from "./runners/finance-runner.js";
 export { LaunchStageRunner, type LaunchStageRunnerOpts } from "./runners/launch-runner.js";
+export {
+  MediaStageRunner,
+  type MediaStageRunnerOpts,
+} from "./runners/media-runner.js";
 export {
   PipelineOrchestrator,
   type PipelineOrchestratorOpts,

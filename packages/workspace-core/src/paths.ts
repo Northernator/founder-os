@@ -239,6 +239,61 @@ export function ventureHandoffPaths(ventureRoot: string): HandoffPaths {
   };
 }
 
+// --- Media (slice 3 of media arc -- MEDIA_READY stage) ---
+// Lives at <root>/10_media/ to avoid collision with 06_product/.
+// The skeletal MediaStageRunner writes media-checkpoint.json here;
+// later slices add scripts/, storyboards/, renders/, exports/.
+
+export function getMediaDir(ventureRoot: string): string {
+  return join(ventureRoot, "10_media");
+}
+
+export function getMediaCheckpointPath(ventureRoot: string): string {
+  return join(getMediaDir(ventureRoot), "media-checkpoint.json");
+}
+
+// Slice 4 of media arc -- subpaths the real-step pipeline writes.
+// Mirror the 10_media/ tree from MEDIA-MODULE-SPEC.md sec 3:
+//   scripts/   storyboards/   renders/   exports/
+// flow-prompts.md sits at the top of 10_media/ so the gemini_flow
+// paste-in path is one folder shallower than the auto-rendered output.
+
+export function getMediaScriptsDir(ventureRoot: string): string {
+  return join(getMediaDir(ventureRoot), "scripts");
+}
+
+export function getMediaScriptJsonPath(ventureRoot: string): string {
+  return join(getMediaScriptsDir(ventureRoot), "media-script.json");
+}
+
+export function getMediaScriptMdPath(ventureRoot: string): string {
+  return join(getMediaScriptsDir(ventureRoot), "media-script.md");
+}
+
+export function getMediaStoryboardsDir(ventureRoot: string): string {
+  return join(getMediaDir(ventureRoot), "storyboards");
+}
+
+export function getStoryboardJsonPath(ventureRoot: string): string {
+  return join(getMediaStoryboardsDir(ventureRoot), "storyboard.json");
+}
+
+export function getMediaRendersDir(ventureRoot: string): string {
+  return join(getMediaDir(ventureRoot), "renders");
+}
+
+export function getMediaExportsDir(ventureRoot: string): string {
+  return join(getMediaDir(ventureRoot), "exports");
+}
+
+export function getLaunchReelPath(ventureRoot: string): string {
+  return join(getMediaExportsDir(ventureRoot), "launch-reel.mp4");
+}
+
+export function getFlowPromptsPath(ventureRoot: string): string {
+  return join(getMediaDir(ventureRoot), "flow-prompts.md");
+}
+
 /** All dirs that may contain user/AI artifacts to be indexed */
 export function ventureArtifactDirs(ventureRoot: string): string[] {
   return [

@@ -17,6 +17,7 @@ import {
   AuditStageRunner,
   BrandStageRunner,
   BuildStageRunner,
+  MediaStageRunner,
   ProductStageRunner,
   ResearchStageRunner,
   StitchStageRunner,
@@ -161,5 +162,30 @@ describe("BuildStageRunner.validate()", () => {
     const r = await runner.validate();
     expect(r.valid).toBe(false);
     expect(r.missingResources.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("MediaStageRunner.validate()", () => {
+  it("requires manifest.id and manifest.name", async () => {
+    const fs = new InMemoryFs();
+    const runner = new MediaStageRunner({
+      manifest: makeManifest({ id: "", name: "" }),
+      ventureRoot: "/v",
+      fs,
+    });
+    const r = await runner.validate();
+    expect(r.valid).toBe(false);
+    expect(r.errors.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("accepts a complete manifest", async () => {
+    const fs = new InMemoryFs();
+    const runner = new MediaStageRunner({
+      manifest: makeManifest(),
+      ventureRoot: "/v",
+      fs,
+    });
+    const r = await runner.validate();
+    expect(r.valid).toBe(true);
   });
 });
