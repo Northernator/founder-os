@@ -50,6 +50,7 @@ import { RunAllStagesButton } from "./RunAllStagesButton.js";
 import { SalesTab } from "./SalesTab.js";
 import { ScreensTab } from "./ScreensTab.js";
 import { SpecTab } from "./SpecTab.js";
+import { MediaTab } from "./MediaTab.js";
 import { UkSetupTab } from "./UkSetupTab.js";
 import { ValidationTab } from "./ValidationTab.js";
 import { VentureProviderPicker } from "./VentureProviderPicker.js";
@@ -79,6 +80,7 @@ type Tab =
   | "artifacts"
   | "sales"
   | "audit"
+  | "media"
   | "options";
 
 function makeMsgId(): string {
@@ -1683,6 +1685,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
     artifacts: "Artifacts",
     audit: "Audit",
     sales: "Sales",
+    media: "Media",
   };
 
   return (
@@ -2217,6 +2220,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
                   HANDOFF: "screens",
                   AUDIT: "audit",
                   BUILD: "audit",
+                  MEDIA: "media",
                   // FINANCE + LAUNCH have no dedicated tab yet -- the
                   // skeletal runners exist but the UI hasn't been built.
                 };
@@ -2339,6 +2343,13 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
             ventureRoot={venture.rootPath}
             refreshToken={auditRefreshToken}
           />
+        )}
+        {tab === "media" && (
+          // Slice 5a (media arc): MediaTab orchestrates the 4-step
+          // MediaStageRunner. providers=[] in slice 5a so every shot
+          // routes through gemini_flow paste-in. Slice 5b will inject
+          // the HyperFrames provider for auto-render of structured shots.
+          <MediaTab key={venture.id} venture={venture} manifest={manifest} />
         )}
         {tab === "sales" && <SalesTab venture={venture} />}
         {tab === "options" && <OptionsTab />}

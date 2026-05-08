@@ -184,6 +184,12 @@ importers:
       '@founder-os/logger':
         specifier: workspace:*
         version: link:../../packages/logger
+      '@founder-os/media-core':
+        specifier: workspace:*
+        version: link:../../packages/media-core
+      '@founder-os/media-providers':
+        specifier: workspace:*
+        version: link:../../packages/media-providers
       '@founder-os/pipeline-core':
         specifier: workspace:*
         version: link:../../packages/pipeline-core
@@ -617,6 +623,9 @@ importers:
       '@founder-os/logger':
         specifier: workspace:*
         version: link:../logger
+      '@founder-os/media-core':
+        specifier: workspace:*
+        version: link:../media-core
       '@founder-os/pipeline-core':
         specifier: workspace:*
         version: link:../pipeline-core
@@ -729,6 +738,9 @@ importers:
       '@founder-os/logger':
         specifier: workspace:*
         version: link:../logger
+      '@founder-os/media-core':
+        specifier: workspace:*
+        version: link:../media-core
       '@founder-os/pipeline-runner':
         specifier: workspace:*
         version: link:../pipeline-runner

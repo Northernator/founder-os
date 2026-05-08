@@ -39,6 +39,7 @@ import { runBrandStage } from "./run-brand-stage.js";
 import { runBuildStage } from "./run-build-stage.js";
 import { runFinanceStage } from "./run-finance-stage.js";
 import { runLaunchStage } from "./run-launch-stage.js";
+import { runMediaStage } from "./run-media-stage.js";
 import { runProductStage } from "./run-product-stage.js";
 import { runResearchStage } from "./run-research-stage.js";
 import { runStitchStage } from "./run-stitch-stage.js";
@@ -99,6 +100,7 @@ const STAGE_ORDER: StageName[] = [
   "AUDIT",
   "BUILD",
   "LAUNCH",
+  "MEDIA",
 ];
 
 /**
@@ -242,6 +244,19 @@ async function runOne(stage: StageName, opts: RunAllStagesOpts): Promise<StageOu
         force: false,
       });
       if (out.kind === "no-provider") return { stage, status: "no-provider" };
+      return interpret(stage, out.result);
+    }
+    case "MEDIA": {
+      // Slice 5a: media has a deterministic path even without an LLM
+      // (no early-return on missing provider). Pending-flow is
+      // surfaced as review-needed so "Run all" stops there until the
+      // founder pastes Flow output and re-runs from MediaTab.
+      const out = await runMediaStage({
+        venture,
+        manifest,
+        ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+        force: false,
+      });
       return interpret(stage, out.result);
     }
     default:
