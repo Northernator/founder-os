@@ -112,15 +112,32 @@ export async function createStoryboardStep(
   await ctx.fs.mkdir(getMediaStoryboardsDir(ctx.ventureRoot));
 
   const defaultHint = ctx.defaultEngineHint ?? "auto";
-  const shots: Shot[] = ctx.script.scenes.map((scene) => {
-    // Prompt = onScreen + voiceover + visualBrief, ordered most-specific-first
-    // so AI engines get the headline before the supporting copy.
+  // Slice 7: scenes may carry an optional shotPlan that fans out into
+  // multiple Shots. Single-shot scenes keep their original sceneId so
+  // existing storyboards round-trip identically; multi-shot scenes use
+  // a compound id `<sceneId>-shot-<idx>` so render filenames stay unique.
+  const shots: Shot[] = ctx.script.scenes.flatMap((scene) => {
+    if (scene.shotPlan && scene.shotPlan.length > 0) {
+      return scene.shotPlan.map((entry, idx) =>
+        buildShotForScene(
+          `${scene.id}-shot-${idx + 1}`,
+          entry.durationSec,
+          entry.prompt,
+          // Per-shot visualBrief defaults to the scene's. engineHint
+          // heuristic still applies via scene.visualBrief keywords; if a
+          // future slice wants per-shot hints, extend ShotPlanEntry.
+          scene.visualBrief,
+          defaultHint,
+        ),
+      );
+    }
+    // Single-shot fallback (slice-4 shape).
     const lines: string[] = [];
     if (scene.onScreen) lines.push(scene.onScreen);
     if (scene.voiceover) lines.push(scene.voiceover);
     lines.push(scene.visualBrief);
     const prompt = lines.join(" -- ");
-    return buildShotForScene(scene.id, scene.durationSec, prompt, scene.visualBrief, defaultHint);
+    return [buildShotForScene(scene.id, scene.durationSec, prompt, scene.visualBrief, defaultHint)];
   });
 
   const storyboard: Storyboard = {

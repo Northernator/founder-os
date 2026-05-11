@@ -198,8 +198,13 @@ async function maybeLlmEnrich(
   try {
     const system =
       "You rewrite launch-video voiceover lines. Keep them concrete and " +
-      "under 25 words. Do not invent metrics. Return JSON of the form " +
-      `{"scenes":[{"id":"...","voiceover":"...","onScreen":"..."}]}.`;
+      "under 25 words. Do not invent metrics. For scenes that benefit " +
+      "from multiple visual angles (product demos, founder cameos, etc) " +
+      "optionally return shotPlan: an array of 1-4 entries each with " +
+      "a full prompt + durationSec. Sum of shotPlan durations should " +
+      "approximately equal scene durationSec. Omit shotPlan for short " +
+      "or single-angle scenes (under 6 seconds). Return JSON of the form " +
+      `{"scenes":[{"id":"...","voiceover":"...","onScreen":"...","shotPlan":[{"prompt":"...","durationSec":N}]?}]}.`;
     const user = JSON.stringify({
       brand,
       scenes: scenes.map((s) => ({
@@ -210,7 +215,9 @@ async function maybeLlmEnrich(
       })),
     });
     const out = await callLlm({ system, user });
-    const parsed = JSON.parse(out) as { scenes?: Array<Partial<Scene> & { id: string }> };
+    const parsed = JSON.parse(out) as {
+      scenes?: Array<Partial<Scene> & { id: string; shotPlan?: unknown }>;
+    };
     if (!parsed.scenes || !Array.isArray(parsed.scenes)) {
       return { scenes, source: "deterministic-fallback" };
     }
@@ -221,6 +228,26 @@ async function maybeLlmEnrich(
       const next: Scene = { ...s };
       if (typeof llm.voiceover === "string") next.voiceover = llm.voiceover.slice(0, 280);
       if (typeof llm.onScreen === "string") next.onScreen = llm.onScreen.slice(0, 80);
+      // Slice 7: LLM may optionally return a shotPlan to break the scene
+      // into multiple shots. Validate each entry has the minimum fields
+      // we need; drop the whole shotPlan if the LLM returned garbage.
+      if (Array.isArray(llm.shotPlan) && llm.shotPlan.length > 0) {
+        const valid = llm.shotPlan
+          .filter(
+            (sp: unknown): sp is { prompt: string; durationSec: number } =>
+              typeof sp === "object" &&
+              sp !== null &&
+              typeof (sp as { prompt?: unknown }).prompt === "string" &&
+              typeof (sp as { durationSec?: unknown }).durationSec === "number" &&
+              (sp as { durationSec: number }).durationSec > 0,
+          )
+          .map((sp) => ({
+            prompt: sp.prompt.slice(0, 400),
+            durationSec: sp.durationSec,
+          }))
+          .slice(0, 4); // cap at 4 shots per scene
+        if (valid.length > 0) next.shotPlan = valid;
+      }
       return next;
     });
     return { scenes: enriched, source: "llm" };

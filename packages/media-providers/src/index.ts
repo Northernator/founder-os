@@ -1,9 +1,12 @@
 // @founder-os/media-providers -- engine-specific implementations of the
 // MediaProvider contract from @founder-os/media-core.
 //
-// Slice 2 ships only the HyperFrames provider (tier_0). Wan2 / CogVideoX /
-// Gemini Flow / Gemini API providers slot in here in later slices, each
-// behind its own factory + barrel export.
+// Slice 2 shipped HyperFrames (tier_0). Slice 6 added typed STUBS for
+// Wan2 (tier_1, ComfyUI HTTP), CogVideoX (tier_2, Python+diffusers),
+// and Veo (tier_4, Gemini API). Each stub's available() returns false
+// and render() throws -- the resolver never picks them, but the
+// contract surface is locked so slice 7+ can fill in subprocess /
+// HTTP internals without changing callers.
 
 export {
   createHyperframesProvider,
@@ -31,3 +34,21 @@ export {
   type SpawnOpts,
   type SpawnResult,
 } from "./spawn.js";
+
+export {
+  createWan2Provider,
+  Wan2NotImplementedError,
+  type Wan2ProviderOpts,
+} from "./wan2-provider.js";
+
+export {
+  createCogVideoXProvider,
+  CogVideoXNotImplementedError,
+  type CogVideoXProviderOpts,
+} from "./cogvideox-provider.js";
+
+export {
+  createVeoProvider,
+  VeoNotImplementedError,
+  type VeoProviderOpts,
+} from "./veo-provider.js";

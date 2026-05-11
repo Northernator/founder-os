@@ -50,6 +50,23 @@ export const MediaIntentSchema = z.enum([
 export type MediaIntent = z.infer<typeof MediaIntentSchema>;
 
 /**
+ * One shot in a Scene's optional shotPlan. Each entry carries a full
+ * per-shot prompt + duration; the storyboard step fans these out into
+ * concrete Shots when scene.shotPlan is populated.
+ *
+ * Slice 7 lets the script LLM optionally return shotPlan per scene so
+ * longer reels can break a 10-second 'product demo' scene into a wide
+ * shot + a close-up + a UI focus, each rendered separately and stitched
+ * in array order. When scene.shotPlan is undefined, the storyboard step
+ * falls back to the 1:1 scene-to-shot mapping (the slice-4 behavior).
+ */
+export const ShotPlanEntrySchema = z.object({
+  prompt: z.string(),
+  durationSec: z.number().positive(),
+});
+export type ShotPlanEntry = z.infer<typeof ShotPlanEntrySchema>;
+
+/**
  * One scene in a MediaScript -- the human-readable intent for a slice of
  * the final reel. Storyboards are built FROM these (one scene -> one or
  * more shots).
@@ -62,6 +79,17 @@ export const SceneSchema = z.object({
   visualBrief: z.string(),          // human description that the resolver
                                     // reads to pick an engineHint when
                                     // engineHint = "auto"
+  /**
+   * Optional multi-shot plan (slice 7 of media arc). When present, the
+   * storyboard step emits one Shot per entry; when absent, the scene
+   * maps to a single Shot (slice-4 behavior).
+   *
+   * Populated by the script step's LLM-aware path when the model decides
+   * a scene benefits from multiple visual angles. Sum of entry
+   * durationSec should approximately equal scene.durationSec; the schema
+   * does not enforce exact equality since LLMs are imprecise.
+   */
+  shotPlan: z.array(ShotPlanEntrySchema).optional(),
 });
 export type Scene = z.infer<typeof SceneSchema>;
 
