@@ -15,25 +15,43 @@ gates instead of running fully automated.
 
 ## Status
 
-**Slice 1 (current):** contracts only.
+**Slices 1-13 shipped:** stage-runner contracts, orchestrator, review gates,
+failed-run resume/retry, real per-stage runners through BACKEND, and the
+Handoff Pack runner are wired into desktop.
 
-- `StageRunner` interface
-- Re-exported zod schemas from `@founder-os/domain` (`StageName`,
-  `StageRunResult`, `ReviewGate`, `StageProgress`, `ArtifactIndexEntry`,
-  `PipelineConfig`)
-- Path helpers added in `@founder-os/workspace-core`
-  (`getStageProgressPath`, `getReviewGatesPath`, `getStageRunLogPath`,
-  `getFailedStageResultPath`)
+- `StageRunner` interface + shared domain schemas remain the contract surface.
+- `PipelineOrchestrator` persists stage progress, review gates, logs, and
+  failed-run recovery data under `.founder/`.
+- Real runners now cover RESEARCH, BRAND, PRODUCT, UK_SETUP, AUDIT, HANDOFF,
+  BUILD, VALIDATION, WIREFRAME, FINANCE, LAUNCH, MEDIA, MEDIA_EDIT, CRM,
+  BACKEND, and HANDOFF_PACK.
+- Handoff Pack renders through the node-only provider path, writes inventory +
+  checkpoint artifacts, supports role packs, and is exposed to desktop through
+  a Tauri sidecar command rather than direct renderer imports.
 
-No runtime behaviour change yet. No callers.
+## Slice 14 notes
 
-## Upcoming slices
+- `@founder-os/stage-runners/node` is the node-only export for
+  `HandoffPackStageRunner`; browser-facing code should avoid importing it.
+- `stage-runners` CLI emits the JSON envelope consumed by the desktop sidecar
+  and reads Handoff Pack counts from the checkpoint.
+- CLI and brand-asset JSON reads tolerate UTF-8 BOMs from Windows tooling.
+- `@founder-os/handoff-desktop` now has a browser conditional export that
+  excludes node filesystem outbox helpers from browser bundles.
 
-- **Slice 2** — `ResearchStageRunner` wrapping `createSaasResearchReports`
-- **Slice 3** — `PipelineOrchestrator` class + `BrandStageRunner` with flag-driven review gate
-- **Slice 4** — desktop review-gate panel + `advance-gate.ts` integration
-- **Slice 5** — resume/retry via `.founder/handoffs/failed/`
-- **Slice 6+** — remaining runners (Product, UK setup, Audit, Build, Launch)
+## Commit plan
+
+1. Slice 1-13 baseline: contracts, orchestrator, all shipped runner promotions,
+   desktop stage wiring, and Handoff Pack renderer/provider work already in the
+   current worktree.
+2. Slice 13 finish: desktop Handoff Pack sidecar path, white-screen-safe
+   renderer boundary, and Tauri command plumbing.
+3. Slice 14 hardening: CLI smoke coverage, node-only export, browser-safe
+   handoff-desktop entry, BOM-tolerant JSON reads, and real sidecar smoke
+   verification against `.tmp/handoff-pack-real-venture`.
+4. Follow-up commit: remaining legacy Vite browser-external warnings from
+   `pipeline-runner` stage paths, if those older buttons still need renderer
+   sidecar migration.
 
 ## Naming note
 

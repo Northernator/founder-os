@@ -221,6 +221,7 @@ export class MediaStageRunner extends BaseStageRunner implements StageRunner {
           reason: pendingFlow ? "pending-flow paste-in" : "configured review gate",
         });
       }
+      artifactPaths.push(...(await this.renderBrandedPdfsForStage()));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       failureMessage = message;

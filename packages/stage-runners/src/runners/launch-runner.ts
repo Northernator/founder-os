@@ -132,6 +132,7 @@ export class LaunchStageRunner extends BaseStageRunner implements StageRunner {
         reviewGateId = gate.gateId;
         this.log("info", "review gate created", { gateId: reviewGateId });
       }
+      artifactPaths.push(...(await this.renderBrandedPdfsForStage()));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       failureMessage = message;

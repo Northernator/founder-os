@@ -27,10 +27,14 @@ type VentureStageMarker =
   | "SPEC_READY"
   | "WIREFRAME_READY"
   | "STITCH_READY"
+  | "BACKEND_READY"
   | "BUILD_READY"
   | "AUDIT_READY"
   | "LAUNCH_READY"
   | "MEDIA_READY"
+  | "MEDIA_EDIT_READY"
+  | "CRM_READY"
+  | "HANDOFF_PACK_READY"
   | "LIVE";
 
 // --- Stage names (the running stage, not the post-completion state) ---
@@ -38,15 +42,19 @@ export const StageNameSchema = z.enum([
   "RESEARCH",
   "VALIDATION",
   "BRAND",
-  "UK_SETUP",
   "FINANCE",
   "PRODUCT_SPEC",
   "WIREFRAME",
   "HANDOFF",
+  "BACKEND",
   "BUILD",
   "AUDIT",
   "LAUNCH",
   "MEDIA",
+  "MEDIA_EDIT",
+  "CRM",
+  "HANDOFF_PACK",
+  "UK_SETUP",
 ]);
 export type StageName = z.infer<typeof StageNameSchema>;
 
@@ -54,15 +62,19 @@ export const STAGE_NAME_ORDER: StageName[] = [
   "RESEARCH",
   "VALIDATION",
   "BRAND",
-  "UK_SETUP",
   "FINANCE",
   "PRODUCT_SPEC",
   "WIREFRAME",
   "HANDOFF",
+  "BACKEND",
   "BUILD",
   "AUDIT",
   "LAUNCH",
   "MEDIA",
+  "MEDIA_EDIT",
+  "CRM",
+  "HANDOFF_PACK",
+  "UK_SETUP",
 ];
 
 /**
@@ -79,10 +91,14 @@ export const STAGE_PRODUCES = {
   PRODUCT_SPEC: "SPEC_READY",
   WIREFRAME: "WIREFRAME_READY",
   HANDOFF: "STITCH_READY",
+  BACKEND: "BACKEND_READY",
   BUILD: "BUILD_READY",
   AUDIT: "AUDIT_READY",
   LAUNCH: "LAUNCH_READY",
   MEDIA: "MEDIA_READY",
+  MEDIA_EDIT: "MEDIA_EDIT_READY",
+  CRM: "CRM_READY",
+  HANDOFF_PACK: "HANDOFF_PACK_READY",
 } as const satisfies Record<StageName, VentureStageMarker>;
 
 // --- Log entries (in-memory + JSONL on disk) ---

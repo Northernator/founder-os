@@ -1,0 +1,89 @@
+---
+docId: api-specification
+tier: A
+category: 04-engineering
+title: API Specification
+---
+
+# API Specification
+
+REST/GraphQL endpoints, request/response contracts, auth.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+{{!-- LLM hint: this is a tier-A document, generated from upstream stage outputs. Replace the section bodies below with content synthesised from the manifest's sourceStages. Keep section headings. --}}
+
+## Overview
+
+**{{COMPANY_NAME}}** runs a TypeScript-first stack with a single deployable web app (Next.js or Tauri shell, depending on the surface), an HTTP API layer behind it, and a managed Postgres database for primary state. Background work runs on a queue and is decoupled from the request path. CI is mandatory; nothing reaches production without passing it.
+
+This document describes that stack in the level of detail a new engineer needs to be productive in their first week.
+
+## Languages and frameworks
+
+- TypeScript on both the server and the client; strict mode is on by default.
+- The web tier uses {{TODO_WEB_FRAMEWORK}} (defaults: Next.js for hosted, Tauri webview for desktop shells).
+- The API tier uses {{TODO_API_FRAMEWORK}} (defaults: Hono or Express depending on the deployment target).
+- Background jobs use {{TODO_JOB_FRAMEWORK}}.
+- Tests use Vitest; e2e tests use Playwright when needed.
+
+## Repository layout
+
+The repository is a pnpm monorepo. `apps/` holds deployable applications; `packages/` holds reusable libraries. Every package has its own `package.json`, its own `tsconfig.json`, and its own test command.
+
+Cross-package imports go through the workspace alias (`@{{COMPANY_SLUG}}/<package>`). Files in `apps/*/src` may not import from a package's `/node` subpath unless the app explicitly opts in; the Biome rule enforces this.
+
+## Security
+
+Secrets live in the secret manager named in the *Tool Stack Register*. They are never committed to the repository, never pasted into chat, and never typed into a CLI in a way that leaves them in shell history.
+
+Dependencies are reviewed at install time; we do not add a dependency without checking it has an active maintainer, a reasonable history, and a permissive licence. The *Dependency Policy* is the long form of this paragraph.
+
+## Testing
+
+Three layers, each with a clear remit. **Unit tests** prove the smallest unit of behaviour is correct. **Integration tests** prove a package collaborates with its real dependencies (database, file system, child processes). **End-to-end tests** prove the whole product still works.
+
+Coverage is reported but not the headline metric. The headline metric is whether the test that would have caught the bug exists. When a bug is found the fix lands together with the test that would have caught it.
+
+## Common failure modes
+
+- **Drift from the spec.** The implementation diverges from the PRD; the PRD is not updated. Fix by updating the PRD in the same pull request.
+- **Silent skip.** A code path is added but no test covers it. Fix by writing the test before the code path lands.
+- **Owner unclear.** A piece of work has no single owner; everyone assumes someone else is responsible. Fix by assigning a name in writing.
+- **Plan without check-in.** A plan is written but never reviewed against reality. Fix by scheduling the review at the same time as the plan is written.
+- **Decision without record.** A choice is made in a meeting; no one records it. Fix by writing the decision in the *Decision Log* before leaving the meeting.
+
+## Security summary
+
+- Strong authentication (MFA) for every account that touches customer data, money, or production.
+- Encryption at rest and in transit for every system that stores customer data.
+- Least-privilege access; access is granted on need, reviewed quarterly, and revoked promptly when an engagement ends.
+- Logging and monitoring on every production system, with alerts routed to the on-call rotation.
+- An incident response process that the team has practised at least once.
+
+The long form of each of the above is in the *Security Policy*.
+
+## How we make decisions
+
+We use a lightweight decision framework. For every non-trivial decision:
+
+1. **Type the decision into a doc.** It does not need to be in this document; the *Decision Log* is fine, an RFC is fine.
+2. **List the options.** Always include "do nothing"; sometimes the best choice is to defer.
+3. **State a recommendation.** A doc with no recommendation is asking the reader to do the author's job.
+4. **Invite challenge.** Anyone on the team can push back; the author is responsible for engaging with the pushback.
+5. **Decide and record.** The decision goes into the *Board Decision Log* or the relevant RFC with the date and the people involved.
+
+Decisions can be revisited when the facts change. They cannot be re-litigated because someone disagrees after the fact.
+
+## Metrics
+
+We measure the things that change the way we behave. The headline metrics are recorded in the *OKRs and KPIs* document; the *North Star Metric* is the one that drives the whole company.
+
+A metric that is reported but never acted on is a metric we should stop reporting. A metric that is acted on but never reported is a metric we should write down so the team can act on it together. The list is reviewed quarterly.
+
+---
+
+{{!-- Tier A/B/C: founder reviews the synthesised content; LLM fills the {{var}} placeholders above. --}}
+
+> **Founder review:** {{TODO_FOUNDER_REVIEW_NOTES}}
+

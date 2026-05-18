@@ -13,14 +13,18 @@ export const VentureStageSchema = z.enum([
   "RESEARCHED",
   "VALIDATED",
   "BRAND_READY",
-  "UK_SETUP_READY",
   "SPEC_READY",
   "WIREFRAME_READY",
   "STITCH_READY",
+  "BACKEND_READY",
   "BUILD_READY",
   "AUDIT_READY",
   "LAUNCH_READY",
   "MEDIA_READY",
+  "MEDIA_EDIT_READY",
+  "CRM_READY",
+  "HANDOFF_PACK_READY",
+  "UK_SETUP_READY",
   "LIVE",
 ]);
 export type VentureStage = z.infer<typeof VentureStageSchema>;
@@ -30,14 +34,18 @@ export const VENTURE_STAGE_ORDER: VentureStage[] = [
   "RESEARCHED",
   "VALIDATED",
   "BRAND_READY",
-  "UK_SETUP_READY",
   "SPEC_READY",
   "WIREFRAME_READY",
   "STITCH_READY",
+  "BACKEND_READY",
   "BUILD_READY",
   "AUDIT_READY",
   "LAUNCH_READY",
   "MEDIA_READY",
+  "MEDIA_EDIT_READY",
+  "CRM_READY",
+  "HANDOFF_PACK_READY",
+  "UK_SETUP_READY",
   "LIVE",
 ];
 
@@ -57,7 +65,31 @@ export type AppType = z.infer<typeof AppTypeSchema>;
 
 // PipelineConfigSchema is defined in ./stage-runners.ts and re-exported
 // from this barrel below. We import it here for VentureManifestSchema.
+import { CrmConfigSchema } from "@founder-os/crm-core";
+import { MediaConfigSchema } from "@founder-os/media-core";
+import { MediaEditConfigSchema } from "@founder-os/media-edit-core";
+import { SocialConfigSchema } from "@founder-os/social-core";
 import { PipelineConfigSchema } from "./stage-runners.js";
+
+const HandoffPackRoleSchema = z.enum([
+  "founder",
+  "dev",
+  "designer",
+  "marketing",
+  "sales",
+  "support",
+  "finance",
+  "contractor",
+]);
+
+const HandoffPackTierSchema = z.enum(["A", "B", "C", "D"]);
+
+const HandoffPackConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  includeRolePacks: z.array(HandoffPackRoleSchema).optional(),
+  customCoverNote: z.string().default(""),
+  excludeTiers: z.array(HandoffPackTierSchema).default([]),
+});
 
 export const VentureManifestSchema = z.object({
   id: z.string(),
@@ -87,6 +119,51 @@ export const VentureManifestSchema = z.object({
    * HandoffSource in @founder-os/handoff-contract.
    */
   handoffSource: z.enum(["stitch", "codesign"]).optional(),
+  /**
+   * Per-venture media stage configuration (slice 8 of media arc).
+   * Currently a single optional field `enabledEngines` -- the list
+   * of MediaProvider engines this venture has opted in to. When
+   * absent, the helper defaults to `["hyperframes", "gemini_flow"]`
+   * (the two real paths). Stubs (wan2/cogvideox/gemini_api) must be
+   * explicitly enabled.
+   */
+  media: MediaConfigSchema.optional(),
+  /**
+   * Per-venture media-edit stage configuration (slice 3 of media-edit
+   * arc). OPTIONAL stage between MEDIA_READY and CRM_READY -- when
+   * `enabled` is false or absent, MEDIA_EDIT is skipped and LAUNCH
+   * reads the raw launch-reel.mp4 from MEDIA_READY. When enabled, the
+   * runner spins up OpenCut (self-hosted via bun dev), waits for the
+   * founder to drop a polished reel into 10_media/exports/edited/,
+   * and stamps the venture's mediaEdit-ready state.
+   */
+  mediaEdit: MediaEditConfigSchema.optional(),
+  /**
+   * Per-venture CRM stage configuration (slice 3 of crm arc).
+   * Optional -- ventures without this block run CRM with all defaults
+   * (tier list = docker/bench/config_only, no docker overrides). The
+   * adminEmail field is required at the schema level when crm is set
+   * because the Docker first-boot flow needs a real address to create
+   * the Frappe admin user.
+   */
+  crm: CrmConfigSchema.optional(),
+  /**
+   * Per-venture handoff-pack configuration. Optional -- ventures without
+   * this block render all tiers and all default role packs.
+   */
+  handoffPack: HandoffPackConfigSchema.optional(),
+  /**
+   * Per-venture social-posting configuration (SOCIAL-MODULE follow-up
+   * arc). OPTIONAL -- ventures without this block default to:
+   *   backend: "social-poster"
+   *   enabledBackends: ["social-poster", "postiz"]
+   *   enabledPlatforms: ["x", "linkedin", "bluesky"]
+   * The `postiz` sub-config (baseUrl + apiKeyEnvVar) is required when a
+   * venture switches backend to "postiz" -- the Postiz config picker in
+   * SocialActions persists it here. social-poster needs no per-venture
+   * config (PATH-resolved binary + browser cookies).
+   */
+  social: SocialConfigSchema.optional(),
 });
 export type VentureManifest = z.infer<typeof VentureManifestSchema>;
 
@@ -148,3 +225,11 @@ export * from "./screens.js";
 // StageName names the running stage, VentureStage names the
 // post-completion state. STAGE_PRODUCES bridges the two.
 export * from "./stage-runners.js";
+
+// --- Stage graph (pipeline-hardening, 2026-05-18) ---
+// Canonical metadata table for every stage. Single source of truth
+// for label / folder / dependencies / producedVentureStage / review
+// gate / provider-required / tab owner. Coexists with STAGE_NAME_ORDER
+// and STAGE_PRODUCES during the migration; consumers can move to
+// STAGE_GRAPH at their own pace.
+export * from "./stage-graph.js";

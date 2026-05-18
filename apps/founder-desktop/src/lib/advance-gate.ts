@@ -80,9 +80,13 @@ const STAGE_PRODUCES_INVERSE: Partial<Record<VentureStage, StageName>> = {
   SPEC_READY: "PRODUCT_SPEC",
   WIREFRAME_READY: "WIREFRAME",
   STITCH_READY: "HANDOFF",
+  BACKEND_READY: "BACKEND",
   BUILD_READY: "BUILD",
   AUDIT_READY: "AUDIT",
   LAUNCH_READY: "LAUNCH",
+  MEDIA_READY: "MEDIA",
+  MEDIA_EDIT_READY: "MEDIA_EDIT",
+  CRM_READY: "CRM",
 };
 
 export function stageNameForVentureStage(stage: VentureStage): StageName | null {

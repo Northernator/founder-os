@@ -76,11 +76,14 @@ vi.mock("node:fs/promises", () => {
 // SUT -- imported AFTER the mocks above.
 // ---------------------------------------------------------------------------
 
+// Hyperframes lives in the /node subpath after the PM split (2026-05-11).
+// The client-safe barrel ("../src/index.js") only re-exports the stub
+// providers (Wan2 / CogVideoX / Veo) -- not the HyperFrames factory.
 import {
   createHyperframesProvider,
   HyperframesLintError,
   HyperframesLayoutError,
-} from "../src/index.js";
+} from "../src/node.js";
 
 beforeEach(() => {
   spawnCalls.length = 0;

@@ -1,0 +1,87 @@
+---
+docId: information-architecture
+tier: C
+category: 03-design-brand
+title: Information Architecture
+---
+
+# Information Architecture
+
+Navigation, pages, sections, hierarchy.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+## Overview
+
+**{{COMPANY_NAME}}** runs a TypeScript-first stack with a single deployable web app (Next.js or Tauri shell, depending on the surface), an HTTP API layer behind it, and a managed Postgres database for primary state. Background work runs on a queue and is decoupled from the request path. CI is mandatory; nothing reaches production without passing it.
+
+This document describes that stack in the level of detail a new engineer needs to be productive in their first week.
+
+## Languages and frameworks
+
+- TypeScript on both the server and the client; strict mode is on by default.
+- The web tier uses {{TODO_WEB_FRAMEWORK}} (defaults: Next.js for hosted, Tauri webview for desktop shells).
+- The API tier uses {{TODO_API_FRAMEWORK}} (defaults: Hono or Express depending on the deployment target).
+- Background jobs use {{TODO_JOB_FRAMEWORK}}.
+- Tests use Vitest; e2e tests use Playwright when needed.
+
+## Repository layout
+
+The repository is a pnpm monorepo. `apps/` holds deployable applications; `packages/` holds reusable libraries. Every package has its own `package.json`, its own `tsconfig.json`, and its own test command.
+
+Cross-package imports go through the workspace alias (`@{{COMPANY_SLUG}}/<package>`). Files in `apps/*/src` may not import from a package's `/node` subpath unless the app explicitly opts in; the Biome rule enforces this.
+
+## Security
+
+Secrets live in the secret manager named in the *Tool Stack Register*. They are never committed to the repository, never pasted into chat, and never typed into a CLI in a way that leaves them in shell history.
+
+Dependencies are reviewed at install time; we do not add a dependency without checking it has an active maintainer, a reasonable history, and a permissive licence. The *Dependency Policy* is the long form of this paragraph.
+
+## Testing
+
+Three layers, each with a clear remit. **Unit tests** prove the smallest unit of behaviour is correct. **Integration tests** prove a package collaborates with its real dependencies (database, file system, child processes). **End-to-end tests** prove the whole product still works.
+
+Coverage is reported but not the headline metric. The headline metric is whether the test that would have caught the bug exists. When a bug is found the fix lands together with the test that would have caught it.
+
+## Brand voice
+
+Our brand voice is **{{TODO_BRAND_VOICE}}**. The voice is consistent across the website, the product, our outbound, our customer support and our internal documents.
+
+The voice is not a costume; we sound like ourselves whether we are writing a press release or a Slack message to a customer. The *Brand Messaging Guide* sets out the longer description and the do/don't examples.
+
+## Visual identity
+
+The visual identity is recorded in the *Brand Guide* and the *Design System*. The primary brand colour is **{{TODO_PRIMARY_HEX}}**; the secondary palette and the type system are in the *Brand Guide*.
+
+No team member should be guessing what a brand colour or a heading font is. If the answer is not in the *Brand Guide*, the *Brand Guide* is wrong, and the fix is to update the *Brand Guide*.
+
+## Owners and approvers
+
+| Area | Owner | Approver |
+|---|---|---|
+| Product | {{TODO_PRODUCT_OWNER}} | Director |
+| Engineering | {{TODO_ENG_OWNER}} | Director |
+| Design | {{TODO_DESIGN_OWNER}} | Director |
+| Sales | {{TODO_SALES_OWNER}} | Director |
+| Marketing | {{TODO_MARKETING_OWNER}} | Director |
+| Customer success | {{TODO_CS_OWNER}} | Director |
+| Finance | {{TODO_FINANCE_OWNER}} | Director |
+| People | {{TODO_PEOPLE_OWNER}} | Director |
+| Security | {{TODO_SECURITY_OWNER}} | Director |
+
+The owner is the person responsible for the area. The approver is the person who signs off material changes. In a small company the approver is often a director by default.
+
+## Common failure modes
+
+- **Drift from the spec.** The implementation diverges from the PRD; the PRD is not updated. Fix by updating the PRD in the same pull request.
+- **Silent skip.** A code path is added but no test covers it. Fix by writing the test before the code path lands.
+- **Owner unclear.** A piece of work has no single owner; everyone assumes someone else is responsible. Fix by assigning a name in writing.
+- **Plan without check-in.** A plan is written but never reviewed against reality. Fix by scheduling the review at the same time as the plan is written.
+- **Decision without record.** A choice is made in a meeting; no one records it. Fix by writing the decision in the *Decision Log* before leaving the meeting.
+
+---
+
+{{!-- Tier A/B/C: founder reviews the synthesised content; LLM fills the {{var}} placeholders above. --}}
+
+> **Founder review:** {{TODO_FOUNDER_REVIEW_NOTES}}
+

@@ -30,11 +30,6 @@ export const STAGE_REQUIREMENTS: StageRequirement[] = [
     description: "Brand brief and logo pack must exist",
   },
   {
-    stage: "UK_SETUP_READY",
-    requiredArtifactTypes: ["company_setup_checklist"],
-    description: "UK company setup checklist must exist",
-  },
-  {
     stage: "SPEC_READY",
     requiredArtifactTypes: ["product_spec"],
     description: "Product spec must exist",
@@ -63,6 +58,11 @@ export const STAGE_REQUIREMENTS: StageRequirement[] = [
     stage: "LAUNCH_READY",
     requiredArtifactTypes: ["launch_checklist"],
     description: "Launch checklist must exist",
+  },
+  {
+    stage: "UK_SETUP_READY",
+    requiredArtifactTypes: ["company_setup_checklist"],
+    description: "UK company setup checklist must exist",
   },
   {
     stage: "LIVE",

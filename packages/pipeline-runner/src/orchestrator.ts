@@ -120,11 +120,6 @@ const STEP_DEFS = [
     description: "Write 4 logo concept briefs (skipped without an LLM caller)",
   },
   {
-    id: "ensure-uk-setup",
-    name: "Ensure UK Setup Canvas",
-    description: "Scaffold the UK admin canvas (entity, HMRC, banking, insurance, IP)",
-  },
-  {
     id: "ensure-spec",
     name: "Ensure Product Spec",
     description:
@@ -150,6 +145,11 @@ const STEP_DEFS = [
     id: "audit-venture",
     name: "Audit Venture",
     description: "Run sanity checks against artifacts and manifest",
+  },
+  {
+    id: "ensure-uk-setup",
+    name: "Ensure UK Setup Canvas",
+    description: "Scaffold the UK admin canvas (entity, HMRC, banking, insurance, IP)",
   },
 ] as const;
 
@@ -221,8 +221,7 @@ export async function runPipeline(opts: OrchestratorOpts): Promise<OrchestratorR
           // every pipeline run. Now takes the full manifest (used for
           // ventureName + future appType-specific gating in
           // deriveProductSpecRules). Slot in the step order matches
-          // VENTURE_STAGE_ORDER: BRAND_READY → UK_SETUP_READY →
-          // SPEC_READY → ... so it runs after ensure-uk-setup.
+          // VENTURE_STAGE_ORDER: BRAND_READY → SPEC_READY → ...
           result = await ensureSpecStep({
             fs,
             manifest,
@@ -275,7 +274,20 @@ export async function runPipeline(opts: OrchestratorOpts): Promise<OrchestratorR
         }
 
         case "create-brand-brief": {
-          const r = await createBrandBriefStep({ fs, manifest, ventureRoot });
+          if (!opts.callLlm) {
+            // Brief is LLM-narrated now -- skip if the consumer hasn't
+            // plumbed in a caller. The brand stage runner enforces a
+            // hard requirement at validate() time; this orchestrator
+            // path stays soft for Node-side / seed consumers.
+            result = { status: "skipped", producedArtifactIds: [] };
+            break;
+          }
+          const r = await createBrandBriefStep({
+            fs,
+            manifest,
+            ventureRoot,
+            callLlm: opts.callLlm,
+          });
           lastBrandBrief = r.brief;
           result = r;
           break;
@@ -283,11 +295,20 @@ export async function runPipeline(opts: OrchestratorOpts): Promise<OrchestratorR
 
         case "create-logo-pack":
           if (!lastBrandBrief) throw new Error("Brand brief must be created before logo pack");
+          if (!opts.callLlm) {
+            // Logo step is LLM-driven now (subscription-CLI preferred,
+            // outputs SVG). Soft-skip for Node / seed consumers that
+            // didn't plumb a caller in; the desktop brand runner
+            // enforces a hard requirement at validate() time.
+            result = { status: "skipped", producedArtifactIds: [] };
+            break;
+          }
           result = await createLogoPackStep({
             fs,
             ventureId: manifest.id,
             ventureRoot,
             brief: lastBrandBrief,
+            callLlm: opts.callLlm,
           });
           break;
 
@@ -327,9 +348,8 @@ export async function runPipeline(opts: OrchestratorOpts): Promise<OrchestratorR
 
         case "ensure-uk-setup":
           // pt.33: deterministic, no LLM, no signal needed (file write
-          // completes in ms). Fits between brand and product-spec
-          // steps because UK_SETUP_READY is the stage immediately
-          // after BRAND_READY in VENTURE_STAGE_ORDER.
+          // completes in ms). Runs late because UK_SETUP_READY now sits
+          // after CRM_READY in VENTURE_STAGE_ORDER.
           result = await ensureUkSetupStep({
             fs,
             manifest,

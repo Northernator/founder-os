@@ -29,7 +29,11 @@ import type {
   ValidationResult,
   VentureManifest,
 } from "@founder-os/domain";
-import type { Filesystem, NamingLlmCaller } from "@founder-os/pipeline-runner";
+import type {
+  Filesystem,
+  NamingLlmCaller,
+  OrchestratorLlmCaller,
+} from "@founder-os/pipeline-runner";
 import {
   createBrandBriefStep,
   createLogoPackStep,
@@ -43,6 +47,12 @@ export type BrandStageRunnerOpts = {
   manifest: VentureManifest;
   ventureRoot: string;
   fs: Filesystem;
+  /**
+   * LLM caller for the naming step + creative fields in the brief
+   * step. NamingLlmCaller and OrchestratorLlmCaller share the same
+   * `({system, user}) => Promise<string>` shape so a single caller
+   * works for both.
+   */
   callLlm: NamingLlmCaller;
   /** Optional founder shortlist / "avoid these" hints, forwarded verbatim. */
   seedHints?: string;
@@ -127,10 +137,16 @@ export class BrandStageRunner extends BaseStageRunner implements StageRunner {
 
       // ----- Step 2: Brand brief -----
       this.log("info", "creating brand brief");
+      // The callLlm injected here is NamingLlmCaller-shaped but the
+      // brief step expects OrchestratorLlmCaller; both share the same
+      // ({system, user}) => Promise<string> signature so the cast is
+      // safe. Kept explicit so future signature drift in either type
+      // surfaces as a compile error here.
       const briefResult = await createBrandBriefStep({
         fs: this.fs,
         manifest: this.manifest,
         ventureRoot: this.ventureRoot,
+        callLlm: this.callLlm as unknown as OrchestratorLlmCaller,
       });
       const briefPath = `${getBrandKitDir(this.ventureRoot)}/brand-brief.json`;
       this.log("info", "brand-brief step finished", {
@@ -150,11 +166,15 @@ export class BrandStageRunner extends BaseStageRunner implements StageRunner {
 
       // ----- Step 3: Logo pack -----
       this.log("info", "materializing logo pack");
+      // Logo step now goes through the same LLM caller as the brief
+      // step (subscription-CLI preferred, no image-gen API). The model
+      // is asked for raw SVG markup, one call per archetype.
       const logoResult = await createLogoPackStep({
         fs: this.fs,
         ventureId: this.manifest.id,
         ventureRoot: this.ventureRoot,
         brief: briefResult.brief,
+        callLlm: this.callLlm as unknown as OrchestratorLlmCaller,
       });
       const logoMarker = `${getLogoExportsDir(this.ventureRoot)}/logo.svg`;
       this.log("info", "logo-pack step finished", { status: logoResult.status, path: logoMarker });

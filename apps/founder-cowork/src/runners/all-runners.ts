@@ -24,6 +24,12 @@ const CONFIG: Record<HandoffRequestType, PerTypeConfig> = {
   // HandoffExport (Stitch or CoDesign). Same output subdir + token
   // budget as the legacy stitch path.
   BUILD_FROM_HANDOFF_EXPORT: { outputSubdir: "07_build", maxTokens: 16_000 },
+  // Backend handoff (slice 6 of backend arc). Bundle payload carries
+  // a parsed BackendExport (engine, baseUrl, collections, auth
+  // providers, SDK import path). Same output subdir + token budget as
+  // the frontend BUILD_FROM_HANDOFF_EXPORT path -- the extension can
+  // consume either or both for a given venture.
+  BUILD_FROM_BACKEND_EXPORT: { outputSubdir: "07_build", maxTokens: 16_000 },
   BUILD_FROM_STITCH_EXPORT: { outputSubdir: "07_build", maxTokens: 16_000 },
   GENERATE_CODE_WIKI: { outputSubdir: "" /* writes under docs/wiki/ from prompt */ },
   GENERATE_TRUTH_LAYER: { outputSubdir: "" },
@@ -48,6 +54,7 @@ function makeRunner(type: HandoffRequestType) {
 export const RUNNERS: HandoffRunnerMap = {
   BUILD_FROM_BRIEF: makeRunner("BUILD_FROM_BRIEF"),
   BUILD_FROM_HANDOFF_EXPORT: makeRunner("BUILD_FROM_HANDOFF_EXPORT"),
+  BUILD_FROM_BACKEND_EXPORT: makeRunner("BUILD_FROM_BACKEND_EXPORT"),
   BUILD_FROM_STITCH_EXPORT: makeRunner("BUILD_FROM_STITCH_EXPORT"),
   GENERATE_CODE_WIKI: makeRunner("GENERATE_CODE_WIKI"),
   GENERATE_TRUTH_LAYER: makeRunner("GENERATE_TRUTH_LAYER"),

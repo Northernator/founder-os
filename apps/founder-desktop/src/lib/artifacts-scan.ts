@@ -71,6 +71,36 @@ function extname(p: string): string {
  */
 export function inferArtifactType(relativePath: string, ext: string): ArtifactType {
   const p = relativePath.toLowerCase();
+  if (p.includes("13_handoff_pack") || p.includes("handoff_pack")) {
+    if (ext === ".pdf") return "handoff-pack-pdf";
+    if (p.endsWith("inventory.md") || p.endsWith("inventory.json"))
+      return "handoff-pack-inventory";
+  }
+  if (p.includes("12_backend") || p.includes("/backend/")) {
+    if (p.endsWith("backend-export.json")) return "backend-export";
+    if (p.endsWith("backend-checkpoint.json")) return "backend-checkpoint";
+  }
+  if (p.includes("11_crm") || p.includes("/crm/")) {
+    if (p.endsWith("crm-instance.json")) return "crm-instance";
+    if (p.endsWith("crm-config.json")) return "crm-config";
+    if (p.includes("/campaigns/") && ext === ".json") return "crm-campaign";
+    if (p.includes("/templates/") && ext === ".md") return "crm-template";
+  }
+  if (p.includes("10_media") || p.includes("/media/")) {
+    if (p.endsWith("media-checkpoint.json")) return "media-checkpoint";
+    if (p.includes("/edits/")) return "media-edit-receipt";
+    if (p.includes("/exports/") && (ext === ".mp4" || p.includes("launch-reel")))
+      return "launch-reel";
+    if (p.includes("/scripts/")) return "media-script";
+    if (p.includes("/storyboards/")) return "storyboard";
+    if (p.includes("/renders/")) return "render-shot";
+  }
+  if (p.endsWith("launch-receipt.json")) return "launch-receipt";
+  if (p.endsWith("launch-announcement.md")) return "launch-announcement";
+  if (p.endsWith("handoff-export.json")) return "handoff-export";
+  if (p.endsWith("validation-summary.json") || p.endsWith("validation-summary.md"))
+    return "validation-summary";
+  if (p.includes("finance-plan") || p.includes("finance-canvas")) return "finance-plan";
   if (p.includes("brand-kit") || (p.includes("brand") && ext === ".json")) return "brand-brief";
   if (p.includes("logo") && ext === ".svg") return "logo-pack";
   if (p.includes("brand-kit")) return "brand-kit";
@@ -80,13 +110,15 @@ export function inferArtifactType(relativePath: string, ext: string): ArtifactTy
   if (p.includes("handoff") && ext === ".json") return "build-handoff";
   if (p.includes("audit")) return "audit-report";
   if (p.includes("market") || p.includes("research")) return "research-summary";
-  if (p.includes("validation") || p.includes("validated")) return "research-summary";
+  if (p.includes("validation") || p.includes("validated")) return "validation-summary";
   if (p.includes("uk") || p.includes("setup") || p.includes("incorporation"))
     return "uk-setup-checklist";
-  if (p.includes("budget") || p.includes("finance")) return "budget-model";
+  if (p.includes("budget") || p.includes("finance")) return "finance-plan";
   if (p.includes("names") || p.includes("naming")) return "naming-scan";
   if (p.includes("trademark")) return "trademark-scan";
   if (p.includes("domain")) return "domain-scan";
+  if (p.includes("social-posts") || p.includes("social/posts") || p.includes("/social/"))
+    return "social-post";
   if (p.includes("social")) return "social-scan";
   if (p.includes("brief")) return "dev-brief";
   return "research-summary";

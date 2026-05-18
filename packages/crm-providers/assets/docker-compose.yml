@@ -1,0 +1,198 @@
+# Founder OS CRM -- local Frappe + ERPNext + CRM stack.
+#
+# Composed for the slice 7 bootstrap. The pipeline writes this file to
+# ~/.founder-os/crm/<slug>/docker-compose.yml on first run and brings it up
+# scoped to `-p founder-os-crm-<slug>` so each venture gets its own
+# isolated project.
+#
+# Default ports: 8000 (web) / 9000 (socketio) on localhost. Override
+# per-venture via venture.yaml under crm.docker.port / socketioPort.
+#
+# Volumes: the `sites` bind mount lives at ~/.founder-os/crm/<slug>/data/sites/
+# so site data survives container restarts. The pipeline first-boot
+# script creates the site + installs the CRM app the first time the
+# stack comes up.
+#
+# This file is a STARTER. Slice 7's docker-bootstrap.ts substitutes the
+# slug + port placeholders before writing it to disk.
+
+services:
+  redis-cache:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+    networks:
+      - founder-os-crm-net
+
+  redis-queue:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+    networks:
+      - founder-os-crm-net
+
+  redis-socketio:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+    networks:
+      - founder-os-crm-net
+
+  db:
+    image: mariadb:10.6
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-frappe-default-root}
+      MYSQL_DATABASE: erpnext
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - founder-os-crm-net
+
+  backend:
+    image: frappe/erpnext:v15
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis-cache
+      - redis-queue
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      REDIS_CACHE: redis-cache:6379
+      REDIS_QUEUE: redis-queue:6379
+      SOCKETIO_PORT: "9000"
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    networks:
+      - founder-os-crm-net
+
+  configurator:
+    image: frappe/erpnext:v15
+    restart: "no"
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - >
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host $$DB_HOST;
+        bench set-config -gp db_port $$DB_PORT;
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
+        bench set-config -g redis_socketio "redis://$$REDIS_CACHE";
+        bench set-config -gp socketio_port $$SOCKETIO_PORT
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      REDIS_CACHE: redis-cache:6379
+      REDIS_QUEUE: redis-queue:6379
+      SOCKETIO_PORT: "9000"
+    depends_on:
+      - db
+      - redis-cache
+      - redis-queue
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    networks:
+      - founder-os-crm-net
+
+  frontend:
+    image: frappe/erpnext:v15
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - websocket
+    command:
+      - nginx-entrypoint.sh
+    environment:
+      BACKEND: backend:8000
+      FRAPPE_SITE_NAME_HEADER: crm.localhost
+      SOCKETIO: websocket:9000
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      PROXY_READ_TIMEOUT: "120"
+      CLIENT_MAX_BODY_SIZE: 50m
+    ports:
+      - "${FOUNDER_OS_CRM_PORT:-8000}:8080"
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    networks:
+      - founder-os-crm-net
+
+  websocket:
+    image: frappe/erpnext:v15
+    restart: unless-stopped
+    command: ["node", "/home/frappe/frappe-bench/apps/frappe/socketio.js"]
+    depends_on:
+      - redis-socketio
+    environment:
+      REDIS_SOCKETIO: redis-socketio:6379
+    ports:
+      - "${FOUNDER_OS_CRM_SOCKETIO_PORT:-9000}:9000"
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    networks:
+      - founder-os-crm-net
+
+  queue-short:
+    image: frappe/erpnext:v15
+    restart: unless-stopped
+    command:
+      - bench
+      - worker
+      - --queue
+      - short,default
+    depends_on:
+      - backend
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    networks:
+      - founder-os-crm-net
+
+  queue-long:
+    image: frappe/erpnext:v15
+    restart: unless-stopped
+    command:
+      - bench
+      - worker
+      - --queue
+      - long
+    depends_on:
+      - backend
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    networks:
+      - founder-os-crm-net
+
+  scheduler:
+    image: frappe/erpnext:v15
+    restart: unless-stopped
+    command: ["bench", "schedule"]
+    depends_on:
+      - backend
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    networks:
+      - founder-os-crm-net
+
+volumes:
+  sites:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${FOUNDER_OS_CRM_DATA_DIR}/sites
+  db-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${FOUNDER_OS_CRM_DATA_DIR}/db
+
+networks:
+  founder-os-crm-net:
+    driver: bridge

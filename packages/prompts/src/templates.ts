@@ -17,21 +17,29 @@ export const STAGE_FIRST_MESSAGE: Record<VentureStage, string> = {
   VALIDATED:
     "Your idea is validated! Time to build your brand. What direction are you thinking for the name and visual identity?",
   BRAND_READY:
-    "Brand is locked in — nice work. Now let's sort the UK business setup. Do you want to go sole trader or Ltd?",
+    "Brand is locked in — nice work. Now let's write the product spec. What are the core user stories for MVP?",
   UK_SETUP_READY:
-    "Business is set up. Now let's write the product spec. What are the core user stories for MVP?",
+    "CRM is ready. Let's do the final UK business setup pass before going live.",
   SPEC_READY:
     "Spec's ready. Let's create wireframes. Are you using Figma, or should we generate screens via AI?",
   WIREFRAME_READY:
     "Wireframes done. Time to export to Stitch/v0 for the design-to-code pass. Ready to go?",
   STITCH_READY:
     "Stitch export ready. Sending to the VS Code extension for the build phase. This is where it gets exciting!",
+  BACKEND_READY:
+    "Backend wired and the frontend has typed access to it. Time to ship the build.",
   BUILD_READY: "Code is generating! Let's review the output and plan the audit pass.",
   AUDIT_READY:
     "Build complete. Running the audit — checking security, performance, and compliance.",
   LAUNCH_READY: "Audit passed! You're ready to launch. Let's go through the launch checklist.",
   MEDIA_READY:
     "Launch reel time. Let's turn the announcement into a short video -- script, storyboard, render.",
+  MEDIA_EDIT_READY:
+    "Polish the launch reel in OpenCut. Drag the rendered clips into the timeline using the manifest, then export back to 10_media/exports/edited/.",
+  CRM_READY:
+    "CRM provisioned and seeded. ICP segments and prospects are loaded; the launch campaign is queued. Now let's confirm UK setup before launch.",
+  HANDOFF_PACK_READY:
+    "Handoff pack rendered — every doc carries the venture's brand. Open `13_handoff_pack/INDEX.md` for the full inventory, or grab the role-pack PDF you need from `role-packs/`.",
   LIVE: "You're live! 🚀 Let's talk about your first 30 days — growth, feedback loops, and what to build next.",
 };
 

@@ -1,45 +1,49 @@
 /**
  * run-media-stage.ts
  *
- * MediaStageRunner adoption helper. Slice 5a shipped UI + helper with
- * `providers: []` (every shot routed through gemini_flow paste-in).
- * Slice 5b adds optional HyperFrames provider injection: if the
- * `hyperframes` binary is on PATH, the helper bootstraps a per-venture
- * project under `<root>/10_media/hyperframes/`, installs the §12 core
- * preset blocks/components, constructs a HyperFrames provider, and
- * passes it to MediaStageRunner.providers. HyperFrames-eligible shots
- * (the resolver picks tier_0 for charts/UI/title cards) auto-render;
- * shots that need an AI engine still fall through to gemini_flow
- * paste-in until a Wan2/CogVideoX/Veo provider lands in slice 6+.
+ * MediaStageRunner adoption helper.
+ *
+ * History
+ * -------
+ * Slice 5a (2026-05-08) shipped UI + helper with `providers: []` -- every
+ * shot routed through gemini_flow paste-in.
+ *
+ * Slice 5b (2026-05-08) attempted to inject a HyperFrames provider by
+ * importing `createHyperframesProvider` + `bootstrapHyperframesProject`
+ * straight from `@founder-os/media-providers`. That barrel transitively
+ * imported `node:child_process` via spawn.ts -- Vite externalised the
+ * Node module and module evaluation threw on first access ("Module
+ * node:child_process has been externalized for browser compatibility"),
+ * unmounting the React tree and producing a blank screen. Architecturally
+ * unsound regardless: the WebView cannot spawn child processes.
+ *
+ * Current state (slice 3b shipped 2026-05-17)
+ * -------------------------------------------
+ * Four Tauri commands now bridge the WebView to
+ * @founder-os/media-providers/node via a one-shot pnpm-filtered CLI:
+ *   hf_probe       -- is the hyperframes binary on PATH?
+ *   hf_doctor      -- env health (FFmpeg, etc)
+ *   hf_bootstrap   -- mkdir 10_media/hyperframes/, init, install §12 preset
+ *   hf_render      -- render a single Shot through HyperFrames
+ * probeHyperframesViaTauri walks probe -> doctor -> bootstrap and returns
+ * an IPC-shaped MediaProvider whose render() invokes hf_render. The
+ * WebView remains free of node:* imports (the renderer is browser-class
+ * and would crash on access, per the PM-split memory).
  *
  * LLM behaviour
  * -------------
  * Subscription-mode CLIs preferred per project policy. The script step
  * is LLM-aware via optional callLlm; without one it runs deterministic.
- *
- * Bootstrap behaviour
- * -------------------
- *  - First run on a venture: ~30s setup (init + 10 catalog adds).
- *  - Subsequent runs: skipped (project + assets persist on disk).
- *  - Bootstrap failure (network blip, npm permissions, etc.) falls
- *    back to gemini_flow paste-in -- the run still completes.
  */
+import { invoke } from "@tauri-apps/api/core";
 import type { Venture, VentureManifest } from "@founder-os/domain";
-import {
-  PRESET_CORE_BLOCKS,
-  PRESET_CORE_COMPONENTS,
-  type MediaProvider,
+import type {
+  MediaProvider,
+  MediaRenderResult,
+  Shot,
 } from "@founder-os/media-core";
-import {
-  addCatalogItems,
-  bootstrapHyperframesProject,
-  createHyperframesProvider,
-  HyperframesNotFoundError,
-  runHyperframesJson,
-} from "@founder-os/media-providers";
 import type { LogEntry, StageRunResult } from "@founder-os/stage-runners";
 import { MediaStageRunner, PipelineOrchestrator } from "@founder-os/stage-runners";
-import { getMediaDir } from "@founder-os/workspace-core";
 import { tauriFs } from "./pipeline-fs.js";
 import { buildPipelineLlmCaller } from "./pipeline-llm.js";
 
@@ -55,7 +59,8 @@ export type HfStatus =
   | "bootstrapped" // freshly bootstrapped this run (toast hint for the user)
   | "not-detected" // hyperframes binary not on PATH
   | "doctor-failed" // binary present but doctor returned ok:false (env issue)
-  | "bootstrap-failed"; // binary + doctor ok, but init/add threw
+  | "bootstrap-failed" // binary + doctor ok, but init/add threw
+  | "disabled"; // hyperframes not in manifest.media.enabledEngines
 
 export type RunMediaStageResult = {
   result: StageRunResult;
@@ -78,7 +83,15 @@ export async function runMediaStage(opts: RunMediaStageOpts): Promise<RunMediaSt
     enableWebSearch: false,
   });
 
-  const { provider, hfStatus } = await ensureHyperframesProvider(opts.venture.rootPath);
+  // Slice 8: per-venture engine toggles. Defaults to ['hyperframes',
+  // 'gemini_flow'] when manifest.media is absent. Slice 3b (this file)
+  // now actually constructs an IPC-shaped MediaProvider when the engine
+  // is enabled AND probe + doctor + bootstrap all succeed via Tauri.
+  const enabledEngines = opts.manifest.media?.enabledEngines ?? ["hyperframes", "gemini_flow"];
+  const hyperframesEnabled = enabledEngines.includes("hyperframes");
+  const { provider, hfStatus } = hyperframesEnabled
+    ? await probeHyperframesViaTauri(opts.venture.rootPath)
+    : { provider: null, hfStatus: "disabled" as const };
   const providers: MediaProvider[] = provider ? [provider] : [];
 
   const runner = new MediaStageRunner({
@@ -105,60 +118,162 @@ export async function runMediaStage(opts: RunMediaStageOpts): Promise<RunMediaSt
   };
 }
 
-/**
- * Probe the hyperframes binary, ensure a per-venture project exists,
- * install the §12 core preset on first run, and return a MediaProvider
- * the runner can dispatch to. Returns { provider: null, hfStatus } when
- * any step fails so the caller falls back to the gemini_flow paste-in
- * path -- never throws.
- */
-async function ensureHyperframesProvider(
-  ventureRoot: string,
-): Promise<{ provider: MediaProvider | null; hfStatus: HfStatus }> {
-  // 1. Probe.
-  let probe: { ok?: boolean };
-  try {
-    probe = await runHyperframesJson<{ ok?: boolean }>(["doctor"], { timeoutMs: 8_000 });
-  } catch (err) {
-    if (err instanceof HyperframesNotFoundError) {
-      return { provider: null, hfStatus: "not-detected" };
+// ---------------------------------------------------------------------------
+// IPC envelope shapes -- mirror packages/media-providers/src/cli.ts and
+// apps/founder-desktop/src-tauri/src/media.rs untagged enums. Each command
+// returns one of (success | failure | { error }), so we model the IPC
+// result as a discriminated union and let the caller branch.
+// ---------------------------------------------------------------------------
+
+type HfProbeResultIpc =
+  | { available: true; version: string }
+  | { available: false; reason: string }
+  | { error: string };
+
+type HfDoctorResultIpc =
+  | { ok: true; raw: Record<string, unknown> }
+  | { ok: false; reason: string; raw?: Record<string, unknown> }
+  | { error: string };
+
+type HfBootstrapResultIpc =
+  | {
+      ok: true;
+      projectPath: string;
+      freshlyBootstrapped: boolean;
+      installedBlocks: number;
+      installedComponents: number;
     }
+  | { ok: false; reason: string }
+  | { error: string };
+
+type HfRenderResultIpc =
+  | {
+      ok: true;
+      path: string;
+      durationSec: number;
+      engine: string;
+      meta?: Record<string, unknown>;
+    }
+  | { ok: false; reason: string; kind: "lint" | "layout" | "exit" | "spawn" | "other" }
+  | { error: string };
+
+/**
+ * Slice 3b implementation: probe -> doctor -> bootstrap -> construct an
+ * IPC-shaped MediaProvider whose render() invokes `hf_render` on the
+ * Rust side. The provider keeps the WebView free of node:* imports
+ * (every Node-only call funnels through Tauri commands defined in
+ * apps/founder-desktop/src-tauri/src/media.rs).
+ *
+ * Status mapping:
+ *   - probe.available === false                     -> "not-detected"
+ *   - probe ok, doctor.ok === false                 -> "doctor-failed"
+ *   - probe ok, doctor ok, bootstrap.ok === false   -> "bootstrap-failed"
+ *   - all three ok, bootstrap.freshlyBootstrapped   -> "bootstrapped"
+ *   - all three ok, bootstrap already initialised   -> "ready"
+ *   - any IPC throw / envelope error                -> "not-detected"
+ *     (degrades silently to gemini_flow paste-in; the warn() trail in
+ *      DevTools is the diagnostic surface)
+ *
+ * The function intentionally never throws -- callers always fall back
+ * to `providers: []` on a returned `provider:null`.
+ */
+async function probeHyperframesViaTauri(ventureRoot: string): Promise<{
+  provider: MediaProvider | null;
+  hfStatus: HfStatus;
+}> {
+  // 1. Probe -- is the hyperframes binary on PATH at all?
+  let probe: HfProbeResultIpc;
+  try {
+    probe = await invoke<HfProbeResultIpc>("hf_probe");
+  } catch (cause) {
+    console.warn("[run-media-stage] hf_probe invoke failed:", cause);
+    return { provider: null, hfStatus: "not-detected" };
+  }
+  if ("error" in probe) {
+    console.warn("[run-media-stage] hf_probe sidecar error:", probe.error);
+    return { provider: null, hfStatus: "not-detected" };
+  }
+  if (!probe.available) {
+    console.info("[run-media-stage] hyperframes not detected:", probe.reason);
+    return { provider: null, hfStatus: "not-detected" };
+  }
+
+  // 2. Doctor -- binary present; is the local env healthy (FFmpeg etc)?
+  let doctor: HfDoctorResultIpc;
+  try {
+    doctor = await invoke<HfDoctorResultIpc>("hf_doctor", { ventureRoot });
+  } catch (cause) {
+    console.warn("[run-media-stage] hf_doctor invoke failed:", cause);
     return { provider: null, hfStatus: "doctor-failed" };
   }
-  if (probe.ok !== true) {
+  if ("error" in doctor) {
+    console.warn("[run-media-stage] hf_doctor sidecar error:", doctor.error);
+    return { provider: null, hfStatus: "doctor-failed" };
+  }
+  if (!doctor.ok) {
+    console.warn("[run-media-stage] hyperframes doctor failed:", doctor.reason);
     return { provider: null, hfStatus: "doctor-failed" };
   }
 
-  // 2. Project root + bootstrap (idempotent: skips when index.html exists).
-  const projectRoot = `${getMediaDir(ventureRoot)}/hyperframes`;
-  let freshlyBootstrapped = false;
+  // 3. Bootstrap -- mkdir, hyperframes init (idempotent), install preset.
+  let bootstrap: HfBootstrapResultIpc;
   try {
-    const indexHtml = `${projectRoot}/index.html`;
-    const exists = await tauriFs.exists(indexHtml);
-    if (!exists) {
-      await bootstrapHyperframesProject({
-        root: projectRoot,
-        example: "blank",
-        tailwind: true,
-        skipSkills: true,
-        timeoutMs: 90_000,
-      });
-      // Install the §12 core preset (7 blocks + 3 components).
-      await addCatalogItems(
-        projectRoot,
-        [...PRESET_CORE_BLOCKS, ...PRESET_CORE_COMPONENTS],
-        { timeoutMs: 30_000 },
-      );
-      freshlyBootstrapped = true;
-    }
-  } catch {
+    bootstrap = await invoke<HfBootstrapResultIpc>("hf_bootstrap", { ventureRoot });
+  } catch (cause) {
+    console.warn("[run-media-stage] hf_bootstrap invoke failed:", cause);
+    return { provider: null, hfStatus: "bootstrap-failed" };
+  }
+  if ("error" in bootstrap) {
+    console.warn("[run-media-stage] hf_bootstrap sidecar error:", bootstrap.error);
+    return { provider: null, hfStatus: "bootstrap-failed" };
+  }
+  if (!bootstrap.ok) {
+    console.warn(
+      "[run-media-stage] hyperframes bootstrap failed:",
+      bootstrap.reason,
+    );
     return { provider: null, hfStatus: "bootstrap-failed" };
   }
 
-  const provider = createHyperframesProvider({ projectRoot });
+  // 4. Build the IPC provider. available() returns true unconditionally
+  // because we just proved it via probe+doctor; the render-shots step
+  // calls available() before dispatch but we've already done the probing.
+  const provider: MediaProvider = {
+    name: "hyperframes",
+    async available(): Promise<boolean> {
+      return true;
+    },
+    async render(shot: Shot, outDir: string): Promise<MediaRenderResult> {
+      let ipc: HfRenderResultIpc;
+      try {
+        ipc = await invoke<HfRenderResultIpc>("hf_render", {
+          ventureRoot,
+          shotJson: JSON.stringify(shot),
+          outDir,
+        });
+      } catch (cause) {
+        throw new Error(
+          `hf_render IPC failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+        );
+      }
+      if ("error" in ipc) {
+        throw new Error(`hf_render sidecar error: ${ipc.error}`);
+      }
+      if (!ipc.ok) {
+        throw new Error(`hf_render ${ipc.kind}: ${ipc.reason}`);
+      }
+      return {
+        path: ipc.path,
+        durationSec: ipc.durationSec,
+        engine: ipc.engine as MediaRenderResult["engine"],
+        ...(ipc.meta !== undefined ? { meta: ipc.meta } : {}),
+      };
+    },
+  };
+
   return {
     provider,
-    hfStatus: freshlyBootstrapped ? "bootstrapped" : "ready",
+    hfStatus: bootstrap.freshlyBootstrapped ? "bootstrapped" : "ready",
   };
 }
 

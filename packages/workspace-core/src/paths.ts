@@ -301,8 +301,188 @@ export function ventureArtifactDirs(ventureRoot: string): string[] {
     join(ventureRoot, STAGE_DIRS.validation),
     join(ventureRoot, STAGE_DIRS.brand),
     join(ventureRoot, STAGE_DIRS.uk),
+    join(ventureRoot, STAGE_DIRS.finance),
     join(ventureRoot, STAGE_DIRS.product),
     join(ventureRoot, STAGE_DIRS.build),
     join(ventureRoot, STAGE_DIRS.launch),
+    join(ventureRoot, STAGE_DIRS.operate),
+    // Post-09_operate stages live outside STAGE_DIRS' fixed keys;
+    // pipeline-hardening adds them here so the artifact-index catches
+    // what these runners actually produce.
+    join(ventureRoot, "10_media"),
+    join(ventureRoot, "11_crm"),
+    join(ventureRoot, "12_backend"),
+    join(ventureRoot, "13_handoff_pack"),
   ];
+}
+
+// ---------------------------------------------------------------------------
+// 10_media/edits — media-edit stage paths (re-added 2026-05-18 after Edit
+// truncation; reconstructed from caller-side imports + the artifact taxonomy
+// convention in artifacts-scan.ts).
+// ---------------------------------------------------------------------------
+
+/** 10_media/edits/ — media-edit working folder. */
+export function getMediaEditDir(ventureRoot: string): string {
+  return join(getMediaDir(ventureRoot), "edits");
+}
+
+/** 10_media/edits/media-edit-checkpoint.json — runner checkpoint. */
+export function getMediaEditCheckpointPath(ventureRoot: string): string {
+  return join(getMediaEditDir(ventureRoot), "media-edit-checkpoint.json");
+}
+
+/** 10_media/edits/clip-manifest.md — founder-readable drag-drop guide. */
+export function getClipManifestPath(ventureRoot: string): string {
+  return join(getMediaEditDir(ventureRoot), "clip-manifest.md");
+}
+
+/** 10_media/edits/edit-receipt.json — receipt the OpenCut export step writes. */
+export function getEditReceiptPath(ventureRoot: string): string {
+  return join(getMediaEditDir(ventureRoot), "edit-receipt.json");
+}
+
+/** 10_media/exports/edited/launch-reel.mp4 — the polished launch reel. */
+export function getEditedReelPath(ventureRoot: string): string {
+  return join(getMediaExportsDir(ventureRoot), "edited", "launch-reel.mp4");
+}
+
+// ---------------------------------------------------------------------------
+// 11_crm — CRM stage paths. Slots after 10_media to keep the post-LAUNCH
+// convention. Like getMediaDir() / getBackendDir(), the CRM helpers are
+// dedicated rather than threaded through STAGE_DIRS' fixed keys.
+// ---------------------------------------------------------------------------
+
+export function getCrmDir(ventureRoot: string): string {
+  return join(ventureRoot, "11_crm");
+}
+
+/** 11_crm/crm-checkpoint.json — runner checkpoint. */
+export function getCrmCheckpointPath(ventureRoot: string): string {
+  return join(getCrmDir(ventureRoot), "crm-checkpoint.json");
+}
+
+/** 11_crm/crm-instance.json — provisioning result (URL, admin email). */
+export function getCrmInstancePath(ventureRoot: string): string {
+  return join(getCrmDir(ventureRoot), "crm-instance.json");
+}
+
+/** 11_crm/crm-config.json — connection config (host, encrypted API key path). */
+export function getCrmConfigPath(ventureRoot: string): string {
+  return join(getCrmDir(ventureRoot), "crm-config.json");
+}
+
+/** 11_crm/segments/ — ICP + audience segment JSON files. */
+export function getCrmSegmentsDir(ventureRoot: string): string {
+  return join(getCrmDir(ventureRoot), "segments");
+}
+
+/** 11_crm/contacts/ — seed-prospects + seed-research-contacts. */
+export function getCrmContactsDir(ventureRoot: string): string {
+  return join(getCrmDir(ventureRoot), "contacts");
+}
+
+/** 11_crm/opportunities/ — seed-opportunities JSON files. */
+export function getCrmOpportunitiesDir(ventureRoot: string): string {
+  return join(getCrmDir(ventureRoot), "opportunities");
+}
+
+/** 11_crm/templates/ — email-welcome / email-followup / email-demo-invite md. */
+export function getCrmTemplatesDir(ventureRoot: string): string {
+  return join(getCrmDir(ventureRoot), "templates");
+}
+
+/** 11_crm/campaigns/ — campaign JSON files. */
+export function getCrmCampaignsDir(ventureRoot: string): string {
+  return join(getCrmDir(ventureRoot), "campaigns");
+}
+
+/** 11_crm/campaigns/launch-campaign.json — the canonical launch campaign. */
+export function getCrmLaunchCampaignPath(ventureRoot: string): string {
+  return join(getCrmCampaignsDir(ventureRoot), "launch-campaign.json");
+}
+
+// ---------------------------------------------------------------------------
+// 12_backend — Backend stage paths. Slots after 11_crm. Pipeline-wise the
+// BACKEND runs between HANDOFF and BUILD, but the folder numbering follows
+// the existing "new stages go at the end" precedent.
+// ---------------------------------------------------------------------------
+
+export function getBackendDir(ventureRoot: string): string {
+  return join(ventureRoot, "12_backend");
+}
+
+/** 12_backend/backend-checkpoint.json — runner checkpoint. */
+export function getBackendCheckpointPath(ventureRoot: string): string {
+  return join(getBackendDir(ventureRoot), "backend-checkpoint.json");
+}
+
+/** 12_backend/backend-export.json — normalized BackendExport (BUILD reads this). */
+export function getBackendExportPath(ventureRoot: string): string {
+  return join(getBackendDir(ventureRoot), "backend-export.json");
+}
+
+/** 12_backend/sdk/ — generated client SDK files. */
+export function getBackendSdkDir(ventureRoot: string): string {
+  return join(getBackendDir(ventureRoot), "sdk");
+}
+
+// ---------------------------------------------------------------------------
+// 13_handoff_pack — Handoff Pack stage paths. Tree B (audience-organised
+// branded PDFs) per HANDOFF-PACK-MODULE-SPEC.md sec 3. Tree A is the
+// canonical pipeline runtime (00..12); tree B is rendered output.
+// ---------------------------------------------------------------------------
+
+export function getHandoffPackDir(ventureRoot: string): string {
+  return join(ventureRoot, "13_handoff_pack");
+}
+
+/** 13_handoff_pack/.brand/ — brand assets the PDF renderer pulls from. */
+export function getHandoffPackBrandDir(ventureRoot: string): string {
+  return join(getHandoffPackDir(ventureRoot), ".brand");
+}
+
+/** 13_handoff_pack/.brand/brand-tokens.json — extracted BrandTokens JSON. */
+export function getHandoffPackBrandTokensPath(ventureRoot: string): string {
+  return join(getHandoffPackBrandDir(ventureRoot), "brand-tokens.json");
+}
+
+/** 13_handoff_pack/.brand/logo.svg — vector logo for headers. */
+export function getHandoffPackBrandLogoSvgPath(ventureRoot: string): string {
+  return join(getHandoffPackBrandDir(ventureRoot), "logo.svg");
+}
+
+/** 13_handoff_pack/.brand/logo.png — raster fallback for engines without SVG. */
+export function getHandoffPackBrandLogoPngPath(ventureRoot: string): string {
+  return join(getHandoffPackBrandDir(ventureRoot), "logo.png");
+}
+
+/** 13_handoff_pack/handoff-pack-checkpoint.json — runner checkpoint. */
+export function getHandoffPackCheckpointPath(ventureRoot: string): string {
+  return join(getHandoffPackDir(ventureRoot), "handoff-pack-checkpoint.json");
+}
+
+/** 13_handoff_pack/index.json — manifest of every emitted doc. */
+export function getHandoffPackIndexPath(ventureRoot: string): string {
+  return join(getHandoffPackDir(ventureRoot), "index.json");
+}
+
+/** 13_handoff_pack/.config/pdf-template.json — PDF template config. */
+export function getHandoffPackPdfTemplateConfigPath(ventureRoot: string): string {
+  return join(getHandoffPackDir(ventureRoot), ".config", "pdf-template.json");
+}
+
+/** 13_handoff_pack/{category}/{slot}-{slug}.pdf — a single rendered doc. */
+export function getHandoffPackDocPdfPath(
+  ventureRoot: string,
+  category: string,
+  slot: string,
+  slug: string,
+): string {
+  return join(getHandoffPackDir(ventureRoot), category, `${slot}-${slug}.pdf`);
+}
+
+/** 13_handoff_pack/role-packs/{role}.pdf — a single role pack. */
+export function getHandoffPackRolePackPath(ventureRoot: string, role: string): string {
+  return join(getHandoffPackDir(ventureRoot), "role-packs", `${role}.pdf`);
 }

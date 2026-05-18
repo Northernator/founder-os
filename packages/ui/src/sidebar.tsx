@@ -36,66 +36,102 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Header */}
-      <div
-        style={{
-          padding: "16px",
-          borderBottom: "1px solid var(--border-subtle)",
-          fontWeight: 700,
-          fontSize: 15,
-          color: "var(--text-primary)",
-        }}
-      >
-        Founder OS
+      {/* Dreamlauncher brand lockup -- cloud + rocket mark + tricolor
+          wordmark + tagline. All styles in dreamlauncher.css under
+          `.brand-lockup`. */}
+      <div className="brand-lockup">
+        <div className="logo-line">
+          <div className="mark" aria-hidden="true">
+            <span className="cloud-mark" />
+            <span className="rocket-mark" />
+          </div>
+          <div className="wordmark" aria-label="Dreamlauncher">
+            <span>Dream</span>
+            <span>Launch</span>
+            <span>er</span>
+          </div>
+        </div>
+        <p className="tagline">From idea to launch in one workspace.</p>
       </div>
 
       {/* Ventures list */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>
-        {ventures.map((v) => (
-          <button
-            type="button"
-            key={v.id}
-            onClick={() => onSelectVenture?.(v.id)}
-            style={{
-              width: "100%",
-              display: "flex",
-              flexDirection: "column",
-              padding: "10px 16px",
-              background: v.id === activeVentureId ? "var(--bg-selected)" : "transparent",
-              color: "var(--text-primary)",
-              border: "none",
-              cursor: "pointer",
-              textAlign: "left",
-              borderLeft:
-                v.id === activeVentureId ? "3px solid var(--accent)" : "3px solid transparent",
-              transition: "background 0.15s",
-            }}
-          >
-            <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-secondary)" }}>
-              {v.name}
-            </span>
-            <span style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
-              {STAGE_EMOJI[v.stage] ?? "•"} {v.stage.replace(/_/g, " ")}
-            </span>
-          </button>
-        ))}
+      <div style={{ flex: 1, overflowY: "auto", padding: "10px 8px" }}>
+        {ventures.map((v) => {
+          const active = v.id === activeVentureId;
+          return (
+            <button
+              type="button"
+              key={v.id}
+              onClick={() => onSelectVenture?.(v.id)}
+              style={{
+                width: "100%",
+                border: active
+                  ? "1px solid color-mix(in srgb, var(--accent) 28%, transparent)"
+                  : "1px solid transparent",
+                background: active ? "var(--bg-selected)" : "transparent",
+                color: "var(--text-primary)",
+                borderRadius: "var(--radius-lg)",
+                display: "grid",
+                gridTemplateColumns: "28px 1fr",
+                gap: 8,
+                padding: "calc(9px * var(--density)) 9px",
+                textAlign: "left",
+                transition: ".18s ease",
+                cursor: "pointer",
+                boxShadow: active ? "inset 3px 0 0 var(--accent)" : undefined,
+                marginBottom: 2,
+              }}
+            >
+              <span style={{ fontSize: 18, lineHeight: 1.2 }}>{STAGE_EMOJI[v.stage] ?? "•"}</span>
+              <span>
+                <span
+                  style={{
+                    display: "block",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  {v.name}
+                </span>
+                <span
+                  style={{
+                    display: "block",
+                    marginTop: 2,
+                    fontSize: 11,
+                    color: "var(--text-tertiary)",
+                  }}
+                >
+                  {v.stage.replace(/_/g, " ")}
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* New venture button */}
-      <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border-subtle)" }}>
+      <div
+        style={{
+          padding: "13px 14px 16px",
+          borderTop: "1px solid var(--border-subtle)",
+        }}
+      >
         <button
           type="button"
           onClick={onNewVenture}
           style={{
             width: "100%",
-            padding: "8px",
+            padding: "calc(8px * var(--density)) 12px",
             background: "var(--accent)",
             color: "var(--accent-fg)",
-            border: "none",
-            borderRadius: 6,
-            fontWeight: 600,
+            border: "1px solid transparent",
+            borderRadius: "var(--radius-md)",
+            fontWeight: 800,
             fontSize: 13,
             cursor: "pointer",
+            boxShadow: "var(--shadow-sm)",
+            transition: ".16s ease",
           }}
         >
           + New Venture

@@ -1,0 +1,92 @@
+---
+docId: customer-health-score
+tier: D
+category: 09-customer-success
+title: Customer Health Score Model
+---
+
+# Customer Health Score Model
+
+Usage, satisfaction, risk signals.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+## Overview
+
+This document records the financial position of **{{COMPANY_NAME}}** as of **{{CURRENT_DATE}}**, and projects it forward over the next twelve months on the assumptions recorded below.
+
+It is the source of truth for the budget and is referenced by the *Board Decision Log* whenever a financial decision is taken.
+
+## Revenue model
+
+Revenue comes from {{TODO_REVENUE_SOURCES}}. The pricing tiers are recorded in the *Pricing Strategy*; the unit economics are recorded in the *Unit Economics Model*.
+
+Projected revenue is built bottom-up: customer count by tier × price × probability-weighted close rate. The assumptions are conservative; the upside case is recorded separately as a sensitivity.
+
+## Costs
+
+The fixed cost base is {{TODO_FIXED_COSTS_SUMMARY}}. The variable cost per customer is {{TODO_VAR_COST_SUMMARY}}. Fixed costs grow with hiring; variable costs grow with usage.
+
+The single largest line in the budget is the team. The second largest is infrastructure. The *Subscription Cost Register* is the canonical list of every recurring tool the company pays for.
+
+## Cashflow
+
+We model cashflow weekly for the next thirteen weeks and monthly thereafter to month twelve. The thirteen-week view is the one we actually manage to; the monthly view is the planning horizon.
+
+Cash on hand at the end of every month is recorded in the *Monthly Close Checklist* and reviewed at the board meeting that follows.
+
+## Runway
+
+At the current burn rate, the company has **{{TODO_RUNWAY_MONTHS}}** months of runway. This is the metric that triggers the next funding decision; the trigger points are recorded in the *Investor / Funding Deck* appendix.
+
+Runway is recalculated every month at close. If the recalculation moves the trigger date in by more than thirty days, the board is notified within five working days.
+
+## Assumptions
+
+1. Pricing as published. No discounting beyond the brackets in the *Pricing Strategy*.
+2. Churn at the rate observed in cohort analysis to date, with a sensitivity at +50%.
+3. CAC at the rate observed in the *Sales Playbook*'s outbound channel.
+4. Salaries at the levels in the *Compensation Framework*; no inflationary uplift until month twelve.
+5. Hosting costs scale linearly with active customers up to the next tier of the underlying provider.
+
+## Communication channels
+
+- **Email.** Outside the company. Signed off by a director for anything contractual.
+- **Team chat.** Inside the company. Default channel for anything routine.
+- **DMs.** For one-to-one conversations that genuinely need privacy; everything else goes in a channel so others can learn from it.
+- **Video calls.** For the conversations the chat or email cannot carry — interviews, hard feedback, customer escalations.
+- **Tickets.** For work that has a clear definition of done; nothing important should be tracked only in chat.
+
+The principle: choose the channel that gives the conversation the right level of permanence and the right audience.
+
+## Escalation path
+
+1. **First**, raise the issue with the owner of the area concerned. Give them a chance to fix it.
+2. **Second**, if the issue is not fixed within a reasonable window, escalate to the approver listed above.
+3. **Third**, if the issue is still not fixed, escalate to a director.
+4. **Fourth**, if the issue is with a director, escalate to the board.
+
+The shorter the path, the better. Skipping a step is permitted when the step is the source of the problem; document the reason in the *Decision Log*.
+
+## Metrics
+
+We measure the things that change the way we behave. The headline metrics are recorded in the *OKRs and KPIs* document; the *North Star Metric* is the one that drives the whole company.
+
+A metric that is reported but never acted on is a metric we should stop reporting. A metric that is acted on but never reported is a metric we should write down so the team can act on it together. The list is reviewed quarterly.
+
+## Common failure modes
+
+- **Drift from the spec.** The implementation diverges from the PRD; the PRD is not updated. Fix by updating the PRD in the same pull request.
+- **Silent skip.** A code path is added but no test covers it. Fix by writing the test before the code path lands.
+- **Owner unclear.** A piece of work has no single owner; everyone assumes someone else is responsible. Fix by assigning a name in writing.
+- **Plan without check-in.** A plan is written but never reviewed against reality. Fix by scheduling the review at the same time as the plan is written.
+- **Decision without record.** A choice is made in a meeting; no one records it. Fix by writing the decision in the *Decision Log* before leaving the meeting.
+
+---
+
+## Founder TODOs
+
+- [ ] Replace every `TODO_*` placeholder above with the value for this venture.
+- [ ] Read every section in full; tighten or rewrite any paragraph that does not apply.
+- [ ] Move the document's status from `draft` to `current` and record the change in the change log.
+

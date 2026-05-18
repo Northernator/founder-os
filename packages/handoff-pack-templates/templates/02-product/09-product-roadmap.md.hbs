@@ -1,0 +1,101 @@
+---
+docId: product-roadmap
+tier: B
+category: 02-product
+title: Product Roadmap
+---
+
+# Product Roadmap
+
+Planned product evolution over time.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+{{!-- LLM hint: this is a tier-B document, generated from upstream stage outputs. Replace the section bodies below with content synthesised from the manifest's sourceStages. Keep section headings. --}}
+
+## Summary
+
+**{{COMPANY_NAME}}** is **{{TODO_COMPANY_ONE_LINER}}**. This plan covers the next twelve months: where we want to be, what gets us there, what we need to get it done, and the risks that could knock us off course.
+
+The plan is read by the team, by the board, and by anyone underwriting our growth (investors, lenders, grant bodies). It is updated at every board meeting.
+
+## Objectives
+
+1. {{TODO_OBJECTIVE_1}}
+2. {{TODO_OBJECTIVE_2}}
+3. {{TODO_OBJECTIVE_3}}
+
+Each objective has a measurable key result; the key results are in the *OKRs and KPIs* document. Progress against them is reviewed monthly.
+
+## Initiatives
+
+The initiatives that deliver the objectives above are listed below. Each initiative has a single owner, an explicit success criterion, and a "done by" date.
+
+{{{TODO_INITIATIVES_TABLE}}}
+
+Initiatives that miss their done-by date are reviewed at the next monthly: do we still want this, do we still need it now, what changed?
+
+## Resources required
+
+- **People** — {{TODO_PEOPLE_NEEDED}}.
+- **Money** — {{TODO_MONEY_NEEDED}}.
+- **Tools** — {{TODO_TOOLS_NEEDED}}.
+- **External** — {{TODO_EXTERNAL_DEPS}} (advisers, agencies, partners).
+
+## Risks and mitigations
+
+The risks that could knock the plan off course are recorded in the *Risk Register*. The top three at the time of writing are:
+
+1. {{TODO_RISK_1}} — mitigated by {{TODO_MITIGATION_1}}.
+2. {{TODO_RISK_2}} — mitigated by {{TODO_MITIGATION_2}}.
+3. {{TODO_RISK_3}} — mitigated by {{TODO_MITIGATION_3}}.
+
+A risk crystallising into an incident triggers the *Incident Response Plan*.
+
+## Review cadence
+
+- **Weekly:** owners stand up against their initiatives.
+- **Monthly:** the team reviews progress against the objectives.
+- **Quarterly:** the board reviews the plan and signs off any material changes.
+- **Annually:** the plan is rewritten from first principles.
+
+## Product definitions
+
+- **Feature** — a unit of functionality the user can invoke.
+- **Capability** — a class of features that share a domain (e.g. "reporting").
+- **Flow** — a sequence of screens that completes a user task.
+- **State** — a configuration of the data and the UI; a flow moves between states.
+- **Event** — a change in state, recorded in the analytics.
+
+## Metrics
+
+We measure the things that change the way we behave. The headline metrics are recorded in the *OKRs and KPIs* document; the *North Star Metric* is the one that drives the whole company.
+
+A metric that is reported but never acted on is a metric we should stop reporting. A metric that is acted on but never reported is a metric we should write down so the team can act on it together. The list is reviewed quarterly.
+
+## Common failure modes
+
+- **Drift from the spec.** The implementation diverges from the PRD; the PRD is not updated. Fix by updating the PRD in the same pull request.
+- **Silent skip.** A code path is added but no test covers it. Fix by writing the test before the code path lands.
+- **Owner unclear.** A piece of work has no single owner; everyone assumes someone else is responsible. Fix by assigning a name in writing.
+- **Plan without check-in.** A plan is written but never reviewed against reality. Fix by scheduling the review at the same time as the plan is written.
+- **Decision without record.** A choice is made in a meeting; no one records it. Fix by writing the decision in the *Decision Log* before leaving the meeting.
+
+## How we make decisions
+
+We use a lightweight decision framework. For every non-trivial decision:
+
+1. **Type the decision into a doc.** It does not need to be in this document; the *Decision Log* is fine, an RFC is fine.
+2. **List the options.** Always include "do nothing"; sometimes the best choice is to defer.
+3. **State a recommendation.** A doc with no recommendation is asking the reader to do the author's job.
+4. **Invite challenge.** Anyone on the team can push back; the author is responsible for engaging with the pushback.
+5. **Decide and record.** The decision goes into the *Board Decision Log* or the relevant RFC with the date and the people involved.
+
+Decisions can be revisited when the facts change. They cannot be re-litigated because someone disagrees after the fact.
+
+---
+
+{{!-- Tier A/B/C: founder reviews the synthesised content; LLM fills the {{var}} placeholders above. --}}
+
+> **Founder review:** {{TODO_FOUNDER_REVIEW_NOTES}}
+

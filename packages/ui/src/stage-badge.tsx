@@ -9,10 +9,14 @@ const STAGE_COLOURS: Record<VentureStage, { bg: string; text: string }> = {
   SPEC_READY: { bg: "#FCE7F3", text: "#9D174D" },
   WIREFRAME_READY: { bg: "#FEF9C3", text: "#713F12" },
   STITCH_READY: { bg: "#F0FDF4", text: "#14532D" },
+  BACKEND_READY: { bg: "#F1F5F9", text: "#334155" },
   BUILD_READY: { bg: "#EFF6FF", text: "#1E3A8A" },
   AUDIT_READY: { bg: "#FFF7ED", text: "#9A3412" },
   LAUNCH_READY: { bg: "#ECFDF5", text: "#064E3B" },
   MEDIA_READY: { bg: "#FCE7F3", text: "#831843" },
+  MEDIA_EDIT_READY: { bg: "#FAE8FF", text: "#701A75" },
+  CRM_READY: { bg: "#E0E7FF", text: "#3730A3" },
+  HANDOFF_PACK_READY: { bg: "#E0E7FF", text: "#1E3A8A" },
   LIVE: { bg: "#6366F1", text: "#FFFFFF" },
 };
 

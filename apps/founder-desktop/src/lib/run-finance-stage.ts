@@ -66,13 +66,15 @@ export async function runFinanceStage(
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     enableWebSearch: false,
   });
-  if (!llmCaller) return { kind: "no-provider" };
-
+  // FINANCE has a deterministic path -- runner falls back to the
+  // templated strategic narrative when callLlm is undefined. The
+  // `kind: "no-provider"` variant is kept in the return type for
+  // back-compat but no longer emitted by the helper.
   const runner = new FinanceStageRunner({
     manifest: opts.manifest,
     ventureRoot: opts.venture.rootPath,
     fs: tauriFs,
-    callLlm: llmCaller.callLlm,
+    ...(llmCaller !== null ? { callLlm: llmCaller.callLlm } : {}),
   });
   const orchestrator = new PipelineOrchestrator({
     manifest: opts.manifest,

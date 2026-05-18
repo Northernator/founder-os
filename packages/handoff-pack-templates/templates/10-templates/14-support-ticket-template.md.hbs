@@ -1,0 +1,65 @@
+---
+docId: support-ticket-template
+tier: D
+category: 10-templates
+title: Support Ticket Template
+---
+
+# Support Ticket Template
+
+Customer, severity, summary, resolution.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+## How to use this template
+
+This template is a starting point, not a finished document. Copy it, rename it, and fill the fields below. Delete the placeholder text once you have replaced it; leave the headings so the structure stays consistent across the company.
+
+A template stops being a template the moment a real instance exists; that instance is the canonical document and this file is the source of the next one.
+
+## Fields
+
+- **Title** — what this instance is.
+- **Owner** — the person responsible for keeping it current.
+- **Audience** — who reads it.
+- **Date** — the date the instance was created.
+- **Status** — draft, current, retired.
+
+## Body
+
+The body of the document goes here. Use the section headings that match the type of document; the *Operating System Style Guide* records the conventions.
+
+Where this template is for a recurring artefact (meeting notes, weekly update, monthly close), the body is short and structured. Where it is for a one-off (RFC, ADR, postmortem), the body is long-form prose.
+
+## More definitions
+
+- **In flight** — work that has been started but not yet shipped.
+- **Shipped** — code that is in production, or a document that is in `current` status.
+- **Blocked** — work that cannot progress until another piece of work or decision completes.
+- **At risk** — work that is in flight but is not on track to ship in the planned window.
+- **Done** — work that has shipped, has a passing test, has a record in the relevant log, and has been signed off by the relevant owner.
+
+## Owners and approvers
+
+| Area | Owner | Approver |
+|---|---|---|
+| Product | {{TODO_PRODUCT_OWNER}} | Director |
+| Engineering | {{TODO_ENG_OWNER}} | Director |
+| Design | {{TODO_DESIGN_OWNER}} | Director |
+| Sales | {{TODO_SALES_OWNER}} | Director |
+| Marketing | {{TODO_MARKETING_OWNER}} | Director |
+| Customer success | {{TODO_CS_OWNER}} | Director |
+| Finance | {{TODO_FINANCE_OWNER}} | Director |
+| People | {{TODO_PEOPLE_OWNER}} | Director |
+| Security | {{TODO_SECURITY_OWNER}} | Director |
+
+The owner is the person responsible for the area. The approver is the person who signs off material changes. In a small company the approver is often a director by default.
+
+---
+
+## Founder TODOs
+
+- [ ] Replace every `TODO_*` placeholder above with the value for this venture.
+- [ ] Read every section in full; tighten or rewrite any paragraph that does not apply.
+- [ ] Move the document's status from `draft` to `current` and record the change in the change log.
+

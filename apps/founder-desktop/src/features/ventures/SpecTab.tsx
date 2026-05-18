@@ -1090,7 +1090,7 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
                 whiteSpace: "nowrap",
               }}
             >
-              {runningProductStage ? "Running stage..." : "Run product stage"}
+              {runningProductStage ? "Running stage..." : "Run spec stage"}
             </button>
             {onAdvanceStage && (
               <button
@@ -1114,7 +1114,7 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
                   whiteSpace: "nowrap",
                 }}
               >
-                {advancing ? "Checking…" : "Advance to Spec Ready →"}
+                {advancing ? "Checking…" : "Advance to Screens →"}
               </button>
             )}
           </div>

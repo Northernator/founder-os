@@ -1,0 +1,89 @@
+---
+docId: startup-budget
+tier: B
+category: 07-finance-admin
+title: Startup Budget
+---
+
+# Startup Budget
+
+Initial setup costs, software, contractors, legal, marketing.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+{{!-- LLM hint: this is a tier-B document, generated from upstream stage outputs. Replace the section bodies below with content synthesised from the manifest's sourceStages. Keep section headings. --}}
+
+## Overview
+
+This document records the financial position of **{{COMPANY_NAME}}** as of **{{CURRENT_DATE}}**, and projects it forward over the next twelve months on the assumptions recorded below.
+
+It is the source of truth for the budget and is referenced by the *Board Decision Log* whenever a financial decision is taken.
+
+## Costs
+
+The fixed cost base is {{TODO_FIXED_COSTS_SUMMARY}}. The variable cost per customer is {{TODO_VAR_COST_SUMMARY}}. Fixed costs grow with hiring; variable costs grow with usage.
+
+The single largest line in the budget is the team. The second largest is infrastructure. The *Subscription Cost Register* is the canonical list of every recurring tool the company pays for.
+
+## Cashflow
+
+We model cashflow weekly for the next thirteen weeks and monthly thereafter to month twelve. The thirteen-week view is the one we actually manage to; the monthly view is the planning horizon.
+
+Cash on hand at the end of every month is recorded in the *Monthly Close Checklist* and reviewed at the board meeting that follows.
+
+## Runway
+
+At the current burn rate, the company has **{{TODO_RUNWAY_MONTHS}}** months of runway. This is the metric that triggers the next funding decision; the trigger points are recorded in the *Investor / Funding Deck* appendix.
+
+Runway is recalculated every month at close. If the recalculation moves the trigger date in by more than thirty days, the board is notified within five working days.
+
+## Assumptions
+
+1. Pricing as published. No discounting beyond the brackets in the *Pricing Strategy*.
+2. Churn at the rate observed in cohort analysis to date, with a sensitivity at +50%.
+3. CAC at the rate observed in the *Sales Playbook*'s outbound channel.
+4. Salaries at the levels in the *Compensation Framework*; no inflationary uplift until month twelve.
+5. Hosting costs scale linearly with active customers up to the next tier of the underlying provider.
+
+## Pricing principles
+
+1. **Price for the value the customer gets, not for our cost of delivering it.**
+2. **Make the next tier obvious.** A customer should know without asking whether they need to upgrade.
+3. **Reward annual commitment.** Annual pricing should be visibly cheaper than monthly.
+4. **Be predictable.** Surprise charges are the single biggest cause of churn.
+5. **Keep a free tier wherever possible.** A free tier is the cheapest sales channel we have.
+
+## Third parties
+
+We use third parties — software vendors, contractors, advisers — to do work we do not do ourselves. We pick them on the basis of fit, quality and price, in that order.
+
+Every third-party relationship is logged in the *Tool Stack Register* or the *Subscription Cost Register*. The owner of the relationship is the person responsible for renewal, escalation and review. No third party is engaged without a written contract.
+
+## Metrics
+
+We measure the things that change the way we behave. The headline metrics are recorded in the *OKRs and KPIs* document; the *North Star Metric* is the one that drives the whole company.
+
+A metric that is reported but never acted on is a metric we should stop reporting. A metric that is acted on but never reported is a metric we should write down so the team can act on it together. The list is reviewed quarterly.
+
+## Owners and approvers
+
+| Area | Owner | Approver |
+|---|---|---|
+| Product | {{TODO_PRODUCT_OWNER}} | Director |
+| Engineering | {{TODO_ENG_OWNER}} | Director |
+| Design | {{TODO_DESIGN_OWNER}} | Director |
+| Sales | {{TODO_SALES_OWNER}} | Director |
+| Marketing | {{TODO_MARKETING_OWNER}} | Director |
+| Customer success | {{TODO_CS_OWNER}} | Director |
+| Finance | {{TODO_FINANCE_OWNER}} | Director |
+| People | {{TODO_PEOPLE_OWNER}} | Director |
+| Security | {{TODO_SECURITY_OWNER}} | Director |
+
+The owner is the person responsible for the area. The approver is the person who signs off material changes. In a small company the approver is often a director by default.
+
+---
+
+{{!-- Tier A/B/C: founder reviews the synthesised content; LLM fills the {{var}} placeholders above. --}}
+
+> **Founder review:** {{TODO_FOUNDER_REVIEW_NOTES}}
+

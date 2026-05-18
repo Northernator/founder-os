@@ -1,0 +1,79 @@
+---
+docId: analytics-dashboard-spec
+tier: D
+category: 08-sales-marketing
+title: Analytics Dashboard Spec
+---
+
+# Analytics Dashboard Spec
+
+Traffic, conversion, CAC, activation, retention.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+## Overview
+
+**{{COMPANY_NAME}}** runs a TypeScript-first stack with a single deployable web app (Next.js or Tauri shell, depending on the surface), an HTTP API layer behind it, and a managed Postgres database for primary state. Background work runs on a queue and is decoupled from the request path. CI is mandatory; nothing reaches production without passing it.
+
+This document describes that stack in the level of detail a new engineer needs to be productive in their first week.
+
+## Languages and frameworks
+
+- TypeScript on both the server and the client; strict mode is on by default.
+- The web tier uses {{TODO_WEB_FRAMEWORK}} (defaults: Next.js for hosted, Tauri webview for desktop shells).
+- The API tier uses {{TODO_API_FRAMEWORK}} (defaults: Hono or Express depending on the deployment target).
+- Background jobs use {{TODO_JOB_FRAMEWORK}}.
+- Tests use Vitest; e2e tests use Playwright when needed.
+
+## Repository layout
+
+The repository is a pnpm monorepo. `apps/` holds deployable applications; `packages/` holds reusable libraries. Every package has its own `package.json`, its own `tsconfig.json`, and its own test command.
+
+Cross-package imports go through the workspace alias (`@{{COMPANY_SLUG}}/<package>`). Files in `apps/*/src` may not import from a package's `/node` subpath unless the app explicitly opts in; the Biome rule enforces this.
+
+## Security
+
+Secrets live in the secret manager named in the *Tool Stack Register*. They are never committed to the repository, never pasted into chat, and never typed into a CLI in a way that leaves them in shell history.
+
+Dependencies are reviewed at install time; we do not add a dependency without checking it has an active maintainer, a reasonable history, and a permissive licence. The *Dependency Policy* is the long form of this paragraph.
+
+## Testing
+
+Three layers, each with a clear remit. **Unit tests** prove the smallest unit of behaviour is correct. **Integration tests** prove a package collaborates with its real dependencies (database, file system, child processes). **End-to-end tests** prove the whole product still works.
+
+Coverage is reported but not the headline metric. The headline metric is whether the test that would have caught the bug exists. When a bug is found the fix lands together with the test that would have caught it.
+
+## Growth loops
+
+A growth loop is a way for one customer to lead to the next without us spending more on acquisition. Our current loops are recorded in the *Go-to-Market Plan*.
+
+Strong loops are: referrals (a happy customer brings a colleague), content (a customer's question becomes a blog post that attracts the next customer), integrations (using us in another tool exposes us to that tool's users). Weak loops are: paid ads (every new customer costs the same), cold outbound at scale (does not compound).
+
+## Pricing principles
+
+1. **Price for the value the customer gets, not for our cost of delivering it.**
+2. **Make the next tier obvious.** A customer should know without asking whether they need to upgrade.
+3. **Reward annual commitment.** Annual pricing should be visibly cheaper than monthly.
+4. **Be predictable.** Surprise charges are the single biggest cause of churn.
+5. **Keep a free tier wherever possible.** A free tier is the cheapest sales channel we have.
+
+## Brand voice
+
+Our brand voice is **{{TODO_BRAND_VOICE}}**. The voice is consistent across the website, the product, our outbound, our customer support and our internal documents.
+
+The voice is not a costume; we sound like ourselves whether we are writing a press release or a Slack message to a customer. The *Brand Messaging Guide* sets out the longer description and the do/don't examples.
+
+## Metrics
+
+We measure the things that change the way we behave. The headline metrics are recorded in the *OKRs and KPIs* document; the *North Star Metric* is the one that drives the whole company.
+
+A metric that is reported but never acted on is a metric we should stop reporting. A metric that is acted on but never reported is a metric we should write down so the team can act on it together. The list is reviewed quarterly.
+
+---
+
+## Founder TODOs
+
+- [ ] Replace every `TODO_*` placeholder above with the value for this venture.
+- [ ] Read every section in full; tighten or rewrite any paragraph that does not apply.
+- [ ] Move the document's status from `draft` to `current` and record the change in the change log.
+

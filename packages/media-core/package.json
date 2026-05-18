@@ -15,7 +15,6 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@founder-os/domain": "workspace:*",
     "zod": "^3.23.8"
   }
 }

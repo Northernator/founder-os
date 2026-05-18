@@ -1,40 +1,29 @@
-// @founder-os/media-providers -- engine-specific implementations of the
-// MediaProvider contract from @founder-os/media-core.
-//
-// Slice 2 shipped HyperFrames (tier_0). Slice 6 added typed STUBS for
-// Wan2 (tier_1, ComfyUI HTTP), CogVideoX (tier_2, Python+diffusers),
-// and Veo (tier_4, Gemini API). Each stub's available() returns false
-// and render() throws -- the resolver never picks them, but the
-// contract surface is locked so slice 7+ can fill in subprocess /
-// HTTP internals without changing callers.
+/**
+ * @founder-os/media-providers public entry -- CLIENT-SAFE.
+ *
+ * This barrel imports ZERO node:* modules. Anything that drives the
+ * HyperFrames CLI (subprocess + project lifecycle + provider factory)
+ * lives in the "./node" subpath:
+ *
+ *   import {
+ *     createHyperframesProvider,
+ *     bootstrapHyperframesProject,
+ *   } from "@founder-os/media-providers/node";
+ *
+ * Why split: the Tauri WebView (and any other browser-like consumer)
+ * bundles this barrel via Vite. If Node-only code reached this file Vite
+ * would externalise the node:* imports and the resulting stubs throw on
+ * access, crashing React mount before any UI renders. The split makes
+ * the boundary a hard import-path error instead of a silent runtime
+ * crash. Mirrors the @founder-os/prompt-master and @founder-os/sales-agents
+ * splits.
+ *
+ * Slice 6 stub providers (Wan2 / CogVideoX / Veo) are pure type-importing
+ * factories whose available() returns false and render() throws; they're
+ * safe to ship in the client barrel until their internals land.
+ */
 
-export {
-  createHyperframesProvider,
-  HyperframesLintError,
-  HyperframesLayoutError,
-  type CreateHyperframesProviderOpts,
-} from "./hyperframes-provider.js";
-
-export {
-  bootstrapHyperframesProject,
-  addCatalogItems,
-  assertHyperframesProject,
-  projectPaths,
-  writeVariablesFile,
-  type BootstrapOpts,
-  type ProjectPaths,
-} from "./ensure-project.js";
-
-export {
-  runHyperframes,
-  runHyperframesJson,
-  HyperframesExitError,
-  HyperframesNotFoundError,
-  HyperframesTimeoutError,
-  type SpawnOpts,
-  type SpawnResult,
-} from "./spawn.js";
-
+// Stub providers (slice 6). Pure -- only import types from media-core.
 export {
   createWan2Provider,
   Wan2NotImplementedError,

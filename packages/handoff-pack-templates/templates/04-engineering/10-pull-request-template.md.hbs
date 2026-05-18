@@ -1,0 +1,77 @@
+---
+docId: pull-request-template
+tier: D
+category: 04-engineering
+title: Pull Request Template
+---
+
+# Pull Request Template
+
+Checklist before code is merged.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+## How to use this template
+
+This template is a starting point, not a finished document. Copy it, rename it, and fill the fields below. Delete the placeholder text once you have replaced it; leave the headings so the structure stays consistent across the company.
+
+A template stops being a template the moment a real instance exists; that instance is the canonical document and this file is the source of the next one.
+
+## Fields
+
+- **Title** — what this instance is.
+- **Owner** — the person responsible for keeping it current.
+- **Audience** — who reads it.
+- **Date** — the date the instance was created.
+- **Status** — draft, current, retired.
+
+## Body
+
+The body of the document goes here. Use the section headings that match the type of document; the *Operating System Style Guide* records the conventions.
+
+Where this template is for a recurring artefact (meeting notes, weekly update, monthly close), the body is short and structured. Where it is for a one-off (RFC, ADR, postmortem), the body is long-form prose.
+
+## Common failure modes
+
+- **Drift from the spec.** The implementation diverges from the PRD; the PRD is not updated. Fix by updating the PRD in the same pull request.
+- **Silent skip.** A code path is added but no test covers it. Fix by writing the test before the code path lands.
+- **Owner unclear.** A piece of work has no single owner; everyone assumes someone else is responsible. Fix by assigning a name in writing.
+- **Plan without check-in.** A plan is written but never reviewed against reality. Fix by scheduling the review at the same time as the plan is written.
+- **Decision without record.** A choice is made in a meeting; no one records it. Fix by writing the decision in the *Decision Log* before leaving the meeting.
+
+## Security summary
+
+- Strong authentication (MFA) for every account that touches customer data, money, or production.
+- Encryption at rest and in transit for every system that stores customer data.
+- Least-privilege access; access is granted on need, reviewed quarterly, and revoked promptly when an engagement ends.
+- Logging and monitoring on every production system, with alerts routed to the on-call rotation.
+- An incident response process that the team has practised at least once.
+
+The long form of each of the above is in the *Security Policy*.
+
+## How we make decisions
+
+We use a lightweight decision framework. For every non-trivial decision:
+
+1. **Type the decision into a doc.** It does not need to be in this document; the *Decision Log* is fine, an RFC is fine.
+2. **List the options.** Always include "do nothing"; sometimes the best choice is to defer.
+3. **State a recommendation.** A doc with no recommendation is asking the reader to do the author's job.
+4. **Invite challenge.** Anyone on the team can push back; the author is responsible for engaging with the pushback.
+5. **Decide and record.** The decision goes into the *Board Decision Log* or the relevant RFC with the date and the people involved.
+
+Decisions can be revisited when the facts change. They cannot be re-litigated because someone disagrees after the fact.
+
+## Metrics
+
+We measure the things that change the way we behave. The headline metrics are recorded in the *OKRs and KPIs* document; the *North Star Metric* is the one that drives the whole company.
+
+A metric that is reported but never acted on is a metric we should stop reporting. A metric that is acted on but never reported is a metric we should write down so the team can act on it together. The list is reviewed quarterly.
+
+---
+
+## Founder TODOs
+
+- [ ] Replace every `TODO_*` placeholder above with the value for this venture.
+- [ ] Read every section in full; tighten or rewrite any paragraph that does not apply.
+- [ ] Move the document's status from `draft` to `current` and record the change in the change log.
+

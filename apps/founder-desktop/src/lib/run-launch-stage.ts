@@ -63,13 +63,15 @@ export async function runLaunchStage(opts: RunLaunchStageOpts): Promise<RunLaunc
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     enableWebSearch: false,
   });
-  if (!llmCaller) return { kind: "no-provider" };
-
+  // LAUNCH has a deterministic path -- runner falls back to a
+  // templated announcement when callLlm is undefined. The
+  // `kind: "no-provider"` variant is kept in the return type for
+  // back-compat but no longer emitted by the helper.
   const runner = new LaunchStageRunner({
     manifest: opts.manifest,
     ventureRoot: opts.venture.rootPath,
     fs: tauriFs,
-    callLlm: llmCaller.callLlm,
+    ...(llmCaller !== null ? { callLlm: llmCaller.callLlm } : {}),
   });
   const orchestrator = new PipelineOrchestrator({
     manifest: opts.manifest,

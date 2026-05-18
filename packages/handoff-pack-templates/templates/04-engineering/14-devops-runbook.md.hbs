@@ -1,0 +1,82 @@
+---
+docId: devops-runbook
+tier: D
+category: 04-engineering
+title: DevOps Runbook
+---
+
+# DevOps Runbook
+
+CI/CD, hosting, logs, monitoring, rollback.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+## Purpose
+
+This checklist makes a recurring process repeatable. Following the steps in order is not optional; the order encodes lessons learned from earlier runs.
+
+If a step turns out to be wrong, fix the step in the same pull request that proves the fix works. Do not skip steps to save time and tell yourself you will go back.
+
+## Steps
+
+- [ ] {{TODO_STEP_1}}
+- [ ] {{TODO_STEP_2}}
+- [ ] {{TODO_STEP_3}}
+- [ ] {{TODO_STEP_4}}
+- [ ] {{TODO_STEP_5}}
+- [ ] {{TODO_STEP_6}}
+- [ ] Confirm completion in the *Operational Runbook* and sign off below.
+
+> **TODO:** replace the placeholder steps with the actual steps for this process. Each step should be one verb, one noun and a clear "done" state.
+
+## Sign-off
+
+| Date | Owner | Notes |
+|---|---|---|
+| {{TODO_DATE_1}} | {{TODO_OWNER_1}} | {{TODO_NOTES_1}} |
+| {{TODO_DATE_2}} | {{TODO_OWNER_2}} | {{TODO_NOTES_2}} |
+
+## Common failure modes
+
+- **Drift from the spec.** The implementation diverges from the PRD; the PRD is not updated. Fix by updating the PRD in the same pull request.
+- **Silent skip.** A code path is added but no test covers it. Fix by writing the test before the code path lands.
+- **Owner unclear.** A piece of work has no single owner; everyone assumes someone else is responsible. Fix by assigning a name in writing.
+- **Plan without check-in.** A plan is written but never reviewed against reality. Fix by scheduling the review at the same time as the plan is written.
+- **Decision without record.** A choice is made in a meeting; no one records it. Fix by writing the decision in the *Decision Log* before leaving the meeting.
+
+## Security summary
+
+- Strong authentication (MFA) for every account that touches customer data, money, or production.
+- Encryption at rest and in transit for every system that stores customer data.
+- Least-privilege access; access is granted on need, reviewed quarterly, and revoked promptly when an engagement ends.
+- Logging and monitoring on every production system, with alerts routed to the on-call rotation.
+- An incident response process that the team has practised at least once.
+
+The long form of each of the above is in the *Security Policy*.
+
+## How we make decisions
+
+We use a lightweight decision framework. For every non-trivial decision:
+
+1. **Type the decision into a doc.** It does not need to be in this document; the *Decision Log* is fine, an RFC is fine.
+2. **List the options.** Always include "do nothing"; sometimes the best choice is to defer.
+3. **State a recommendation.** A doc with no recommendation is asking the reader to do the author's job.
+4. **Invite challenge.** Anyone on the team can push back; the author is responsible for engaging with the pushback.
+5. **Decide and record.** The decision goes into the *Board Decision Log* or the relevant RFC with the date and the people involved.
+
+Decisions can be revisited when the facts change. They cannot be re-litigated because someone disagrees after the fact.
+
+## Metrics
+
+We measure the things that change the way we behave. The headline metrics are recorded in the *OKRs and KPIs* document; the *North Star Metric* is the one that drives the whole company.
+
+A metric that is reported but never acted on is a metric we should stop reporting. A metric that is acted on but never reported is a metric we should write down so the team can act on it together. The list is reviewed quarterly.
+
+---
+
+## Founder TODOs
+
+- [ ] Replace every `TODO_*` placeholder above with the value for this venture.
+- [ ] Read every section in full; tighten or rewrite any paragraph that does not apply.
+- [ ] Move the document's status from `draft` to `current` and record the change in the change log.
+

@@ -159,8 +159,22 @@ export function SalesTab({ venture }: { venture: Venture }) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <Card>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "1rem",
+        height: "100%",
+        minHeight: 0,
+        width: "100%",
+        minWidth: 0,
+        overflowY: "auto",
+        overflowX: "hidden",
+        boxSizing: "border-box",
+        padding: "1rem",
+      }}
+    >
+      <Card style={salesCardStyle}>
         <details open>
           <summary
             style={{
@@ -173,7 +187,7 @@ export function SalesTab({ venture }: { venture: Venture }) {
           >
             About the Sales Pipeline
           </summary>
-          <div style={{ marginTop: "0.75rem", fontSize: "0.9rem", lineHeight: 1.55 }}>
+          <div style={copyBlockStyle}>
             <h4 style={{ margin: "0.5rem 0 0.25rem 0" }}>What you put in</h4>
             <p style={{ margin: "0 0 0.75rem 0" }}>
               A company URL. That's it. Anything like <code>https://acme.com</code> or{" "}
@@ -234,19 +248,19 @@ export function SalesTab({ venture }: { venture: Venture }) {
         </details>
       </Card>
 
-      <Card>
+      <Card style={salesCardStyle}>
         <h2 style={{ margin: "0 0 0.75rem 0" }}>Run Pipeline</h2>
         <p style={{ marginTop: 0, opacity: 0.8, fontSize: "0.9rem" }}>
           Paste a prospect URL. Outputs land under <code>.founder/sales/</code> in this venture.
         </p>
-        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
           <input
             type="url"
             placeholder="https://acme.com"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             disabled={running}
-            style={{ flex: 1, padding: "0.5rem", fontSize: "0.95rem" }}
+            style={{ flex: "1 1 16rem", minWidth: 0, padding: "0.5rem", fontSize: "0.95rem" }}
           />
           <Button onClick={handleRun} disabled={!url || running}>
             {running ? "Running..." : "Run Pipeline"}
@@ -255,7 +269,7 @@ export function SalesTab({ venture }: { venture: Venture }) {
       </Card>
 
       {log.length > 0 && (
-        <Card>
+        <Card style={salesCardStyle}>
           <h3 style={{ margin: "0 0 0.5rem 0" }}>Agent Log</h3>
           <pre
             style={{
@@ -266,6 +280,8 @@ export function SalesTab({ venture }: { venture: Venture }) {
               background: "rgba(0,0,0,0.04)",
               maxHeight: "16rem",
               overflowY: "auto",
+              overflowX: "auto",
+              maxWidth: "100%",
             }}
           >
             {log.map((l) => (
@@ -288,17 +304,17 @@ export function SalesTab({ venture }: { venture: Venture }) {
       )}
 
       {memoryPath && (
-        <Card>
+        <Card style={salesCardStyle}>
           <h3 style={{ margin: "0 0 0.5rem 0" }}>Report Artifacts</h3>
-          <p style={{ marginTop: 0, fontSize: "0.9rem" }}>
+          <p style={pathLineStyle}>
             Memory: <code>{memoryPath}</code>
           </p>
           {pdfPath && (
-            <p style={{ marginTop: "0.25rem", fontSize: "0.9rem" }}>
+            <p style={pathLineStyle}>
               PDF: <code>{pdfPath}</code>
             </p>
           )}
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
             <Button onClick={handleGeneratePdf} disabled={generatingPdf}>
               {generatingPdf ? "Generating..." : pdfPath ? "Regenerate PDF" : "Generate PDF"}
             </Button>
@@ -308,12 +324,14 @@ export function SalesTab({ venture }: { venture: Venture }) {
       )}
 
       {memory?.outreach?.emails?.length ? (
-        <Card>
+        <Card style={salesCardStyle}>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
               marginBottom: "0.75rem",
             }}
           >
@@ -339,12 +357,13 @@ export function SalesTab({ venture }: { venture: Venture }) {
                     justifyContent: "space-between",
                     alignItems: "baseline",
                     gap: "0.5rem",
+                    flexWrap: "wrap",
                   }}
                 >
-                  <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>
+                  <div style={{ fontWeight: 600, fontSize: "0.95rem", minWidth: 0 }}>
                     {i + 1}. {e.subject}
                   </div>
-                  <div style={{ display: "flex", gap: "0.4rem" }}>
+                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
                     <Button onClick={() => handleCopyEmail(e)}>Copy</Button>
                     <Button onClick={() => handleMailtoEmail(e)}>Open in mail</Button>
                   </div>
@@ -355,6 +374,7 @@ export function SalesTab({ venture }: { venture: Venture }) {
                     fontFamily: "inherit",
                     fontSize: "0.85rem",
                     whiteSpace: "pre-wrap",
+                    overflowWrap: "anywhere",
                     opacity: 0.85,
                   }}
                 >
@@ -366,7 +386,7 @@ export function SalesTab({ venture }: { venture: Venture }) {
         </Card>
       ) : null}
 
-      <Card>
+      <Card style={salesCardStyle}>
         <h3 style={{ margin: "0 0 0.5rem 0" }}>Follow-up Chat</h3>
         <p style={{ marginTop: 0, opacity: 0.8, fontSize: "0.9rem" }}>
           Ask follow-up questions about this prospect. History persists at{" "}
@@ -398,13 +418,32 @@ export function SalesTab({ venture }: { venture: Venture }) {
             </p>
           </div>
         </details>
-        <div style={{ marginTop: "0.75rem", height: "32rem" }}>
+        <div style={{ marginTop: "0.75rem", height: "min(32rem, 70vh)", minHeight: "22rem" }}>
           <SalesChatPanel venture={venture} memoryPath={memoryPath} />
         </div>
       </Card>
     </div>
   );
 }
+
+const salesCardStyle: React.CSSProperties = {
+  flex: "0 0 auto",
+  minWidth: 0,
+  maxWidth: "100%",
+};
+
+const copyBlockStyle: React.CSSProperties = {
+  marginTop: "0.75rem",
+  fontSize: "0.9rem",
+  lineHeight: 1.55,
+  overflowWrap: "anywhere",
+};
+
+const pathLineStyle: React.CSSProperties = {
+  marginTop: 0,
+  fontSize: "0.9rem",
+  overflowWrap: "anywhere",
+};
 
 /** Format a single email as plain-text "Subject: ...\n\n<body>". */
 function formatEmail(e: { subject: string; body: string }): string {

@@ -1157,7 +1157,7 @@ export function ScreensTab({ venture, manifest, onAdvanceStage, onManifestUpdate
                   whiteSpace: "nowrap",
                 }}
               >
-                {advancing ? "Checking…" : "Advance to Screens →"}
+                {advancing ? "Checking…" : "Advance to Audit →"}
               </button>
             )}
           </div>

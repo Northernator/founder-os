@@ -1,0 +1,113 @@
+---
+docId: prompt-library
+tier: D
+category: 04-engineering
+title: Prompt Library
+---
+
+# Prompt Library
+
+Approved prompts, system prompts, reusable chains.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+## Purpose
+
+This document records how **{{COMPANY_NAME}}** approaches the topic above. It is the canonical reference for anyone — employees, contractors, investors, regulators — who needs to know what the company has committed to, and how.
+
+Where the body of this document says *we* it means {{COMPANY_NAME}} as a legal entity. Where it says *you* it means the reader: employee, contractor, customer or partner.
+
+## Scope
+
+This document applies to every person who acts on behalf of {{COMPANY_NAME}} — directors, employees, contractors, advisors and third parties operating under our name. It applies regardless of location, role or seniority.
+
+Exceptions to scope must be approved in writing by a director and recorded in the change log at the foot of this document.
+
+## Who this is for
+
+The primary audience is the team itself. The secondary audience is anyone who joins the company and needs to come up to speed quickly without reading the entire operating system from scratch.
+
+If you are reading this as part of onboarding, read it through once end-to-end. If you are returning to it for reference, the section headings above are the navigation aid.
+
+## Definitions
+
+- **Director** — a person registered as a director at Companies House.
+- **Officer** — a director, the company secretary, or any other person designated as an officer by the board.
+- **Personnel** — employees and contractors with a current engagement.
+- **Customer** — an organisation or individual that has accepted our terms of service and is using the product.
+- **Confidential information** — anything labelled confidential, anything a reasonable person would treat as confidential, and anything covered by an NDA.
+
+## Team responsibilities
+
+Every member of the team is responsible for the integrity of their own work, for raising blockers early, and for keeping the operating system honest — that is, for flagging when a document drifts from how we actually operate.
+
+No one is responsible for being right all the time. Everyone is responsible for being honest when they are wrong.
+
+## Review and updates
+
+This document is reviewed at least annually, and whenever a change to the business or to the law makes it obsolete. The review owner is recorded in the *Domain and Account Register*.
+
+Material changes are signed off by the board and recorded in the change log at the foot of this document.
+
+## Common failure modes
+
+- **Drift from the spec.** The implementation diverges from the PRD; the PRD is not updated. Fix by updating the PRD in the same pull request.
+- **Silent skip.** A code path is added but no test covers it. Fix by writing the test before the code path lands.
+- **Owner unclear.** A piece of work has no single owner; everyone assumes someone else is responsible. Fix by assigning a name in writing.
+- **Plan without check-in.** A plan is written but never reviewed against reality. Fix by scheduling the review at the same time as the plan is written.
+- **Decision without record.** A choice is made in a meeting; no one records it. Fix by writing the decision in the *Decision Log* before leaving the meeting.
+
+## Security summary
+
+- Strong authentication (MFA) for every account that touches customer data, money, or production.
+- Encryption at rest and in transit for every system that stores customer data.
+- Least-privilege access; access is granted on need, reviewed quarterly, and revoked promptly when an engagement ends.
+- Logging and monitoring on every production system, with alerts routed to the on-call rotation.
+- An incident response process that the team has practised at least once.
+
+The long form of each of the above is in the *Security Policy*.
+
+## How we make decisions
+
+We use a lightweight decision framework. For every non-trivial decision:
+
+1. **Type the decision into a doc.** It does not need to be in this document; the *Decision Log* is fine, an RFC is fine.
+2. **List the options.** Always include "do nothing"; sometimes the best choice is to defer.
+3. **State a recommendation.** A doc with no recommendation is asking the reader to do the author's job.
+4. **Invite challenge.** Anyone on the team can push back; the author is responsible for engaging with the pushback.
+5. **Decide and record.** The decision goes into the *Board Decision Log* or the relevant RFC with the date and the people involved.
+
+Decisions can be revisited when the facts change. They cannot be re-litigated because someone disagrees after the fact.
+
+## Metrics
+
+We measure the things that change the way we behave. The headline metrics are recorded in the *OKRs and KPIs* document; the *North Star Metric* is the one that drives the whole company.
+
+A metric that is reported but never acted on is a metric we should stop reporting. A metric that is acted on but never reported is a metric we should write down so the team can act on it together. The list is reviewed quarterly.
+
+## Related documents
+
+- *Company Brief*
+- *Strategic Roadmap*
+- *Operating Cadence*
+- *Risk Register*
+- *Decision Log*
+
+Linked documents may change; this list is updated at the same time the body is updated.
+
+## Change log
+
+| Date | Author | Change |
+|---|---|---|
+| {{CURRENT_DATE}} | Generated by Founder OS | Initial draft |
+
+Add a row every time this document changes. The smallest change worth recording is "spelling fix"; the largest is a rewrite of the whole document.
+
+---
+
+## Founder TODOs
+
+- [ ] Replace every `TODO_*` placeholder above with the value for this venture.
+- [ ] Read every section in full; tighten or rewrite any paragraph that does not apply.
+- [ ] Move the document's status from `draft` to `current` and record the change in the change log.
+

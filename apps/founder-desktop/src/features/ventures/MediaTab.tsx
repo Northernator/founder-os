@@ -22,21 +22,28 @@
  * it and surfaces the receipt.
  */
 import type { FailedRunEntry, Venture, VentureManifest } from "@founder-os/domain";
+import type { MediaEngine } from "@founder-os/media-core";
+import type { SocialMediaRef } from "@founder-os/social-core";
 import {
   getFlowPromptsPath,
   getLaunchReelPath,
   getMediaScriptMdPath,
+  getStagePath,
 } from "@founder-os/workspace-core";
+import { writeVentureManifest } from "../../lib/venture-io.js";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { findLatestFailedRunForStage } from "../../lib/failed-runs.js";
 import { runMediaStage } from "../../lib/run-media-stage.js";
 import { pushToast } from "../../lib/toasts.js";
 import { FailedRunBanner } from "./FailedRunBanner.js";
+import { SocialActions, type SocialActionsPrefill } from "./SocialActions.js";
+import { SocialPostLogPanel } from "./SocialPostLogPanel.js";
 
 type Props = {
   venture: Venture;
   manifest: VentureManifest | null;
+  onManifestUpdate?: (next: VentureManifest) => void;
 };
 
 type StepStatus = "ok" | "missing" | "pending-flow" | "skipped";
@@ -46,15 +53,20 @@ type LastRun = {
   generationSource: "llm" | "deterministic" | "deterministic-fallback" | "unknown";
   pendingFlow: boolean;
   llmConfigured: boolean;
-  hfStatus: "ready" | "bootstrapped" | "not-detected" | "doctor-failed" | "bootstrap-failed";
+  hfStatus: "ready" | "bootstrapped" | "not-detected" | "doctor-failed" | "bootstrap-failed" | "disabled";
 };
 
-export function MediaTab({ venture, manifest }: Props) {
+export function MediaTab({ venture, manifest, onManifestUpdate }: Props) {
   const [running, setRunning] = useState(false);
   const [failedRun, setFailedRun] = useState<FailedRunEntry | null>(null);
   const [lastRun, setLastRun] = useState<LastRun | null>(null);
   const [scriptPreview, setScriptPreview] = useState<string | null>(null);
   const [reelExists, setReelExists] = useState(false);
+  // Pre-fill for <SocialActions>. Pulls the first 200 chars of
+  // 08_launch/launch-announcement.md (per spec sec 8.1) when present so
+  // the compose modal opens with a sensible caption draft. The launch reel
+  // is attached as a SocialMediaRef when it exists on disk.
+  const [socialPrefill, setSocialPrefill] = useState<SocialActionsPrefill | undefined>(undefined);
 
   // Pull failed-run + artifact preview on mount and after each run.
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
@@ -67,10 +79,17 @@ export function MediaTab({ venture, manifest }: Props) {
       .catch(() => {
         if (!cancelled) setFailedRun(null);
       });
-    refreshArtifacts(venture).then(({ scriptMd, reel }) => {
+    refreshArtifacts(venture).then(({ scriptMd, reel, announcement }) => {
       if (cancelled) return;
       setScriptPreview(scriptMd);
       setReelExists(reel);
+      setSocialPrefill(
+        buildSocialPrefill({
+          ventureRoot: venture.rootPath,
+          announcement,
+          reelExists: reel,
+        }),
+      );
     });
     return () => {
       cancelled = true;
@@ -132,6 +151,13 @@ export function MediaTab({ venture, manifest }: Props) {
       const refreshed = await refreshArtifacts(venture);
       setScriptPreview(refreshed.scriptMd);
       setReelExists(refreshed.reel);
+      setSocialPrefill(
+        buildSocialPrefill({
+          ventureRoot: venture.rootPath,
+          announcement: refreshed.announcement,
+          reelExists: refreshed.reel,
+        }),
+      );
       // Re-pull failed-run -- successful runs clear it via the orchestrator.
       const next = await findLatestFailedRunForStage(venture.rootPath, "MEDIA").catch(() => null);
       setFailedRun(next);
@@ -149,8 +175,49 @@ export function MediaTab({ venture, manifest }: Props) {
   const flowPromptsPath = getFlowPromptsPath(venture.rootPath);
   const reelPath = getLaunchReelPath(venture.rootPath);
 
+  // Slice 8: per-venture engine toggles. Default mirrors the helper
+  // default so the UI shows what would actually run if untouched.
+  const enabledEngines: ReadonlyArray<MediaEngine> =
+    manifest?.media?.enabledEngines ?? ["hyperframes", "gemini_flow"];
+
+  const persistEnabledEngines = async (next: ReadonlyArray<MediaEngine>) => {
+    if (!manifest) return;
+    try {
+      const updated: VentureManifest = {
+        ...manifest,
+        media: { ...(manifest.media ?? {}), enabledEngines: [...next] },
+      };
+      await writeVentureManifest(venture.rootPath, updated);
+      onManifestUpdate?.(updated);
+    } catch (err) {
+      pushToast({
+        kind: "error",
+        message: "Couldn't save engine config",
+        detail: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  const toggleEngine = (engine: MediaEngine) => {
+    const isOn = enabledEngines.includes(engine);
+    const next = isOn
+      ? enabledEngines.filter((e) => e !== engine)
+      : [...enabledEngines, engine];
+    void persistEnabledEngines(next);
+  };
+
   return (
-    <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
+    <div
+      style={{
+        padding: 28,
+        display: "flex",
+        flexDirection: "column",
+        gap: 20,
+        height: "100%",
+        overflowY: "auto",
+        boxSizing: "border-box",
+      }}
+    >
       {failedRun && (
         <FailedRunBanner
           label="Media"
@@ -190,6 +257,8 @@ export function MediaTab({ venture, manifest }: Props) {
           {running ? "Running media stage..." : "Run media stage"}
         </button>
       </div>
+
+      <EnginesRow enabled={enabledEngines} onToggle={toggleEngine} disabled={!manifest} />
 
       {lastRun && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -250,6 +319,90 @@ export function MediaTab({ venture, manifest }: Props) {
           </span>
         </div>
       )}
+
+      {/*
+        Round 3 of the SOCIAL-MODULE-SPEC arc: <SocialActions> exposes the
+        "post the launch reel" affordance per spec sec 8.1. Pre-fill seeds
+        the compose modal with the launch announcement (first 200 chars)
+        and attaches launch-reel.mp4 when it exists. The widget reaches the
+        Node sidecar via Tauri commands -- never imports
+        @founder-os/social-providers/node directly (PM-split guard).
+      */}
+      <SocialActions
+        ventureRoot={venture.rootPath}
+        ventureSlug={venture.slug}
+        prefill={socialPrefill}
+        manifest={manifest}
+        onManifestUpdate={onManifestUpdate}
+      />
+      {/*
+        Slice 6 of the SOCIAL-MODULE follow-up arc: read-only panel that
+        renders the last few SocialResult artifacts so the founder can see
+        per-platform success rates without opening 13_social/posts/ in
+        Explorer. Empty-state friendly: a fresh venture sees a hint, not
+        an error.
+      */}
+      <SocialPostLogPanel ventureRoot={venture.rootPath} />
+    </div>
+  );
+}
+
+function EnginesRow({
+  enabled,
+  onToggle,
+  disabled,
+}: {
+  enabled: ReadonlyArray<MediaEngine>;
+  onToggle: (engine: MediaEngine) => void;
+  disabled: boolean;
+}) {
+  const engines: ReadonlyArray<{ key: MediaEngine; label: string; tier: string }> = [
+    { key: "hyperframes", label: "HyperFrames", tier: "tier_0 (real, free)" },
+    { key: "wan2", label: "Wan2", tier: "tier_1 (stub)" },
+    { key: "cogvideox", label: "CogVideoX", tier: "tier_2 (stub)" },
+    { key: "gemini_flow", label: "Gemini Flow", tier: "tier_3 (paste-in)" },
+    { key: "gemini_api", label: "Veo (paid)", tier: "tier_4 (stub)" },
+  ];
+  return (
+    <div
+      style={{
+        padding: 14,
+        background: "var(--bg-elevated)",
+        border: "1px solid var(--border-subtle)",
+        borderRadius: 8,
+      }}
+    >
+      <h3 style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "var(--text-secondary)" }}>
+        Engines for this venture
+      </h3>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {engines.map((e) => {
+          const isOn = enabled.includes(e.key);
+          return (
+            <label
+              key={e.key}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontSize: 12,
+                color: disabled ? "var(--text-muted)" : "var(--text-primary)",
+                cursor: disabled ? "default" : "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isOn}
+                disabled={disabled}
+                onChange={() => onToggle(e.key)}
+                style={{ cursor: disabled ? "default" : "pointer" }}
+              />
+              <span style={{ fontWeight: 600 }}>{e.label}</span>
+              <span style={{ color: "var(--text-tertiary)", fontSize: 11 }}>{e.tier}</span>
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -260,11 +413,13 @@ function HfPill({ status }: { status: LastRun["hfStatus"] }) {
       ? "HyperFrames: ready (auto-render)"
       : status === "bootstrapped"
         ? "HyperFrames: bootstrapped (auto-render)"
-        : status === "not-detected"
-          ? "HyperFrames: not detected -- install with `npm install -g hyperframes` for auto-render"
-          : status === "doctor-failed"
-            ? "HyperFrames: env check failed (Node 22+ + ffmpeg required)"
-            : "HyperFrames: bootstrap failed (run `npx hyperframes init` manually under 10_media/hyperframes/)";
+        : status === "disabled"
+          ? "HyperFrames: disabled for this venture (toggle above to enable)"
+          : status === "not-detected"
+            ? "HyperFrames: not detected -- install with `npm install -g hyperframes` for auto-render"
+            : status === "doctor-failed"
+              ? "HyperFrames: env check failed (Node 22+ + ffmpeg required)"
+              : "HyperFrames: bootstrap failed (run `npx hyperframes init` manually under 10_media/hyperframes/)";
   const ok = status === "ready" || status === "bootstrapped";
   return (
     <span
@@ -375,12 +530,44 @@ function pillBorder(status: StepStatus): string {
   return "var(--border-subtle)";
 }
 
-async function refreshArtifacts(venture: Venture): Promise<{ scriptMd: string | null; reel: boolean }> {
+async function refreshArtifacts(venture: Venture): Promise<{
+  scriptMd: string | null;
+  reel: boolean;
+  announcement: string | null;
+}> {
   const scriptMdPath = getMediaScriptMdPath(venture.rootPath);
   const reelPath = getLaunchReelPath(venture.rootPath);
-  const [scriptMd, reel] = await Promise.all([
+  // launch-announcement.md lives under 08_launch/ -- the media script step
+  // already consumes it, so reading it here on MediaTab mount is the right
+  // place to feed the <SocialActions> caption prefill.
+  const announcementPath = `${getStagePath(venture.rootPath, "launch")}/launch-announcement.md`;
+  const [scriptMd, reel, announcement] = await Promise.all([
     invoke<string>("read_file", { path: scriptMdPath }).catch(() => null),
     invoke<boolean>("path_exists", { path: reelPath }).catch(() => false),
+    invoke<string>("read_file", { path: announcementPath }).catch(() => null),
   ]);
-  return { scriptMd, reel };
+  return { scriptMd, reel, announcement };
+}
+
+/**
+ * Build the <SocialActions> prefill from the venture's launch-announcement +
+ * launch-reel state. Returns undefined when there's nothing to seed -- the
+ * widget then opens with an empty caption draft.
+ */
+function buildSocialPrefill(args: {
+  ventureRoot: string;
+  announcement: string | null;
+  reelExists: boolean;
+}): SocialActionsPrefill | undefined {
+  const text = args.announcement?.trim()
+    ? args.announcement.trim().slice(0, 200)
+    : undefined;
+  const media: SocialMediaRef[] = args.reelExists
+    ? [{ path: getLaunchReelPath(args.ventureRoot), kind: "video" }]
+    : [];
+  if (!text && media.length === 0) return undefined;
+  return {
+    ...(text !== undefined ? { text } : {}),
+    ...(media.length > 0 ? { media } : {}),
+  };
 }

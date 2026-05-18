@@ -1,0 +1,93 @@
+---
+docId: product-vision
+tier: B
+category: 02-product
+title: Product Vision
+---
+
+# Product Vision
+
+Product purpose and long-term direction.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+{{!-- LLM hint: this is a tier-B document, generated from upstream stage outputs. Replace the section bodies below with content synthesised from the manifest's sourceStages. Keep section headings. --}}
+
+## Vision
+
+**{{PRODUCT_NAME}}** exists to **{{VISION}}**. We measure success not by feature shipment but by whether the people we built it for solve the problem they came to us with.
+
+The vision sets the direction. The roadmap sets the order. The PRD sets the next step.
+
+## Users we are building for
+
+The primary user is **{{TODO_PRIMARY_USER}}**, working in **{{TODO_USER_CONTEXT}}**. The secondary user is **{{TODO_SECONDARY_USER}}**; we design for them where it does not compromise the primary user's experience.
+
+We do *not* build for {{TODO_NON_USER}}. Saying no to a user is a feature; it sharpens what the product is, and what it isn't.
+
+## Scope
+
+**In scope for v1:** {{IN_SCOPE}}.
+
+**Out of scope for v1:** {{OUT_OF_SCOPE}}. These are not wrong, they are not now.
+
+**On the horizon:** {{LATER}}. We track these in the *Strategic Roadmap*; if they move forward, the PRD is updated and the *Decision Log* records why.
+
+## Product principles
+
+1. The product earns the user's trust before it earns their money.
+2. The simplest interface that works is the right interface.
+3. Defaults are a feature; the right default removes a decision the user does not want to make.
+4. Performance is part of the design. A slow product is a broken product.
+5. Every error message tells the user what to do next.
+
+## Product definitions
+
+- **Feature** — a unit of functionality the user can invoke.
+- **Capability** — a class of features that share a domain (e.g. "reporting").
+- **Flow** — a sequence of screens that completes a user task.
+- **State** — a configuration of the data and the UI; a flow moves between states.
+- **Event** — a change in state, recorded in the analytics.
+
+## Metrics
+
+We measure the things that change the way we behave. The headline metrics are recorded in the *OKRs and KPIs* document; the *North Star Metric* is the one that drives the whole company.
+
+A metric that is reported but never acted on is a metric we should stop reporting. A metric that is acted on but never reported is a metric we should write down so the team can act on it together. The list is reviewed quarterly.
+
+## Common failure modes
+
+- **Drift from the spec.** The implementation diverges from the PRD; the PRD is not updated. Fix by updating the PRD in the same pull request.
+- **Silent skip.** A code path is added but no test covers it. Fix by writing the test before the code path lands.
+- **Owner unclear.** A piece of work has no single owner; everyone assumes someone else is responsible. Fix by assigning a name in writing.
+- **Plan without check-in.** A plan is written but never reviewed against reality. Fix by scheduling the review at the same time as the plan is written.
+- **Decision without record.** A choice is made in a meeting; no one records it. Fix by writing the decision in the *Decision Log* before leaving the meeting.
+
+## How we make decisions
+
+We use a lightweight decision framework. For every non-trivial decision:
+
+1. **Type the decision into a doc.** It does not need to be in this document; the *Decision Log* is fine, an RFC is fine.
+2. **List the options.** Always include "do nothing"; sometimes the best choice is to defer.
+3. **State a recommendation.** A doc with no recommendation is asking the reader to do the author's job.
+4. **Invite challenge.** Anyone on the team can push back; the author is responsible for engaging with the pushback.
+5. **Decide and record.** The decision goes into the *Board Decision Log* or the relevant RFC with the date and the people involved.
+
+Decisions can be revisited when the facts change. They cannot be re-litigated because someone disagrees after the fact.
+
+## Related documents
+
+- *Company Brief*
+- *Strategic Roadmap*
+- *Operating Cadence*
+- *Risk Register*
+- *Decision Log*
+
+Linked documents may change; this list is updated at the same time the body is updated.
+
+---
+
+{{!-- Tier A/B/C: founder reviews the synthesised content; LLM fills the {{var}} placeholders above. --}}
+
+> **Founder review:** {{TODO_FOUNDER_REVIEW_NOTES}}
+

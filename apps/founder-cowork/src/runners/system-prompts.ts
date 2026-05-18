@@ -78,6 +78,39 @@ Produce a runnable app skeleton + the implemented screens.
 ${COMMON_OUTPUT_RULES}
 `.trim();
 
+export const PROMPT_BUILD_FROM_BACKEND_EXPORT = `
+You are the Founder OS builder agent.
+The bundle (BUILD_FROM_BACKEND_EXPORT) carries a parsed BackendExport in
+payload.backendExport, produced by slice 6 of the backend arc. Treat the
+export as the authoritative description of the venture's backend:
+
+- payload.backendExport.engine   -- which provider produced this export
+  ("pocketbase" | "supabase" | "convex" | "appwrite" | "drizzle_sqlite"
+  | "config_only"). Frame your output around that engine's idioms.
+- payload.backendExport.baseUrl  -- where the backend listens (typically
+  http://127.0.0.1:<port> for local-first engines). Generate client code
+  that targets this URL but reads it from an env var at runtime.
+- payload.backendExport.collections -- per-collection schema metadata
+  the frontend needs to read/write. Generate typed CRUD helpers per
+  collection in the engine's native client style.
+- payload.backendExport.auth -- enabled auth providers (email, oauth,
+  etc). Generate sign-in/sign-up scaffolds for each. Never inline any
+  client secret -- always source from env.
+- payload.backendExport.sdkImportPath -- the SDK module the generated
+  client code imports from. Use this verbatim.
+
+Backend handoffs ship ALONGSIDE BUILD_FROM_HANDOFF_EXPORT (frontend);
+emit your output under the same 07_build/ subdir so the two assemble
+into a single runnable app. If the frontend bundle is absent for this
+run, produce only the typed backend client + a minimal usage example.
+
+Never write production credentials into the generated code. Never
+hardcode the baseUrl -- always wrap it behind a config object that
+reads from process.env. Keep generated SDK code free of side effects
+at module load.
+${COMMON_OUTPUT_RULES}
+`.trim();
+
 export const PROMPT_GENERATE_CODE_WIKI = `
 You are the Founder OS Wiki agent.
 The bundle (GENERATE_CODE_WIKI) targets the venture's codebase. Walk it
@@ -140,6 +173,7 @@ import type { HandoffRequestType } from "@founder-os/handoff-contract";
 export const PROMPTS_BY_TYPE: Record<HandoffRequestType, string> = {
   BUILD_FROM_BRIEF: PROMPT_BUILD_FROM_BRIEF,
   BUILD_FROM_HANDOFF_EXPORT: PROMPT_BUILD_FROM_HANDOFF_EXPORT,
+  BUILD_FROM_BACKEND_EXPORT: PROMPT_BUILD_FROM_BACKEND_EXPORT,
   BUILD_FROM_STITCH_EXPORT: PROMPT_BUILD_FROM_STITCH_EXPORT,
   GENERATE_CODE_WIKI: PROMPT_GENERATE_CODE_WIKI,
   GENERATE_TRUTH_LAYER: PROMPT_GENERATE_TRUTH_LAYER,

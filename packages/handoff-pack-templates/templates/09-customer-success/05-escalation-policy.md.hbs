@@ -1,0 +1,81 @@
+---
+docId: escalation-policy
+tier: D
+category: 09-customer-success
+title: Escalation Policy
+---
+
+# Escalation Policy
+
+When support escalates to engineering / product.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+## Purpose
+
+This policy sets out how **{{COMPANY_NAME}}** ("the company") handles the matter described above. It is binding on directors, employees and contractors. It is also relevant to customers and suppliers where it touches on their dealings with us.
+
+The policy exists to protect the company, the team and our customers. It is not a substitute for common sense or for legal advice; where the two conflict, the policy is the floor, not the ceiling.
+
+## Scope and application
+
+This policy applies in every country in which {{COMPANY_NAME}} operates and to every contract under which we act, irrespective of the role or seniority of the individual concerned. Where local law sets a higher standard than this policy, local law wins.
+
+Where this policy refers to a procedure, the procedure is a binding part of the policy. Where it refers to a guideline, the guideline is advisory and the policy owner can authorise an exception in writing.
+
+## Escalation
+
+If a ticket cannot be resolved within the response time target, escalate per the *Escalation Policy*. The escalation routes are: technical → engineering on-call, billing → finance, contractual → director.
+
+Escalations are tracked in the CRM with the reason, the escalation route, and the resolution. Repeated escalations against the same root cause are surfaced at the support review.
+
+## Policy ownership
+
+| Field | Value |
+|---|---|
+| Owner | {{TODO_OWNER_ROLE}} |
+| Approver | {{TODO_APPROVER_ROLE}} |
+| Review cadence | Annual or on material change |
+| Last reviewed | {{CURRENT_DATE}} |
+
+## Communication channels
+
+- **Email.** Outside the company. Signed off by a director for anything contractual.
+- **Team chat.** Inside the company. Default channel for anything routine.
+- **DMs.** For one-to-one conversations that genuinely need privacy; everything else goes in a channel so others can learn from it.
+- **Video calls.** For the conversations the chat or email cannot carry — interviews, hard feedback, customer escalations.
+- **Tickets.** For work that has a clear definition of done; nothing important should be tracked only in chat.
+
+The principle: choose the channel that gives the conversation the right level of permanence and the right audience.
+
+## Escalation path
+
+1. **First**, raise the issue with the owner of the area concerned. Give them a chance to fix it.
+2. **Second**, if the issue is not fixed within a reasonable window, escalate to the approver listed above.
+3. **Third**, if the issue is still not fixed, escalate to a director.
+4. **Fourth**, if the issue is with a director, escalate to the board.
+
+The shorter the path, the better. Skipping a step is permitted when the step is the source of the problem; document the reason in the *Decision Log*.
+
+## Metrics
+
+We measure the things that change the way we behave. The headline metrics are recorded in the *OKRs and KPIs* document; the *North Star Metric* is the one that drives the whole company.
+
+A metric that is reported but never acted on is a metric we should stop reporting. A metric that is acted on but never reported is a metric we should write down so the team can act on it together. The list is reviewed quarterly.
+
+## Common failure modes
+
+- **Drift from the spec.** The implementation diverges from the PRD; the PRD is not updated. Fix by updating the PRD in the same pull request.
+- **Silent skip.** A code path is added but no test covers it. Fix by writing the test before the code path lands.
+- **Owner unclear.** A piece of work has no single owner; everyone assumes someone else is responsible. Fix by assigning a name in writing.
+- **Plan without check-in.** A plan is written but never reviewed against reality. Fix by scheduling the review at the same time as the plan is written.
+- **Decision without record.** A choice is made in a meeting; no one records it. Fix by writing the decision in the *Decision Log* before leaving the meeting.
+
+---
+
+## Founder TODOs
+
+- [ ] Replace every `TODO_*` placeholder above with the value for this venture.
+- [ ] Read every section in full; tighten or rewrite any paragraph that does not apply.
+- [ ] Move the document's status from `draft` to `current` and record the change in the change log.
+

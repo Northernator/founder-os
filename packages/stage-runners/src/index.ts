@@ -6,19 +6,22 @@
  * a uniform StageRunner contract: preflight validation, idempotent
  * run, structured logs, optional human review gate.
  *
- * Status (post-2026-05-07 sweep):
+ * Status (post-2026-05-17 sweep):
  *   shipped: ResearchStageRunner, BrandStageRunner, ProductStageRunner,
  *            UkSetupStageRunner, AuditStageRunner, StitchStageRunner /
  *            HandoffStageRunner, BuildStageRunner, ValidationStageRunner,
  *            WireframeStageRunner, FinanceStageRunner, LaunchStageRunner,
- *            MediaStageRunner.
- *   note:    MediaStageRunner is a SKELETAL placeholder (slice 3 of
- *            media arc). It writes a media-checkpoint.json and
- *            marks the stage complete, no underlying pipeline-runner
- *            step yet. Slice 4+ promotes it to real (script + storyboard
- *            + render-shots + stitch steps that drive the HyperFrames
- *            provider in @founder-os/media-providers). The runner
- *            contract does not change at that point.
+ *            MediaStageRunner, MediaEditStageRunner, CrmStageRunner,
+ *            BackendStageRunner, HandoffPackStageRunner.
+ *   note:    HandoffPackStageRunner promoted skeletal -> real in slice 5
+ *            of the handoff-pack arc. It orchestrates
+ *            renderHandoffPackArtefactsStep from
+ *            @founder-os/handoff-pack-providers/node:
+ *            prepareBrandAssetsStep + renderAllStubsStep + writeInventory
+ *            (markdown + JSON). Role-pack assembly lands in slice 10;
+ *            tier A/B LLM enrichment lands in slices 6 + 7; per-stage
+ *            progressive PDFs in slices 8 + 9. The runner contract is
+ *            unchanged from the skeletal placeholder.
  *
  * See uploads/moneyprinter_quick_reference.md for design rationale.
  */
@@ -58,6 +61,18 @@ export {
   MediaStageRunner,
   type MediaStageRunnerOpts,
 } from "./runners/media-runner.js";
+export {
+  MediaEditStageRunner,
+  type MediaEditStageRunnerOpts,
+} from "./runners/media-edit-runner.js";
+export {
+  CrmStageRunner,
+  type CrmStageRunnerOpts,
+} from "./runners/crm-runner.js";
+export {
+  BackendStageRunner,
+  type BackendStageRunnerOpts,
+} from "./runners/backend-runner.js";
 export {
   PipelineOrchestrator,
   type PipelineOrchestratorOpts,

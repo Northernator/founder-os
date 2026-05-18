@@ -1,0 +1,79 @@
+---
+docId: feature-request-process
+tier: D
+category: 09-customer-success
+title: Feature Request Process
+---
+
+# Feature Request Process
+
+How requests are logged and reviewed.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+## Purpose
+
+This checklist makes a recurring process repeatable. Following the steps in order is not optional; the order encodes lessons learned from earlier runs.
+
+If a step turns out to be wrong, fix the step in the same pull request that proves the fix works. Do not skip steps to save time and tell yourself you will go back.
+
+## Steps
+
+- [ ] {{TODO_STEP_1}}
+- [ ] {{TODO_STEP_2}}
+- [ ] {{TODO_STEP_3}}
+- [ ] {{TODO_STEP_4}}
+- [ ] {{TODO_STEP_5}}
+- [ ] {{TODO_STEP_6}}
+- [ ] Confirm completion in the *Operational Runbook* and sign off below.
+
+> **TODO:** replace the placeholder steps with the actual steps for this process. Each step should be one verb, one noun and a clear "done" state.
+
+## Sign-off
+
+| Date | Owner | Notes |
+|---|---|---|
+| {{TODO_DATE_1}} | {{TODO_OWNER_1}} | {{TODO_NOTES_1}} |
+| {{TODO_DATE_2}} | {{TODO_OWNER_2}} | {{TODO_NOTES_2}} |
+
+## Communication channels
+
+- **Email.** Outside the company. Signed off by a director for anything contractual.
+- **Team chat.** Inside the company. Default channel for anything routine.
+- **DMs.** For one-to-one conversations that genuinely need privacy; everything else goes in a channel so others can learn from it.
+- **Video calls.** For the conversations the chat or email cannot carry — interviews, hard feedback, customer escalations.
+- **Tickets.** For work that has a clear definition of done; nothing important should be tracked only in chat.
+
+The principle: choose the channel that gives the conversation the right level of permanence and the right audience.
+
+## Escalation path
+
+1. **First**, raise the issue with the owner of the area concerned. Give them a chance to fix it.
+2. **Second**, if the issue is not fixed within a reasonable window, escalate to the approver listed above.
+3. **Third**, if the issue is still not fixed, escalate to a director.
+4. **Fourth**, if the issue is with a director, escalate to the board.
+
+The shorter the path, the better. Skipping a step is permitted when the step is the source of the problem; document the reason in the *Decision Log*.
+
+## Metrics
+
+We measure the things that change the way we behave. The headline metrics are recorded in the *OKRs and KPIs* document; the *North Star Metric* is the one that drives the whole company.
+
+A metric that is reported but never acted on is a metric we should stop reporting. A metric that is acted on but never reported is a metric we should write down so the team can act on it together. The list is reviewed quarterly.
+
+## Common failure modes
+
+- **Drift from the spec.** The implementation diverges from the PRD; the PRD is not updated. Fix by updating the PRD in the same pull request.
+- **Silent skip.** A code path is added but no test covers it. Fix by writing the test before the code path lands.
+- **Owner unclear.** A piece of work has no single owner; everyone assumes someone else is responsible. Fix by assigning a name in writing.
+- **Plan without check-in.** A plan is written but never reviewed against reality. Fix by scheduling the review at the same time as the plan is written.
+- **Decision without record.** A choice is made in a meeting; no one records it. Fix by writing the decision in the *Decision Log* before leaving the meeting.
+
+---
+
+## Founder TODOs
+
+- [ ] Replace every `TODO_*` placeholder above with the value for this venture.
+- [ ] Read every section in full; tighten or rewrite any paragraph that does not apply.
+- [ ] Move the document's status from `draft` to `current` and record the change in the change log.
+

@@ -210,6 +210,7 @@ export class AuditStageRunner extends BaseStageRunner implements StageRunner {
       // findings are still returned in the StageRunResult logs and
       // (failing case) the failed-runs dump.
     }
+    artifactPaths.push(...(await this.renderBrandedPdfsForStage()));
 
     // Blockers present: success=false, NOT recoverable. Fix the
     // findings and re-run.
@@ -251,7 +252,6 @@ export class AuditStageRunner extends BaseStageRunner implements StageRunner {
         this.log("warn", "failed to write review gate", { error: m });
       }
     }
-
     try {
       await this.flushLogs();
     } catch (flushErr) {

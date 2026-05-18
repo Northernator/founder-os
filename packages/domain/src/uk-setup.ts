@@ -23,6 +23,48 @@
  */
 import { z } from "zod";
 
+// ---------------------------------------------------------------------------
+// UK_LEGAL_CONSTANTS
+// ---------------------------------------------------------------------------
+/**
+ * Single source of truth for UK legal / tax thresholds the pipeline
+ * reasons about. Audit rules, UI hints, prompts, and finance plans
+ * should read from this constant instead of hardcoding figures.
+ *
+ * `lastVerified` is the date a human checked the official sources;
+ * stage runners can flag a "stale" warning when the gap exceeds a
+ * threshold. Sources for the current values:
+ *   - VAT registration threshold raised from £85k to £90k on
+ *     1 April 2024 (GOV.UK — VAT: register for VAT; HMRC policy paper
+ *     2024-03-06).
+ *   - VAT deregistration threshold £88k from 1 April 2024.
+ *   - Small profits rate (corporation tax) £50k upper bound and main
+ *     rate threshold £250k unchanged since 1 April 2023.
+ *   - Class 1 NIC primary threshold figures kept loose — Finance Act
+ *     changes them every year; finance-plan re-reads HMRC manuals at
+ *     run time.
+ */
+export const UK_LEGAL_CONSTANTS = {
+  lastVerified: "2026-05-18",
+  vat: {
+    /** Compulsory registration once 12-month taxable turnover exceeds this. */
+    registrationThresholdGBP: 90_000,
+    /** Allowed to deregister when expected taxable turnover falls below this. */
+    deregistrationThresholdGBP: 88_000,
+    /** Effective date of the current thresholds. */
+    effectiveFrom: "2024-04-01",
+    sourceUrl: "https://www.gov.uk/vat-registration-thresholds",
+  },
+  corporationTax: {
+    smallProfitsRateUpperBoundGBP: 50_000,
+    mainRateThresholdGBP: 250_000,
+    effectiveFrom: "2023-04-01",
+    sourceUrl: "https://www.gov.uk/corporation-tax-rates",
+  },
+} as const;
+
+export type UkLegalConstants = typeof UK_LEGAL_CONSTANTS;
+
 /**
  * Local mirror of `EntityTypeSchema` from `index.ts`. We define it
  * here instead of importing to break a circular dependency:
@@ -127,8 +169,12 @@ export const HmrcSetupSchema = z.object({
    */
   utrNumber: z.string().default(""),
   /**
-   * VAT registration. UK threshold is £85k (2024) — flip to true once
-   * registered (voluntarily or compulsorily).
+   * VAT registration. Compulsory once taxable turnover exceeds the
+   * threshold in UK_LEGAL_CONSTANTS.vat.registrationThresholdGBP
+   * (£90,000 since 1 April 2024). Flip to true once registered
+   * (voluntarily or compulsorily). Deregistration is allowed when
+   * expected turnover falls below
+   * UK_LEGAL_CONSTANTS.vat.deregistrationThresholdGBP (£88,000).
    */
   vatRegistered: z.boolean().default(false),
   vatNumber: z.string().default(""),

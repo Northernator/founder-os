@@ -1,0 +1,113 @@
+---
+docId: insurance-file
+tier: D
+category: 00-company-control
+title: Insurance File
+---
+
+# Insurance File
+
+Professional indemnity, cyber, public liability, employers' liability.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+> **⚠ SOLICITOR REVIEW REQUIRED — DO NOT PUBLISH WITHOUT LEGAL SIGN-OFF.**
+> This document is generated boilerplate and is not legal advice. The clauses
+> below are drafting starting points; a qualified solicitor must review and
+> adapt them to **{{COMPANY_NAME}}**'s specific circumstances before this
+> document is used in commerce, signed, or shared with a counterparty.
+
+
+## Purpose
+
+This register records every item of the type above that **{{COMPANY_NAME}}** holds. It is the authoritative list; if an item exists but is not in this register, the register is wrong, not the item.
+
+The register is reviewed at the cadence in the *Operating Cadence*. The owner of the register is recorded in the *Domain and Account Register*.
+
+## Columns
+
+- **Item** — name of the asset / account / contract.
+- **Owner** — the person responsible for it.
+- **Started** — the date we acquired or signed it.
+- **Renewal / review date** — the next date a decision is required.
+- **Cost** — annualised cost, in GBP.
+- **Notes** — anything relevant: contract reference, contact email, login owner.
+
+## Register
+
+| Item | Owner | Started | Renewal / review | Cost (GBP) | Notes |
+|---|---|---|---|---|---|
+| {{TODO_ITEM_1}} | {{TODO_OWNER_1}} | {{TODO_DATE_1}} | {{TODO_DATE_NEXT_1}} | {{TODO_COST_1}} | {{TODO_NOTES_1}} |
+| {{TODO_ITEM_2}} | {{TODO_OWNER_2}} | {{TODO_DATE_2}} | {{TODO_DATE_NEXT_2}} | {{TODO_COST_2}} | {{TODO_NOTES_2}} |
+| {{TODO_ITEM_3}} | {{TODO_OWNER_3}} | {{TODO_DATE_3}} | {{TODO_DATE_NEXT_3}} | {{TODO_COST_3}} | {{TODO_NOTES_3}} |
+
+Add rows as items are added. Do not delete rows for retired items; mark them retired and keep the row for the audit trail.
+
+## Policy ownership
+
+| Field | Value |
+|---|---|
+| Owner | {{TODO_OWNER_ROLE}} |
+| Approver | {{TODO_APPROVER_ROLE}} |
+| Review cadence | Annual or on material change |
+| Last reviewed | {{CURRENT_DATE}} |
+
+## Review and updates
+
+This document is reviewed at least annually, and whenever a change to the business or to the law makes it obsolete. The review owner is recorded in the *Domain and Account Register*.
+
+Material changes are signed off by the board and recorded in the change log at the foot of this document.
+
+## Operating cadence
+
+**Daily.** Async standup in the team channel — what was done yesterday, what is planned today, what is blocked. Three sentences, not a meeting.
+
+**Weekly.** A team review covering the work in flight against the *Strategic Roadmap*, the *OKRs and KPIs*, and any incidents from the *Incident Response Plan*. Forty-five minutes; agenda goes out the night before.
+
+**Monthly.** A board pack covering the financial position, the product status, the team status, and any decision required from the board. Recorded in the *Board Decision Log*.
+
+**Quarterly.** An offsite — physical where possible, virtual where not — to review the last quarter and plan the next. The *Strategic Roadmap* is updated as a result; the update is signed off by the board.
+
+## How we make decisions
+
+We use a lightweight decision framework. For every non-trivial decision:
+
+1. **Type the decision into a doc.** It does not need to be in this document; the *Decision Log* is fine, an RFC is fine.
+2. **List the options.** Always include "do nothing"; sometimes the best choice is to defer.
+3. **State a recommendation.** A doc with no recommendation is asking the reader to do the author's job.
+4. **Invite challenge.** Anyone on the team can push back; the author is responsible for engaging with the pushback.
+5. **Decide and record.** The decision goes into the *Board Decision Log* or the relevant RFC with the date and the people involved.
+
+Decisions can be revisited when the facts change. They cannot be re-litigated because someone disagrees after the fact.
+
+## Owners and approvers
+
+| Area | Owner | Approver |
+|---|---|---|
+| Product | {{TODO_PRODUCT_OWNER}} | Director |
+| Engineering | {{TODO_ENG_OWNER}} | Director |
+| Design | {{TODO_DESIGN_OWNER}} | Director |
+| Sales | {{TODO_SALES_OWNER}} | Director |
+| Marketing | {{TODO_MARKETING_OWNER}} | Director |
+| Customer success | {{TODO_CS_OWNER}} | Director |
+| Finance | {{TODO_FINANCE_OWNER}} | Director |
+| People | {{TODO_PEOPLE_OWNER}} | Director |
+| Security | {{TODO_SECURITY_OWNER}} | Director |
+
+The owner is the person responsible for the area. The approver is the person who signs off material changes. In a small company the approver is often a director by default.
+
+## Legal compliance
+
+We comply with the laws of every country in which we operate. Where the laws of two countries conflict, we comply with the stricter and document the reason in the *Decision Log*.
+
+We do not interpret the law informally. Where a question has legal consequence — a contract, a privacy decision, an employment matter — we take advice from a qualified professional. The cost of advice is recorded in the budget; the absence of advice is recorded as a risk.
+
+---
+
+## Founder TODOs
+
+- [ ] Replace every `TODO_*` placeholder above with the value for this venture.
+- [ ] Read every section in full; tighten or rewrite any paragraph that does not apply.
+- [ ] Send to a solicitor for review **before** publishing or signing.
+- [ ] Move the document's status from `draft` to `current` and record the change in the change log.
+

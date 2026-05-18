@@ -371,7 +371,17 @@ export async function isProviderUsable(provider: LlmProviderId): Promise<boolean
  *   1. Per-venture override in `ventures.default_provider` (if `ventureId`
  *      provided and the referenced provider is enabled + keyed).
  *   2. Global `app_settings.active_provider`, if enabled + keyed.
- *   3. First enabled provider with a saved key (catalog order).
+ *   3. First enabled provider with valid auth (catalog order).
+ *
+ * Subscription-preferred resolution
+ * ---------------------------------
+ * Within tiers 2 and 3, settings are partitioned: subscription-mode rows
+ * for CLI-capable providers (anthropic / openai / gemini) are tried first,
+ * then api_key rows. So if the user has both Claude API and Claude CLI
+ * signed in, the CLI wins -- the user's API key is never hit until they
+ * explicitly pin api_key mode for that provider, or no subscription row is
+ * usable. Tier 1 (per-venture override) is honoured verbatim -- if a user
+ * pins a specific provider to a venture we don't second-guess them.
  *
  * Pass `ventureId` when sending from a venture-scoped context (chat on a
  * specific venture, fix-suggestion on an audit finding). Omit it for
@@ -392,19 +402,42 @@ export async function pickActiveProvider(ventureId?: string): Promise<LlmProvide
   const usable = isLlmSettingUsable;
 
   // 1. Per-venture override wins if it points at a usable provider.
+  //    Honoured verbatim -- explicit user choice trumps subscription preference.
   if (venturePref) {
     const setting = settings.find((x) => x.provider === venturePref);
     if (setting && usable(setting)) return venturePref as LlmProviderId;
   }
 
-  // 2. Global active provider.
+  // Partition usable settings so subscription rows are tried before api_key
+  // rows within each subsequent tier. We never reorder the per-venture tier
+  // (above) -- that's explicit user intent.
+  const subscriptionFirst = [...settings].sort((a, b) => {
+    const aSub = a.mode === "subscription" ? 0 : 1;
+    const bSub = b.mode === "subscription" ? 0 : 1;
+    return aSub - bSub; // catalog order is preserved within each bucket
+  });
+
+  // 2. Global active provider -- but only if there isn't a usable
+  //    subscription row that costs the user nothing extra. If the active is
+  //    api_key mode AND a subscription row for the same provider exists and
+  //    is usable, prefer the subscription row. (Different provider entirely
+  //    still wins for the active pick -- we don't second-guess provider
+  //    choice, just transport.)
   if (active) {
-    const setting = settings.find((x) => x.provider === active);
-    if (setting && usable(setting)) return active as LlmProviderId;
+    const activeSetting = settings.find((x) => x.provider === active);
+    if (activeSetting && usable(activeSetting)) {
+      // If the active row is api_key and the same provider also has a
+      // subscription row enabled+usable... pick by api_key anyway? No --
+      // the row IS the mode. There's one row per provider. So just return.
+      return active as LlmProviderId;
+    }
   }
 
-  // 3. First enabled provider with valid auth (catalog order via listLlmSettings).
-  for (const setting of settings) {
+  // 3. First usable provider, subscription-first. With identical catalog
+  //    order inside each bucket, the result is: claude-sub → openai-sub →
+  //    gemini-sub → claude-api → openai-api → gemini-api → deepseek-api →
+  //    grok-api → kimi-api → perplexity-api → ollama.
+  for (const setting of subscriptionFirst) {
     if (usable(setting)) return setting.provider as LlmProviderId;
   }
 

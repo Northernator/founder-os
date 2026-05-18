@@ -15,7 +15,7 @@ export function baseSystemPrompt(manifest: VentureManifest): string {
 
 ## Your Role
 You help the founder progress ${manifest.name} through the Founder OS pipeline:
-IDEA → RESEARCHED → VALIDATED → BRAND_READY → UK_SETUP_READY → SPEC_READY → WIREFRAME_READY → STITCH_READY → BUILD_READY → AUDIT_READY → LAUNCH_READY → LIVE
+IDEA → RESEARCHED → VALIDATED → BRAND_READY → SPEC_READY → WIREFRAME_READY → STITCH_READY → BUILD_READY → AUDIT_READY → LAUNCH_READY → MEDIA_READY → MEDIA_EDIT_READY → CRM_READY → UK_SETUP_READY → LIVE
 
 ## Ground Rules
 - Be specific to ${manifest.name}, not generic

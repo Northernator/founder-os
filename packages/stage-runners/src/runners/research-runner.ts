@@ -147,17 +147,17 @@ export class ResearchStageRunner extends BaseStageRunner implements StageRunner 
       await this.appendArtifactIndex(indexEntries);
 
       const success = result.status !== "failed";
-      this.log("info", "RESEARCH stage finished", {
-        status: result.status,
-        artifactsCreated: artifactPaths.length,
-      });
-
       if (success && requiresReview) {
         const gate = this.buildReviewGate(artifactPaths);
         await this.appendReviewGate(gate);
         reviewGateId = gate.gateId;
         this.log("info", "review gate created", { gateId: reviewGateId });
       }
+      artifactPaths.push(...(await this.renderBrandedPdfsForStage()));
+      this.log("info", "RESEARCH stage finished", {
+        status: result.status,
+        artifactsCreated: artifactPaths.length,
+      });
 
       const errorPayload =
         result.status === "failed"

@@ -299,7 +299,7 @@ export async function auditVentureStep(ctx: AuditVentureContext): Promise<AuditV
       severity: "medium",
       title: "Logo SVG missing",
       message:
-        "Expected logo.svg in 03_brand/logo/exports/. materializeBrandPack either failed or the step was skipped.",
+        "Expected logo.svg in 03_brand/logo/exports/. createLogoPackStep either failed (Imagen API call) or the step was skipped.",
       evidence: [{ filePath: logoSvgPath }],
     });
   }
@@ -331,7 +331,7 @@ export async function auditVentureStep(ctx: AuditVentureContext): Promise<AuditV
     try {
       const raw = await fs.readFile(tokensPath);
       const tokens = JSON.parse(raw) as Record<string, unknown>;
-      // materializeBrandPack emits `colors`/`typography` at minimum — if
+      // The Brand stage emits `colors`/`typography` at minimum — if
       // neither is present, something's likely wrong with the generator.
       if (!tokens.colors && !tokens.typography) {
         pushFinding("BRAND_READY", {

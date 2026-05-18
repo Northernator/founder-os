@@ -1,0 +1,95 @@
+---
+docId: unit-economics-model
+tier: B
+category: 01-strategy
+title: Unit Economics Model
+---
+
+# Unit Economics Model
+
+CAC, LTV, churn, gross margin, hosting cost, API cost, support cost.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+{{!-- LLM hint: this is a tier-B document, generated from upstream stage outputs. Replace the section bodies below with content synthesised from the manifest's sourceStages. Keep section headings. --}}
+
+## Overview
+
+This document records the financial position of **{{COMPANY_NAME}}** as of **{{CURRENT_DATE}}**, and projects it forward over the next twelve months on the assumptions recorded below.
+
+It is the source of truth for the budget and is referenced by the *Board Decision Log* whenever a financial decision is taken.
+
+## Revenue model
+
+Revenue comes from {{TODO_REVENUE_SOURCES}}. The pricing tiers are recorded in the *Pricing Strategy*; the unit economics are recorded in the *Unit Economics Model*.
+
+Projected revenue is built bottom-up: customer count by tier × price × probability-weighted close rate. The assumptions are conservative; the upside case is recorded separately as a sensitivity.
+
+## Costs
+
+The fixed cost base is {{TODO_FIXED_COSTS_SUMMARY}}. The variable cost per customer is {{TODO_VAR_COST_SUMMARY}}. Fixed costs grow with hiring; variable costs grow with usage.
+
+The single largest line in the budget is the team. The second largest is infrastructure. The *Subscription Cost Register* is the canonical list of every recurring tool the company pays for.
+
+## Break-even
+
+The company reaches break-even when monthly recurring revenue exceeds the monthly cost base. On the current plan that happens at **{{TODO_BREAK_EVEN_CUSTOMERS}}** customers on the median tier.
+
+Break-even is not the same as profitability; the *Unit Economics Model* sets out the difference and the path between them.
+
+## Assumptions
+
+1. Pricing as published. No discounting beyond the brackets in the *Pricing Strategy*.
+2. Churn at the rate observed in cohort analysis to date, with a sensitivity at +50%.
+3. CAC at the rate observed in the *Sales Playbook*'s outbound channel.
+4. Salaries at the levels in the *Compensation Framework*; no inflationary uplift until month twelve.
+5. Hosting costs scale linearly with active customers up to the next tier of the underlying provider.
+
+## How we make decisions
+
+We use a lightweight decision framework. For every non-trivial decision:
+
+1. **Type the decision into a doc.** It does not need to be in this document; the *Decision Log* is fine, an RFC is fine.
+2. **List the options.** Always include "do nothing"; sometimes the best choice is to defer.
+3. **State a recommendation.** A doc with no recommendation is asking the reader to do the author's job.
+4. **Invite challenge.** Anyone on the team can push back; the author is responsible for engaging with the pushback.
+5. **Decide and record.** The decision goes into the *Board Decision Log* or the relevant RFC with the date and the people involved.
+
+Decisions can be revisited when the facts change. They cannot be re-litigated because someone disagrees after the fact.
+
+## Metrics
+
+We measure the things that change the way we behave. The headline metrics are recorded in the *OKRs and KPIs* document; the *North Star Metric* is the one that drives the whole company.
+
+A metric that is reported but never acted on is a metric we should stop reporting. A metric that is acted on but never reported is a metric we should write down so the team can act on it together. The list is reviewed quarterly.
+
+## Common failure modes
+
+- **Drift from the spec.** The implementation diverges from the PRD; the PRD is not updated. Fix by updating the PRD in the same pull request.
+- **Silent skip.** A code path is added but no test covers it. Fix by writing the test before the code path lands.
+- **Owner unclear.** A piece of work has no single owner; everyone assumes someone else is responsible. Fix by assigning a name in writing.
+- **Plan without check-in.** A plan is written but never reviewed against reality. Fix by scheduling the review at the same time as the plan is written.
+- **Decision without record.** A choice is made in a meeting; no one records it. Fix by writing the decision in the *Decision Log* before leaving the meeting.
+
+## Owners and approvers
+
+| Area | Owner | Approver |
+|---|---|---|
+| Product | {{TODO_PRODUCT_OWNER}} | Director |
+| Engineering | {{TODO_ENG_OWNER}} | Director |
+| Design | {{TODO_DESIGN_OWNER}} | Director |
+| Sales | {{TODO_SALES_OWNER}} | Director |
+| Marketing | {{TODO_MARKETING_OWNER}} | Director |
+| Customer success | {{TODO_CS_OWNER}} | Director |
+| Finance | {{TODO_FINANCE_OWNER}} | Director |
+| People | {{TODO_PEOPLE_OWNER}} | Director |
+| Security | {{TODO_SECURITY_OWNER}} | Director |
+
+The owner is the person responsible for the area. The approver is the person who signs off material changes. In a small company the approver is often a director by default.
+
+---
+
+{{!-- Tier A/B/C: founder reviews the synthesised content; LLM fills the {{var}} placeholders above. --}}
+
+> **Founder review:** {{TODO_FOUNDER_REVIEW_NOTES}}
+

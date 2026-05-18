@@ -2,6 +2,7 @@ import {
   type EntityType,
   EntityTypeSchema,
   type FailedRunEntry,
+  UK_LEGAL_CONSTANTS,
   type UkSetupCanvas,
   UkSetupCanvasSchema,
   type Venture,
@@ -507,7 +508,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
             label="VAT registered"
             checked={canvas.hmrc.vatRegistered}
             onChange={(v) => updateHmrc({ vatRegistered: v })}
-            hint={`UK threshold £85k. Below threshold → optional. ${manifest.takesPayments ? "Manifest says you take payments — may apply." : ""}`}
+            hint={`UK threshold £${(UK_LEGAL_CONSTANTS.vat.registrationThresholdGBP / 1000).toFixed(0)}k (since ${UK_LEGAL_CONSTANTS.vat.effectiveFrom}). Below threshold → optional. ${manifest.takesPayments ? "Manifest says you take payments — may apply." : ""}`}
           />
           {canvas.hmrc.vatRegistered && (
             <Field label="VAT number">

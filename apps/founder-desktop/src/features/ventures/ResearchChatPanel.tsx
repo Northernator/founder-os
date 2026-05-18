@@ -260,7 +260,7 @@ export function ResearchChatPanel(props: {
       let jobId: string;
       try {
         const accepted = await client.createDeepResearch({
-          venture_slug: venture.id,
+          venture_slug: venture.slug,
           topic,
           depth: 2,
         });
@@ -318,7 +318,7 @@ export function ResearchChatPanel(props: {
         });
       }
     },
-    [append, client, updateMessage, venture.id]
+    [append, client, updateMessage, venture.slug]
   );
 
   // ---- /competitors ----
@@ -342,7 +342,7 @@ export function ResearchChatPanel(props: {
       let jobId: string;
       try {
         const accepted = await client.scanCompetitors({
-          venture_slug: venture.id,
+          venture_slug: venture.slug,
           urls,
         });
         jobId = accepted.job_id;
@@ -399,7 +399,7 @@ export function ResearchChatPanel(props: {
         });
       }
     },
-    [append, client, updateMessage, venture.id]
+    [append, client, updateMessage, venture.slug]
   );
 
   // ---- /icp ----
@@ -410,7 +410,7 @@ export function ResearchChatPanel(props: {
 
     let jobId: string;
     try {
-      const accepted = await client.synthesizeIcp({ venture_slug: venture.id });
+      const accepted = await client.synthesizeIcp({ venture_slug: venture.slug });
       jobId = accepted.job_id;
       updateMessage(messageId, {
         jobId,
@@ -464,7 +464,7 @@ export function ResearchChatPanel(props: {
         content: `Polling aborted. Job ${jobId.slice(0, 8)} may still be running on the server.`,
       });
     }
-  }, [append, client, updateMessage, venture.id]);
+  }, [append, client, updateMessage, venture.slug]);
 
   // ---- /jobs ----
   const handleJobs = useCallback(async () => {

@@ -9,6 +9,12 @@ export const HandoffRequestTypeSchema = z.enum([
   // and the prompt when Stitch did. Prefer this over BUILD_FROM_STITCH_EXPORT
   // for any new bundle.
   "BUILD_FROM_HANDOFF_EXPORT",
+  // Backend handoff (slice 6 of backend arc). Bundle payload includes
+  // the parsed BackendExport so VS Code sees the resolved engine,
+  // baseUrl, collections, auth providers, and SDK import path. Emitted
+  // ALONGSIDE BUILD_FROM_HANDOFF_EXPORT (frontend and backend bundles
+  // are independent) -- the extension can consume either or both.
+  "BUILD_FROM_BACKEND_EXPORT",
   // Pre-slice-7 alias. Kept so old bundles in handoffs/inbox/ still
   // parse and so the cowork system-prompts registry (apps/founder-cowork)
   // doesn't break. New bundles should use BUILD_FROM_HANDOFF_EXPORT.

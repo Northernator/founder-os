@@ -51,6 +51,7 @@ function defaultStepResult(overrides: Record<string, unknown> = {}) {
       createdAt: "2026-01-01T00:00:00Z",
       monthlyBudgetCapGBP: null,
       startingCapitalGBP: null,
+      backendHostingMonthlyUsdCap: 0,
       revenueModel: null,
       pricingTiers: [],
       costProjections: null,
@@ -67,6 +68,7 @@ function defaultStepResult(overrides: Record<string, unknown> = {}) {
       inputs: {
         monthlyBudgetCapGBP: null,
         startingCapitalGBP: null,
+        backendHostingMonthlyUsdCap: 0,
         entityType: "ltd",
         takesPayments: false,
         regulated: false,
@@ -92,6 +94,12 @@ function defaultStepResult(overrides: Record<string, unknown> = {}) {
       },
       runway: { months: null, breakEvenCustomers: null },
       fundingRecommendation: { path: "unclear", rationale: "stub" },
+      backendHosting: {
+        resolvedEngine: null,
+        estimatedMonthlyUsd: 0,
+        capMonthlyUsd: 0,
+        status: "no-backend-yet",
+      },
       assumptions: [],
       sources: ["finance-canvas.json"],
       generationSource: "deterministic",

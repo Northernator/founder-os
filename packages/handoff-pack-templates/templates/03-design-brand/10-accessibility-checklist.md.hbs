@@ -1,0 +1,82 @@
+---
+docId: accessibility-checklist
+tier: D
+category: 03-design-brand
+title: Accessibility Checklist
+---
+
+# Accessibility Checklist
+
+Contrast, keyboard, screen-reader, WCAG essentials.
+
+_Document for **{{COMPANY_NAME}}** (`{{COMPANY_SLUG}}`). Last updated **{{CURRENT_DATE}}**._
+
+## Purpose
+
+This checklist makes a recurring process repeatable. Following the steps in order is not optional; the order encodes lessons learned from earlier runs.
+
+If a step turns out to be wrong, fix the step in the same pull request that proves the fix works. Do not skip steps to save time and tell yourself you will go back.
+
+## Steps
+
+- [ ] {{TODO_STEP_1}}
+- [ ] {{TODO_STEP_2}}
+- [ ] {{TODO_STEP_3}}
+- [ ] {{TODO_STEP_4}}
+- [ ] {{TODO_STEP_5}}
+- [ ] {{TODO_STEP_6}}
+- [ ] Confirm completion in the *Operational Runbook* and sign off below.
+
+> **TODO:** replace the placeholder steps with the actual steps for this process. Each step should be one verb, one noun and a clear "done" state.
+
+## Sign-off
+
+| Date | Owner | Notes |
+|---|---|---|
+| {{TODO_DATE_1}} | {{TODO_OWNER_1}} | {{TODO_NOTES_1}} |
+| {{TODO_DATE_2}} | {{TODO_OWNER_2}} | {{TODO_NOTES_2}} |
+
+## Brand voice
+
+Our brand voice is **{{TODO_BRAND_VOICE}}**. The voice is consistent across the website, the product, our outbound, our customer support and our internal documents.
+
+The voice is not a costume; we sound like ourselves whether we are writing a press release or a Slack message to a customer. The *Brand Messaging Guide* sets out the longer description and the do/don't examples.
+
+## Visual identity
+
+The visual identity is recorded in the *Brand Guide* and the *Design System*. The primary brand colour is **{{TODO_PRIMARY_HEX}}**; the secondary palette and the type system are in the *Brand Guide*.
+
+No team member should be guessing what a brand colour or a heading font is. If the answer is not in the *Brand Guide*, the *Brand Guide* is wrong, and the fix is to update the *Brand Guide*.
+
+## Owners and approvers
+
+| Area | Owner | Approver |
+|---|---|---|
+| Product | {{TODO_PRODUCT_OWNER}} | Director |
+| Engineering | {{TODO_ENG_OWNER}} | Director |
+| Design | {{TODO_DESIGN_OWNER}} | Director |
+| Sales | {{TODO_SALES_OWNER}} | Director |
+| Marketing | {{TODO_MARKETING_OWNER}} | Director |
+| Customer success | {{TODO_CS_OWNER}} | Director |
+| Finance | {{TODO_FINANCE_OWNER}} | Director |
+| People | {{TODO_PEOPLE_OWNER}} | Director |
+| Security | {{TODO_SECURITY_OWNER}} | Director |
+
+The owner is the person responsible for the area. The approver is the person who signs off material changes. In a small company the approver is often a director by default.
+
+## Common failure modes
+
+- **Drift from the spec.** The implementation diverges from the PRD; the PRD is not updated. Fix by updating the PRD in the same pull request.
+- **Silent skip.** A code path is added but no test covers it. Fix by writing the test before the code path lands.
+- **Owner unclear.** A piece of work has no single owner; everyone assumes someone else is responsible. Fix by assigning a name in writing.
+- **Plan without check-in.** A plan is written but never reviewed against reality. Fix by scheduling the review at the same time as the plan is written.
+- **Decision without record.** A choice is made in a meeting; no one records it. Fix by writing the decision in the *Decision Log* before leaving the meeting.
+
+---
+
+## Founder TODOs
+
+- [ ] Replace every `TODO_*` placeholder above with the value for this venture.
+- [ ] Read every section in full; tighten or rewrite any paragraph that does not apply.
+- [ ] Move the document's status from `draft` to `current` and record the change in the change log.
+

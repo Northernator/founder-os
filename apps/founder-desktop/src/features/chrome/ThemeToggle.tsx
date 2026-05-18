@@ -24,7 +24,18 @@ function nextTheme(current: Theme): Theme {
 
 type Size = "sm" | "md";
 
-export function ThemeToggle({ size = "md" }: { size?: Size } = {}) {
+/**
+ * CoDesign's Dreamlauncher export turned the icon toggle into a pill
+ * with a conic-gradient dot + theme name label. We support both shapes
+ * so embedded callers (Options tab inline copy) can stay compact while
+ * the floating top-right toggle uses the pill.
+ */
+type ToggleVariant = "icon" | "pill";
+
+export function ThemeToggle({
+  size = "md",
+  variant = "pill",
+}: { size?: Size; variant?: ToggleVariant } = {}) {
   const { theme, cycleTheme, toggleRainbowWarp } = useTheme();
   const [animKey, setAnimKey] = useState(0);
 
@@ -43,6 +54,21 @@ export function ThemeToggle({ size = "md" }: { size?: Size } = {}) {
     }
     cycleTheme();
   };
+
+  if (variant === "pill") {
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        title={`${THEME_LABEL[theme]} theme — ${NEXT_LABEL[theme]} (shift+click in rainbow for warp)`}
+        aria-label={NEXT_LABEL[theme]}
+        className="theme-toggle-pill"
+      >
+        <span className="theme-dot" aria-hidden="true" />
+        <span className="theme-label">{THEME_LABEL[theme]}</span>
+      </button>
+    );
+  }
 
   return (
     <button

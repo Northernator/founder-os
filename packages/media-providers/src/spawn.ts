@@ -15,10 +15,58 @@
 // metacharacters (quotes, ampersands, etc.). We dodge that entirely by:
 //   1. NEVER passing JSON as a CLI arg -- use --variables-file <path>.
 //   2. Keeping all other args metacharacter-free (paths, numbers, enums).
+//   3. Resolving the binary via PATH x PATHEXT and setting shell:true
+//      only when we land on a .cmd / .bat / .ps1 shim (slice 10 lift
+//      from @founder-os/social-providers' spawn.ts).
 // Callers that need to pass JSON should write it to a temp file first.
 
 import { spawn, type ChildProcessByStdio } from "node:child_process";
+import { existsSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import type { Readable, Writable } from "node:stream";
+
+/**
+ * Manual PATH x PATHEXT resolver for Windows -- Node's spawn() WITHOUT
+ * shell:true does not probe PATHEXT, so a bare "hyperframes" never finds
+ * the npm-installed `hyperframes.cmd`. Lifted from
+ * @founder-os/social-providers/spawn.ts; mirrors the "Win CLI"
+ * auto-memory pattern.
+ *
+ * Returns null when nothing matched; callers fall back to spawning the
+ * bare name (which surfaces ENOENT through HyperframesNotFoundError so
+ * the UI shows the install hint).
+ */
+function resolveHyperframesBinary(
+  name: string,
+): { path: string; needsShell: boolean } | null {
+  if (process.platform !== "win32") {
+    return { path: name, needsShell: false };
+  }
+  const pathexts = (process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD;.PS1")
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const dirs = (process.env.PATH ?? "").split(delimiter).filter(Boolean);
+  const hasExt = /\.[a-z0-9]+$/i.test(name);
+  const shellExts = /\.(cmd|bat|ps1)$/i;
+
+  for (const dir of dirs) {
+    if (hasExt) {
+      const full = join(dir, name);
+      if (existsSync(full)) {
+        return { path: full, needsShell: shellExts.test(full) };
+      }
+      continue;
+    }
+    for (const ext of pathexts) {
+      const full = join(dir, name + ext);
+      if (existsSync(full)) {
+        return { path: full, needsShell: shellExts.test(full) };
+      }
+    }
+  }
+  return null;
+}
 
 export interface SpawnOpts {
   /** Working directory. Defaults to process.cwd(). */
@@ -84,13 +132,23 @@ export function runHyperframes(
   const binary = opts.binary ?? "hyperframes";
   const timeoutMs = opts.timeoutMs ?? 120_000;
 
+  // Resolve PATHEXT shim up-front (Windows only) -- BatBadBut workaround.
+  const resolved = resolveHyperframesBinary(binary);
+  const spawnBinary = resolved?.path ?? binary;
+  const needsShell = resolved?.needsShell ?? false;
+
   return new Promise((resolve, reject) => {
     let child: ChildProcessByStdio<Writable, Readable, Readable>;
     try {
-      child = spawn(binary, [...args], {
+      child = spawn(spawnBinary, [...args], {
         stdio: ["pipe", "pipe", "pipe"],
         cwd: opts.cwd,
         env: opts.env ? { ...process.env, ...opts.env } : process.env,
+        // Node 20.12+ refuses to spawn .cmd/.bat directly (CVE-2024-24576).
+        // shell:true only when we resolved to a shim -- direct .exe spawns
+        // stay shell-free.
+        shell: needsShell,
+        windowsHide: true,
       });
     } catch (err) {
       const e = err as Error & { code?: string };

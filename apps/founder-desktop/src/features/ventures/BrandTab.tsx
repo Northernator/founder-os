@@ -1,4 +1,6 @@
-import { materializeBrandPack } from "@founder-os/branding-assets";
+import { createLogoPackStep } from "@founder-os/pipeline-runner";
+import { tauriFs } from "../../lib/pipeline-fs.js";
+import { buildPipelineLlmCaller } from "../../lib/pipeline-llm.js";
 import {
   type AvailabilityCheck,
   type AvailabilityStatus,
@@ -524,7 +526,7 @@ export function BrandTab({
   // BrandChatPanel is the sole entry point for AI-driven concepts and
   // pack generation now. `chosenLogoSvg` stores whatever logo /lock
   // picked (or earlier flows wrote); `brandLocked` gates the
-  // "Advance to UK Setup" must-haves checklist on the right.
+  // "Advance to Spec" must-haves checklist on the right.
   const [chosenLogoSvg, setChosenLogoSvg] = useState<string>("");
   const [_brandLocked, setBrandLocked] = useState(false);
 
@@ -1670,14 +1672,16 @@ Rules:
     }
   };
 
-  /** Generate the deterministic logo pack via materializeBrandPack. */
+  /**
+   * Generate the logo pack via the active LLM provider, asking for raw
+   * SVG markup per archetype. Subscription-CLI preferred (no API key);
+   * goes through the same createLogoPackStep the brand stage runner
+   * uses so this UI button and the stage runner stay in lockstep.
+   */
   const handleGenerateLogoPack = async () => {
     if (generatingLogo) return;
     setGeneratingLogo(true);
     try {
-      // Read the brief from disk — it's the authoritative input. If it's
-      // missing we error out rather than re-deriving from canvas; saving
-      // the brief is the explicit intent signal.
       const rawBrief = await invoke<string>("read_file", {
         path: briefPath(venture.rootPath),
       }).catch(() => null);
@@ -1700,23 +1704,42 @@ Rules:
         return;
       }
       const brief: BrandBrief = briefParsed.data;
-      const pack = materializeBrandPack(brief);
-      const exportsDir = getLogoExportsDir(venture.rootPath);
-      await invoke("mkdir_p", { path: exportsDir });
-      await Promise.all(
-        Object.entries(pack).map(([filename, content]) =>
-          invoke("write_file", {
-            path: joinPath(exportsDir, filename),
-            content,
-          })
-        )
-      );
-      pushToast({
-        kind: "success",
-        message: "Logo pack generated",
-        detail: `${Object.keys(pack).length} files under 03_brand/logo/exports/`,
-        ttlMs: 3500,
+      const llm = await buildPipelineLlmCaller({ ventureId: venture.id });
+      if (!llm) {
+        pushToast({
+          kind: "warn",
+          message: "No AI provider configured",
+          detail: "Configure a provider in Options (subscription mode works -- no key needed).",
+          ttlMs: 7000,
+        });
+        return;
+      }
+      const result = await createLogoPackStep({
+        fs: tauriFs,
+        ventureId: venture.id,
+        ventureRoot: venture.rootPath,
+        brief,
+        callLlm: llm.callLlm,
       });
+      if (result.status === "skipped") {
+        pushToast({
+          kind: "info",
+          message: "Logo already exists",
+          detail: "Delete 03_brand/logo/exports/ to regenerate.",
+          ttlMs: 4500,
+        });
+      } else {
+        const okCount = Object.values(result.perArchetype).filter((v) => v === "ok").length;
+        pushToast({
+          kind: result.status === "partial" ? "warn" : "success",
+          message:
+            result.status === "partial"
+              ? `Logo pack: ${okCount}/4 variants OK`
+              : "Logo pack generated (SVG)",
+          detail: `${result.writtenPaths.length} files under 03_brand/logo/exports/.`,
+          ttlMs: 5500,
+        });
+      }
       refreshArtifacts(venture.rootPath);
     } catch (err) {
       pushToast({
@@ -2322,7 +2345,7 @@ Rules:
               whiteSpace: "nowrap",
             }}
           >
-            {advancing ? "Advancing…" : "Advance to UK Setup →"}
+            {advancing ? "Advancing…" : "Advance to Spec →"}
           </button>
         </div>
       </div>

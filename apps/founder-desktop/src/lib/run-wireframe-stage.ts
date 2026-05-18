@@ -71,13 +71,15 @@ export async function runWireframeStage(
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     enableWebSearch: false,
   });
-  if (!llmCaller) return { kind: "no-provider" };
-
+  // WIREFRAME has a deterministic path -- runner falls back to a
+  // templated narrative when callLlm is undefined. The `kind: "no-provider"`
+  // variant is kept in the return type for back-compat but no longer
+  // emitted by the helper.
   const runner = new WireframeStageRunner({
     manifest: opts.manifest,
     ventureRoot: opts.venture.rootPath,
     fs: tauriFs,
-    callLlm: llmCaller.callLlm,
+    ...(llmCaller !== null ? { callLlm: llmCaller.callLlm } : {}),
   });
   const orchestrator = new PipelineOrchestrator({
     manifest: opts.manifest,

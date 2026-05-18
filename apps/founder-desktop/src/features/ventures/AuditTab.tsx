@@ -32,6 +32,8 @@ import { runLaunchStage } from "../../lib/run-launch-stage.js";
 import { pushToast } from "../../lib/toasts.js";
 import { FailedRunBanner } from "./FailedRunBanner.js";
 import { renderMarkdown } from "./markdown.js";
+import { SocialActions, type SocialActionsPrefill } from "./SocialActions.js";
+import { SocialPostLogPanel } from "./SocialPostLogPanel.js";
 
 // Local error stringifier — matches db.ts / venture-io.ts. Kept inline
 // rather than sharing so this file doesn't grow a new lib dep for a
@@ -483,6 +485,14 @@ export function AuditTab({ venture, manifest, ventureId, ventureRoot, refreshTok
   const [runningLaunchStage, setRunningLaunchStage] = useState(false);
   const [failedFinanceRun, setFailedFinanceRun] = useState<FailedRunEntry | null>(null);
   const [failedLaunchRun, setFailedLaunchRun] = useState<FailedRunEntry | null>(null);
+  // SOCIAL-MODULE-SPEC sec 8.2: the LaunchTab equivalent surface lives here
+  // (there is no standalone LaunchTab in the desktop -- LAUNCH runs through
+  // AuditTab's "Stage runners:" row). Prefill seeds the compose modal with
+  // 08_launch/launch-announcement.md (full text) so the user can post the
+  // announcement straight after the LAUNCH stage finishes.
+  const [socialPrefill, setSocialPrefill] = useState<SocialActionsPrefill | undefined>(
+    undefined,
+  );
   // Export menu: open/close flag, plus a transient status line that shows
   // "Copied JSON", "Saved to …", or an error for ~2s after the action runs.
   // Anchor ref is used for outside-click detection on the dropdown.
@@ -1439,6 +1449,22 @@ export function AuditTab({ venture, manifest, ventureId, ventureRoot, refreshTok
       .catch(() => {
         if (!cancelled) setFailedLaunchRun(null);
       });
+    // Pull launch-announcement.md as the SocialActions caption prefill.
+    // Path mirrors create-launch-package.ts's announcementPath.
+    const announcementPath = `${ventureRoot}/08_launch/launch-announcement.md`;
+    invoke<string>("read_file", { path: announcementPath })
+      .then((text) => {
+        if (cancelled) return;
+        const trimmed = text?.trim();
+        setSocialPrefill(
+          trimmed && trimmed.length > 0
+            ? { text: trimmed.slice(0, 280) }
+            : undefined,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setSocialPrefill(undefined);
+      });
     return () => {
       cancelled = true;
     };
@@ -1543,6 +1569,39 @@ export function AuditTab({ venture, manifest, ventureId, ventureRoot, refreshTok
           {runningLaunchStage ? "Running..." : "Run launch stage"}
         </button>
       </div>
+      {/*
+        SOCIAL-MODULE-SPEC round 3: <SocialActions> sits below the Stage
+        runners row so it's adjacent to the LAUNCH button -- the natural
+        "I just finished launch, post the announcement" sequence. Renders
+        only when we have the venture row + ventureRoot in props; older
+        AuditTab embeddings that only need history rendering keep their
+        existing behaviour.
+      */}
+      {ventureRoot && venture && (
+        <div
+          style={{
+            padding: "10px 28px",
+            borderBottom: "1px solid var(--bg-hover)",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)" }}>
+            Social:
+          </span>
+          <div style={{ flex: "1 1 320px", minWidth: 280, display: "flex", flexDirection: "column", gap: 10 }}>
+            <SocialActions
+              ventureRoot={ventureRoot}
+              ventureSlug={venture.slug}
+              prefill={socialPrefill}
+              manifest={manifest}
+            />
+            <SocialPostLogPanel ventureRoot={ventureRoot} />
+          </div>
+        </div>
+      )}
       <div
         style={{
           padding: "12px 28px",

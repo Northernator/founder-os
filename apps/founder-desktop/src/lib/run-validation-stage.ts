@@ -65,13 +65,17 @@ export async function runValidationStage(
     ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
     enableWebSearch: false,
   });
-  if (!llmCaller) return { kind: "no-provider" };
-
+  // VALIDATION has a deterministic path -- the runner's step falls back
+  // to a templated narrative when callLlm is undefined. Pass the caller
+  // conditionally so the deterministic branch runs cleanly when no
+  // provider is configured. The `kind: "no-provider"` variant is kept
+  // in the return type for back-compat with callers, but is no longer
+  // emitted by the helper.
   const runner = new ValidationStageRunner({
     manifest: opts.manifest,
     ventureRoot: opts.venture.rootPath,
     fs: tauriFs,
-    callLlm: llmCaller.callLlm,
+    ...(llmCaller !== null ? { callLlm: llmCaller.callLlm } : {}),
   });
   const orchestrator = new PipelineOrchestrator({
     manifest: opts.manifest,

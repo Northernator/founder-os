@@ -221,6 +221,26 @@ export const MediaSpendSchema = z.object({
 export type MediaSpend = z.infer<typeof MediaSpendSchema>;
 
 // ---------------------------------------------------------------------------
+// Per-venture media config (slice 8 of media arc)
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-venture media configuration -- lives at `manifest.media` in
+ * venture.yaml. Slice 8 ships a single optional field: which engines
+ * this venture has opted in to. The helper translates the list into
+ * actual MediaProvider instances passed to MediaStageRunner.
+ *
+ * When absent, the helper applies a sensible default of
+ * `["hyperframes", "gemini_flow"]` -- the two real paths that ship
+ * out of the box. Stubs (wan2 / cogvideox / gemini_api) require
+ * explicit opt-in via this field.
+ */
+export const MediaConfigSchema = z.object({
+  enabledEngines: z.array(MediaEngineSchema).optional(),
+});
+export type MediaConfig = z.infer<typeof MediaConfigSchema>;
+
+// ---------------------------------------------------------------------------
 // HyperFrames template-project preset (see MEDIA-MODULE-SPEC.md sec 12)
 // ---------------------------------------------------------------------------
 

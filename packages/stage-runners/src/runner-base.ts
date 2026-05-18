@@ -30,12 +30,40 @@ import type {
   VentureManifest,
 } from "@founder-os/domain";
 import { DEFAULT_REVIEW_GATES } from "@founder-os/domain";
+import type { SourceStage } from "@founder-os/handoff-pack-core";
 import type { Filesystem } from "@founder-os/pipeline-runner";
 import {
   getArtifactsIndexPath,
+  getHandoffPackDir,
   getReviewGatesPath,
   getStageRunLogPath,
 } from "@founder-os/workspace-core";
+
+type RenderBrandedPdfsStepResult = {
+  sourceStage: SourceStage;
+  matched: number;
+  counts: {
+    generated: number;
+    partial: number;
+    stub: number;
+    failed: number;
+  };
+  entries: Array<{
+    docId: string;
+    status: string;
+    pdfRelativePath: string;
+    lastRenderedAt?: string;
+  }>;
+};
+
+type RenderBrandedPdfsModule = {
+  renderBrandedPdfsStep(opts: {
+    ventureRoot: string;
+    ventureName: string;
+    ventureSlug: string;
+    sourceStage: SourceStage;
+  }): Promise<RenderBrandedPdfsStepResult>;
+};
 
 export abstract class BaseStageRunner {
   abstract readonly stageName: StageName;
@@ -118,6 +146,63 @@ export abstract class BaseStageRunner {
     const configured = this.manifest.pipeline?.reviewGates ?? DEFAULT_REVIEW_GATES;
     return configured.includes(this.stageName);
   }
+
+  protected async renderBrandedPdfsForStage(): Promise<string[]> {
+    const sourceStage = this.stageName as SourceStage;
+    try {
+      const { renderBrandedPdfsStep } = await loadBrandedPdfRenderer();
+      const result = await renderBrandedPdfsStep({
+        ventureRoot: this.ventureRoot,
+        ventureName: this.manifest.name,
+        ventureSlug: this.manifest.slug,
+        sourceStage,
+      });
+      const nowIso = new Date().toISOString();
+      const handoffPackDir = getHandoffPackDir(this.ventureRoot);
+      const readyEntries = result.entries.filter(
+        (entry) => entry.status !== "failed" && entry.status !== "pending"
+      );
+      const artifactEntries: ArtifactIndexEntry[] = readyEntries.map((entry) => ({
+        artifactId: `handoff-pack:${sourceStage}:${entry.docId}:${this.runId}`,
+        stageName: this.stageName,
+        type: "handoff-pack-pdf",
+        path: `${handoffPackDir}/${entry.pdfRelativePath}`,
+        createdAt: entry.lastRenderedAt ?? nowIso,
+        status: "ready",
+        runId: this.runId,
+      }));
+      await this.appendArtifactIndex(artifactEntries);
+      this.log("info", "branded PDFs rendered", summarizeBrandedPdfResult(result));
+      return artifactEntries.map((entry) => entry.path);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log("warn", "branded PDF render skipped", {
+        sourceStage,
+        error: message,
+      });
+      return [];
+    }
+  }
+}
+
+async function loadBrandedPdfRenderer(): Promise<RenderBrandedPdfsModule> {
+  const dynamicImport = new Function("specifier", "return import(specifier)") as (
+    specifier: string
+  ) => Promise<RenderBrandedPdfsModule>;
+  return dynamicImport("@founder-os/handoff-pack-providers/node");
+}
+
+function summarizeBrandedPdfResult(
+  result: RenderBrandedPdfsStepResult
+): Record<string, unknown> {
+  return {
+    sourceStage: result.sourceStage,
+    matched: result.matched,
+    generated: result.counts.generated,
+    partial: result.counts.partial,
+    stub: result.counts.stub,
+    failed: result.counts.failed,
+  };
 }
 
 /**

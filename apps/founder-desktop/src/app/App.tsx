@@ -206,7 +206,7 @@ export function App() {
           ) : activeVentureId ? (
             <VentureDashboard ventureId={activeVentureId} />
           ) : (
-            <WelcomeScreen />
+            <WelcomeScreen onStartJourney={() => setShowWizard(true)} />
           )}
         </AppShell>
 
@@ -214,20 +214,12 @@ export function App() {
           <NewVentureWizard onClose={() => setShowWizard(false)} onCreate={handleCreate} />
         )}
 
-        {/* Top-right theme toggle — fixed-position so it floats above the
-            main content regardless of which screen is mounted (Welcome,
-            VentureDashboard, etc.). One source of truth; the Options-tab
-            copy reads the same store. */}
-        <div
-          style={{
-            position: "fixed",
-            top: 12,
-            right: 16,
-            zIndex: 50,
-          }}
-        >
-          <ThemeToggle />
-        </div>
+        {/* Top-right theme toggle. The pill variant carries its own
+            position:fixed so it floats above the main content regardless
+            of which screen is mounted (Welcome, VentureDashboard, etc.).
+            One source of truth; the Options-tab copy reads the same
+            store. */}
+        <ThemeToggle />
 
         {/* App-wide toast surface. Mounted once so every db/keyring path can
             push notifications via `pushToast` without threading a ref. */}

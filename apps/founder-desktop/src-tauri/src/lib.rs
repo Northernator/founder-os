@@ -1,18 +1,25 @@
 use serde::Serialize;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+mod backend;
 mod brand_checks;
 mod brand_names;
 mod brand_pack;
 mod cache;
 mod cli_agent;
+mod codesign;
+mod crm;
 mod editor;
+mod handoff_pack;
 mod handoff_watcher;
 mod llm;
+mod media;
+mod media_edit;
 mod pdf;
 mod pricing;
 mod secrets;
 mod sales_report;
+mod social;
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -432,6 +439,29 @@ pub fn run() {
             brand_names::brand_name_update_info,
             brand_names::brand_name_set_status,
             brand_names::brand_name_list,
+            backend::backend_probe_pocketbase,
+            backend::backend_download_binary,
+            backend::backend_run_stage,
+            backend::backend_probe_supabase,
+            backend::backend_save_supabase_credentials,
+            codesign::codesign_probe,
+            codesign::codesign_spawn,
+            crm::crm_probe_docker,
+            crm::crm_probe_bench,
+            crm::crm_run_stage,
+            handoff_pack::handoff_pack_run_stage,
+            media::hf_probe,
+            media::hf_doctor,
+            media::hf_bootstrap,
+            media::hf_render,
+            media_edit::media_edit_probe_vendor,
+            media_edit::media_edit_serve,
+            media_edit::media_edit_kill,
+            media_edit::media_edit_open_browser,
+            social::social_probe_backend,
+            social::social_login_state,
+            social::social_post,
+            social::social_open_post_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

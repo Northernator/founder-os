@@ -21,6 +21,29 @@ export const ArtifactTypeSchema = z.enum([
   "red-team-report",
   "budget-model",
   "uk-setup-checklist",
+  // --- Pipeline-hardening: types added when the scanner stopped
+  // mapping everything-it-didn't-recognise to "research-summary". Each
+  // value maps to a real artifact a stage runner now writes.
+  "validation-summary",
+  "finance-plan",
+  "handoff-export",
+  "media-script",
+  "storyboard",
+  "render-shot",
+  "launch-reel",
+  "media-checkpoint",
+  "media-edit-receipt",
+  "crm-instance",
+  "crm-config",
+  "crm-campaign",
+  "crm-template",
+  "backend-export",
+  "backend-checkpoint",
+  "handoff-pack-pdf",
+  "handoff-pack-inventory",
+  "launch-receipt",
+  "launch-announcement",
+  "social-post",
 ]);
 export type ArtifactType = z.infer<typeof ArtifactTypeSchema>;
 

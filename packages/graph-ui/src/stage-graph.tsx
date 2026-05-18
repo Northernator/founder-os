@@ -107,10 +107,14 @@ const STAGE_LABELS: Record<VentureStage, string> = {
   SPEC_READY: "📋 Spec",
   WIREFRAME_READY: "🖼️ Wireframes",
   STITCH_READY: "🧵 Stitch",
+  BACKEND_READY: "🗄 Backend",
   BUILD_READY: "🔨 Build",
   AUDIT_READY: "🔒 Audit",
   LAUNCH_READY: "🚀 Launch",
   MEDIA_READY: "🎬 Media",
+  MEDIA_EDIT_READY: "✂️ Polish",
+  CRM_READY: "📇 CRM",
+  HANDOFF_PACK_READY: "📦 Handoff Pack",
   LIVE: "🌍 Live",
 };
 

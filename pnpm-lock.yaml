@@ -154,6 +154,12 @@ importers:
       '@founder-os/artifacts-index':
         specifier: workspace:*
         version: link:../../packages/artifacts-index
+      '@founder-os/backend-core':
+        specifier: workspace:*
+        version: link:../../packages/backend-core
+      '@founder-os/backend-providers':
+        specifier: workspace:*
+        version: link:../../packages/backend-providers
       '@founder-os/branding-assets':
         specifier: workspace:*
         version: link:../../packages/branding-assets
@@ -163,6 +169,12 @@ importers:
       '@founder-os/chat-ui':
         specifier: workspace:*
         version: link:../../packages/chat-ui
+      '@founder-os/crm-core':
+        specifier: workspace:*
+        version: link:../../packages/crm-core
+      '@founder-os/crm-providers':
+        specifier: workspace:*
+        version: link:../../packages/crm-providers
       '@founder-os/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -178,6 +190,9 @@ importers:
       '@founder-os/handoff-desktop':
         specifier: workspace:*
         version: link:../../packages/handoff-desktop
+      '@founder-os/handoff-providers':
+        specifier: workspace:*
+        version: link:../../packages/handoff-providers
       '@founder-os/llm-providers':
         specifier: workspace:*
         version: link:../../packages/llm-providers
@@ -187,6 +202,12 @@ importers:
       '@founder-os/media-core':
         specifier: workspace:*
         version: link:../../packages/media-core
+      '@founder-os/media-edit-core':
+        specifier: workspace:*
+        version: link:../../packages/media-edit-core
+      '@founder-os/media-edit-providers':
+        specifier: workspace:*
+        version: link:../../packages/media-edit-providers
       '@founder-os/media-providers':
         specifier: workspace:*
         version: link:../../packages/media-providers
@@ -211,6 +232,12 @@ importers:
       '@founder-os/sales-agents':
         specifier: workspace:*
         version: link:../../packages/sales-agents
+      '@founder-os/social-core':
+        specifier: workspace:*
+        version: link:../../packages/social-core
+      '@founder-os/social-providers':
+        specifier: workspace:*
+        version: link:../../packages/social-providers
       '@founder-os/stage-runners':
         specifier: workspace:*
         version: link:../../packages/stage-runners
@@ -339,6 +366,43 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
 
+  packages/backend-core:
+    dependencies:
+      '@founder-os/domain':
+        specifier: workspace:*
+        version: link:../domain
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+
+  packages/backend-providers:
+    dependencies:
+      '@founder-os/backend-core':
+        specifier: workspace:*
+        version: link:../backend-core
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      '@founder-os/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@founder-os/pipeline-runner':
+        specifier: workspace:*
+        version: link:../pipeline-runner
+      '@founder-os/stage-runners':
+        specifier: workspace:*
+        version: link:../stage-runners
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.39)
+
   packages/branding-assets:
     dependencies:
       '@founder-os/branding-core':
@@ -385,6 +449,40 @@ importers:
         specifier: ^19.1.2
         version: 19.2.14
 
+  packages/crm-core:
+    dependencies:
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+
+  packages/crm-providers:
+    dependencies:
+      '@founder-os/crm-core':
+        specifier: workspace:*
+        version: link:../crm-core
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      '@founder-os/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@founder-os/pipeline-runner':
+        specifier: workspace:*
+        version: link:../pipeline-runner
+      '@founder-os/stage-runners':
+        specifier: workspace:*
+        version: link:../stage-runners
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.39)
+
   packages/db:
     dependencies:
       '@founder-os/artifacts-core':
@@ -418,6 +516,18 @@ importers:
 
   packages/domain:
     dependencies:
+      '@founder-os/crm-core':
+        specifier: workspace:*
+        version: link:../crm-core
+      '@founder-os/media-core':
+        specifier: workspace:*
+        version: link:../media-core
+      '@founder-os/media-edit-core':
+        specifier: workspace:*
+        version: link:../media-edit-core
+      '@founder-os/social-core':
+        specifier: workspace:*
+        version: link:../social-core
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -493,6 +603,84 @@ importers:
         specifier: ^19.1.0
         version: 19.2.5
 
+  packages/handoff-pack-core:
+    dependencies:
+      '@founder-os/domain':
+        specifier: workspace:*
+        version: link:../domain
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+
+  packages/handoff-pack-providers:
+    dependencies:
+      '@founder-os/branding-core':
+        specifier: workspace:*
+        version: link:../branding-core
+      '@founder-os/handoff-pack-core':
+        specifier: workspace:*
+        version: link:../handoff-pack-core
+      '@founder-os/logger':
+        specifier: workspace:*
+        version: link:../logger
+      '@founder-os/workspace-core':
+        specifier: workspace:*
+        version: link:../workspace-core
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.39)
+
+  packages/handoff-pack-templates:
+    dependencies:
+      '@founder-os/handoff-pack-core':
+        specifier: workspace:*
+        version: link:../handoff-pack-core
+      '@founder-os/handoff-pack-providers':
+        specifier: workspace:*
+        version: link:../handoff-pack-providers
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.39)
+
+  packages/handoff-providers:
+    dependencies:
+      '@founder-os/branding-core':
+        specifier: workspace:*
+        version: link:../branding-core
+      '@founder-os/handoff-contract':
+        specifier: workspace:*
+        version: link:../handoff-contract
+      '@founder-os/logger':
+        specifier: workspace:*
+        version: link:../logger
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.39)
+
   packages/handoff-vscode:
     dependencies:
       '@founder-os/domain':
@@ -525,12 +713,34 @@ importers:
 
   packages/media-core:
     dependencies:
-      '@founder-os/domain':
-        specifier: workspace:*
-        version: link:../domain
       zod:
         specifier: ^3.23.8
         version: 3.25.76
+
+  packages/media-edit-core:
+    dependencies:
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+
+  packages/media-edit-providers:
+    dependencies:
+      '@founder-os/media-edit-core':
+        specifier: workspace:*
+        version: link:../media-edit-core
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.39)
 
   packages/media-providers:
     dependencies:
@@ -541,9 +751,15 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
       vitest:
         specifier: ^1.6.0
-        version: 1.6.1(@types/node@22.19.17)
+        version: 1.6.1(@types/node@20.19.39)
 
   packages/mission-control-protocol:
     dependencies:
@@ -602,12 +818,18 @@ importers:
       '@founder-os/audit-contract':
         specifier: workspace:*
         version: link:../audit-contract
+      '@founder-os/backend-core':
+        specifier: workspace:*
+        version: link:../backend-core
       '@founder-os/branding-assets':
         specifier: workspace:*
         version: link:../branding-assets
       '@founder-os/branding-core':
         specifier: workspace:*
         version: link:../branding-core
+      '@founder-os/crm-core':
+        specifier: workspace:*
+        version: link:../crm-core
       '@founder-os/db':
         specifier: workspace:*
         version: link:../db
@@ -626,6 +848,9 @@ importers:
       '@founder-os/media-core':
         specifier: workspace:*
         version: link:../media-core
+      '@founder-os/media-edit-core':
+        specifier: workspace:*
+        version: link:../media-edit-core
       '@founder-os/pipeline-core':
         specifier: workspace:*
         version: link:../pipeline-core
@@ -727,20 +952,66 @@ importers:
         specifier: ^1.6.0
         version: 1.6.1(@types/node@20.19.39)
 
+  packages/social-core:
+    dependencies:
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+
+  packages/social-providers:
+    dependencies:
+      '@founder-os/social-core':
+        specifier: workspace:*
+        version: link:../social-core
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.39)
+
   packages/stage-runners:
     dependencies:
+      '@founder-os/artifacts-core':
+        specifier: workspace:*
+        version: link:../artifacts-core
+      '@founder-os/artifacts-index':
+        specifier: workspace:*
+        version: link:../artifacts-index
+      '@founder-os/backend-core':
+        specifier: workspace:*
+        version: link:../backend-core
+      '@founder-os/crm-core':
+        specifier: workspace:*
+        version: link:../crm-core
       '@founder-os/domain':
         specifier: workspace:*
         version: link:../domain
       '@founder-os/handoff-contract':
         specifier: workspace:*
         version: link:../handoff-contract
+      '@founder-os/handoff-pack-core':
+        specifier: workspace:*
+        version: link:../handoff-pack-core
+      '@founder-os/handoff-pack-providers':
+        specifier: workspace:*
+        version: link:../handoff-pack-providers
       '@founder-os/logger':
         specifier: workspace:*
         version: link:../logger
       '@founder-os/media-core':
         specifier: workspace:*
         version: link:../media-core
+      '@founder-os/media-edit-core':
+        specifier: workspace:*
+        version: link:../media-edit-core
       '@founder-os/pipeline-runner':
         specifier: workspace:*
         version: link:../pipeline-runner
@@ -751,6 +1022,9 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
       vitest:
         specifier: ^1.6.0
         version: 1.6.1(@types/node@22.19.17)
@@ -5498,7 +5772,7 @@ snapshots:
 
   '@types/node-fetch@2.6.13':
     dependencies:
-      '@types/node': 20.19.39
+      '@types/node': 22.19.17
       form-data: 4.0.5
 
   '@types/node@18.19.130':

@@ -1,15 +1,16 @@
 /**
- * BuildStageRunner -- wraps createBuildHandoffStep with the StageRunner contract.
+ * BuildStageRunner -- wraps createBuildHandoffStep + createBuildBackendStep
+ * with the StageRunner contract.
  *
  * The build stage is the cross-process boundary: the orchestrator
- * writes a HandoffBundle to .founder/handoffs/inbox/<bundleRunId>.json
- * and the VS Code extension picks it up async. This runner KICKS OFF
- * the handoff -- it does NOT wait for the extension to process it.
+ * writes one or two HandoffBundles to .founder/handoffs/inbox/<bundleRunId>.json
+ * and the VS Code extension picks them up async. This runner KICKS OFF
+ * the handoffs -- it does NOT wait for the extension to process them.
  * That's a separate cross-process concern handled by handoff-watcher
  * + handoff-result ingestion in the desktop, well outside the runner's
  * responsibility.
  *
- * Practical implication: a successful runStage() means "bundle dropped
+ * Practical implication: a successful runStage() means "bundle(s) dropped
  * in inbox", not "build complete". The desktop UI surfaces build
  * progress separately via the handoff watcher.
  *
@@ -17,8 +18,13 @@
  *  - BrandBrief loaded from 03_brand/brand-kit/brand-brief.json
  *  - Stitch pack (preconditions) at 06_product/stitch/
  *  - Product spec (preconditions) at 06_product/specs/product-spec.md
- *  - All checked by validate(); missing prereqs short-circuit the run
- *    with a clear "run HANDOFF stage first" message.
+ *  - HandoffExport (slice 7 of dual-handoff arc) at
+ *    .founder/handoffs/handoff-export.json
+ *  - BackendExport (slice 6 of backend arc, OPTIONAL) at
+ *    12_backend/backend-export.json. When present, an additional
+ *    BUILD_FROM_BACKEND_EXPORT bundle ships in the same inbox.
+ *  - All hard prereqs checked by validate(); missing required prereqs
+ *    short-circuit the run with a clear "run X stage first" message.
  *
  * BUILD is NOT in DEFAULT_REVIEW_GATES. When opted in, requiredApproval
  * is "security" -- the build is what's about to ship to users.
@@ -32,13 +38,15 @@ import type {
   VentureManifest,
 } from "@founder-os/domain";
 import type { Filesystem } from "@founder-os/pipeline-runner";
-import { createBuildHandoffStep } from "@founder-os/pipeline-runner";
+import {
+  createBuildBackendStep,
+  createBuildHandoffStep,
+} from "@founder-os/pipeline-runner";
 import {
   getBrandKitDir,
   getHandoffExportPath,
   getHandoffInboxPath,
   getProductSpecMarkdownPath,
-  getStitchDir,
 } from "@founder-os/workspace-core";
 import { BaseStageRunner } from "../runner-base.js";
 import type { StageRunner } from "../types.js";
@@ -81,7 +89,7 @@ export class BuildStageRunner extends BaseStageRunner implements StageRunner {
     const handoffExportPath = getHandoffExportPath(this.ventureRoot);
     if (!(await this.fs.exists(handoffExportPath))) {
       missing.push(
-        `handoff export at ${handoffExportPath} -- run HANDOFF stage first`
+        `handoff export at ${handoffExportPath} -- run HANDOFF stage first`,
       );
     }
     const specPath = getProductSpecMarkdownPath(this.ventureRoot);
@@ -89,6 +97,12 @@ export class BuildStageRunner extends BaseStageRunner implements StageRunner {
       missing.push(`product spec at ${specPath} -- run PRODUCT_SPEC stage first`);
     }
 
+    // backend-export.json is SOFT-required (slice 6 of backend arc).
+    // Missing it just means createBuildBackendStep returns "skipped" --
+    // BUILD still produces the frontend handoff bundle. This keeps
+    // backend-less ventures (marketing sites, pure-frontend extensions)
+    // able to BUILD without first running BACKEND. The runner emits a
+    // log line in run() noting whether the backend bundle landed.
     return {
       valid: errors.length === 0 && missing.length === 0,
       missingResources: missing,
@@ -114,26 +128,29 @@ export class BuildStageRunner extends BaseStageRunner implements StageRunner {
       const briefPath = `${getBrandKitDir(this.ventureRoot)}/brand-brief.json`;
       const brief = JSON.parse(await this.fs.readFile(briefPath));
 
-      const result = await createBuildHandoffStep({
+      // Step 1: frontend handoff bundle. Hard requirement -- handoff
+      // export was validated above, so this should always succeed
+      // (createBuildHandoffStep has its own permissive fallback to
+      // BUILD_FROM_BRIEF if the export got corrupted between
+      // validate and run).
+      const handoffResult = await createBuildHandoffStep({
         fs: this.fs,
         manifest: this.manifest,
         ventureRoot: this.ventureRoot,
         brief,
       });
-
       // The bundle file is named after the bundle's own runId (an
       // independent identifier from this runner's runId). Reconstruct
       // the path so we can index it.
-      bundlePath = `${getHandoffInboxPath(this.ventureRoot)}/${result.bundle.runId}.json`;
+      bundlePath = `${getHandoffInboxPath(this.ventureRoot)}/${handoffResult.bundle.runId}.json`;
       this.log("info", "create-build-handoff finished", {
-        status: result.status,
-        bundleRunId: result.bundle.runId,
-        bundleType: result.bundle.type,
+        status: handoffResult.status,
+        bundleRunId: handoffResult.bundle.runId,
+        bundleType: handoffResult.bundle.type,
         bundlePath,
       });
-
       indexEntries.push({
-        artifactId: `build:handoff-${result.bundle.runId}`,
+        artifactId: `build:handoff-${handoffResult.bundle.runId}`,
         stageName: "BUILD",
         type: "build-handoff-bundle",
         path: bundlePath,
@@ -143,14 +160,50 @@ export class BuildStageRunner extends BaseStageRunner implements StageRunner {
       });
       artifactPaths.push(bundlePath);
 
+      // Step 2: backend bundle (slice 6 of backend arc). Soft-required
+      // -- when backend-export.json is missing or unparseable the step
+      // returns "skipped" and we emit only the handoff bundle.
+      const backendResult = await createBuildBackendStep({
+        fs: this.fs,
+        manifest: this.manifest,
+        ventureRoot: this.ventureRoot,
+      });
+      if (backendResult.status === "done") {
+        this.log("info", "create-build-backend finished", {
+          status: backendResult.status,
+          bundleRunId: backendResult.bundle.runId,
+          bundleType: backendResult.bundle.type,
+          bundlePath: backendResult.bundlePath,
+          engine: backendResult.backendExport.engine,
+          collectionCount: backendResult.backendExport.collections.length,
+          sdkImportPath: backendResult.backendExport.sdk.importPath,
+        });
+        indexEntries.push({
+          artifactId: `build:backend-${backendResult.bundle.runId}`,
+          stageName: "BUILD",
+          type: "build-backend-bundle",
+          path: backendResult.bundlePath,
+          createdAt: nowIso,
+          status: "ready",
+          runId: this.runId,
+        });
+        artifactPaths.push(backendResult.bundlePath);
+      } else {
+        this.log("info", "create-build-backend skipped", {
+          reason: backendResult.reason,
+          backendExportPath: backendResult.backendExportPath,
+        });
+      }
+
       await this.appendArtifactIndex(indexEntries);
 
       if (requiresReview) {
-        const gate = this.buildReviewGate(bundlePath);
+        const gate = this.buildReviewGate(artifactPaths);
         await this.appendReviewGate(gate);
         reviewGateId = gate.gateId;
         this.log("info", "review gate created", { gateId: reviewGateId });
       }
+      artifactPaths.push(...(await this.renderBrandedPdfsForStage()));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       failureMessage = message;
@@ -196,7 +249,7 @@ export class BuildStageRunner extends BaseStageRunner implements StageRunner {
     return stageResult;
   }
 
-  private buildReviewGate(bundlePath: string): ReviewGate {
+  private buildReviewGate(bundlePaths: string[]): ReviewGate {
     return {
       gateId: `gate-${this.stageName}-${this.runId}`,
       stageName: this.stageName,
@@ -207,13 +260,15 @@ export class BuildStageRunner extends BaseStageRunner implements StageRunner {
       requiredApproval: "security",
       status: "pending",
       createdAt: new Date().toISOString(),
-      artifactsForReview: [
-        {
-          path: bundlePath,
-          type: "build-handoff-bundle",
-          humanReadableContent: bundlePath,
-        },
-      ],
+      artifactsForReview: bundlePaths.map((p) => ({
+        path: p,
+        type: p.endsWith(".json")
+          ? p.includes("/inbox/")
+            ? "build-handoff-bundle"
+            : "build-artifact"
+          : "build-artifact",
+        humanReadableContent: p,
+      })),
     };
   }
 }

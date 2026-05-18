@@ -1,6 +1,8 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "organizeImports": { "enabled": true },
+  "organizeImports": {
+    "enabled": true
+  },
   "linter": {
     "enabled": true,
     "rules": {
@@ -99,7 +101,9 @@
   },
   "overrides": [
     {
-      "include": ["apps/founder-desktop/src/**"],
+      "include": [
+        "apps/founder-desktop/src/**"
+      ],
       "linter": {
         "rules": {
           "nursery": {
@@ -118,7 +122,14 @@
                   "node:events": "Tauri WebView cannot run Node modules -- use EventTarget.",
                   "node:buffer": "Tauri WebView cannot run Node modules -- use Uint8Array.",
                   "@founder-os/prompt-master/node": "The /node entry point pulls in Node-only deps. Desktop app uses the client-safe barrel: import from @founder-os/prompt-master only.",
-                  "@founder-os/sales-agents/node": "The /node entry point pulls in pdfkit + node:fs. Desktop app uses the client-safe barrel: import from @founder-os/sales-agents only."
+                  "@founder-os/sales-agents/node": "The /node entry point pulls in pdfkit + node:fs. Desktop app uses the client-safe barrel: import from @founder-os/sales-agents only.",
+                  "@founder-os/media-providers/node": "The /node entry point spawns the HyperFrames CLI via node:child_process. Desktop app cannot spawn from the WebView -- invoke a Tauri command instead, or import from @founder-os/media-providers (client-safe barrel) for stub providers and types only.",
+                  "@founder-os/crm-providers/node": "The /node entry point makes localhost HTTP calls + spawns docker via node:child_process. Desktop app cannot do either from the WebView -- invoke a Tauri command instead, or import from @founder-os/crm-providers (client-safe barrel) for types + stub providers only.",
+                  "@founder-os/handoff-providers/node": "The /node entry point spawns the Open CoDesign Electron binary via node:child_process. Desktop app cannot spawn from the WebView -- invoke a Tauri command (codesign_probe / codesign_spawn) instead, or import from @founder-os/handoff-providers (client-safe barrel) for capabilities, schemas, and the pure prompt builder.",
+                  "@founder-os/backend-providers/node": "The /node entry point spawns the PocketBase binary via node:child_process and hits the admin REST API. Desktop app cannot do either from the WebView -- invoke a Tauri command (backend_probe_pocketbase / backend_serve_dev) instead, or import from @founder-os/backend-providers (client-safe barrel) for capabilities, stub providers, and the probe-result envelope.",
+                  "@founder-os/media-edit-providers/node": "The /node entry point spawns the Bun runtime via node:child_process. Desktop app cannot spawn from the WebView -- invoke a Tauri command instead, or import from @founder-os/media-edit-providers (client-safe barrel) for the config_only provider, capabilities, and types.",
+                  "@founder-os/social-providers/node": "The /node entry point spawns the social-poster CLI via node:child_process and writes drafts/results to disk via node:fs/promises. Desktop app cannot do either from the WebView -- invoke a Tauri command instead, or import from @founder-os/social-providers (client-safe barrel) for capabilities, the probe-result envelope, and the BrightBean / TryPost stub providers.",
+                  "@founder-os/handoff-pack-providers/node": "The /node entry point writes brand assets and PDFs via node:fs / node:path. Desktop app cannot touch disk from the WebView -- invoke a Tauri command (handoff_pack_prepare_brand_assets / handoff_pack_render_pdf) instead, or import from @founder-os/handoff-pack-providers (client-safe barrel) for the PdfEngine contract, the Handlebars-subset template engine, the markdown converter, and the brand-CSS wrapper."
                 }
               }
             }

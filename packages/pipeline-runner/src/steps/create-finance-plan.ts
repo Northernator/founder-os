@@ -51,6 +51,8 @@
  * Schemas are shape-stable (schemaVersion: 1). Adding fields is fine;
  * renaming/removing breaks downstream and bumps the schema version.
  */
+import type { BackendEngine } from "@founder-os/backend-core";
+import { estimatedMonthlyHostingUsd } from "@founder-os/backend-core";
 import type { VentureManifest } from "@founder-os/domain";
 import { createLogger } from "@founder-os/logger";
 import { getStagePath } from "@founder-os/workspace-core";
@@ -86,6 +88,15 @@ export type FinanceCanvasJson = {
   monthlyBudgetCapGBP: number | null;
   /** Founder-editable starting capital (cash on hand). Null if unknown. */
   startingCapitalGBP: number | null;
+  /**
+   * Founder-editable monthly USD cap on backend hosting. The advance-gate
+   * audit rule (`finance.backend-hosting.exceeds-cap`) fires at
+   * LAUNCH_READY when the BACKEND stage's resolved engine has an
+   * estimated monthly cost greater than this value. Null = "no cap set";
+   * 0 = "must be free-tier / self-hosted". Mirrors the spec sec 12
+   * `FINANCE.backendHostingMonthlyUsdCap` field.
+   */
+  backendHostingMonthlyUsdCap: number | null;
   revenueModel: string | null;
   pricingTiers: Array<Record<string, unknown>>;
   costProjections: Record<string, unknown> | null;
@@ -104,6 +115,13 @@ export type FinancePlanJson = {
   inputs: {
     monthlyBudgetCapGBP: number | null;
     startingCapitalGBP: number | null;
+    /**
+     * Pass-through copy of the canvas field of the same name. Surfaced
+     * on the plan so the advance-gate audit rule can read it without
+     * also reaching into the canvas. Null when the founder hasn't set
+     * one yet.
+     */
+    backendHostingMonthlyUsdCap: number | null;
     entityType: string | null;
     takesPayments: boolean;
     regulated: boolean;
@@ -134,6 +152,20 @@ export type FinancePlanJson = {
   fundingRecommendation: {
     path: "bootstrap" | "seed" | "unclear";
     rationale: string;
+  };
+  /**
+   * Backend hosting comparison block. Populated best-effort by reading
+   * `12_backend/backend-checkpoint.json` (skip-if-missing). When the
+   * BACKEND stage hasn't run yet, `resolvedEngine` is null and `status`
+   * is "no-backend-yet". When it has run, `estimatedMonthlyUsd` is
+   * resolved via @founder-os/backend-core's cost map and `status` is
+   * "ok" / "exceeds-cap" / "no-cap-set" based on the canvas cap.
+   */
+  backendHosting: {
+    resolvedEngine: BackendEngine | null;
+    estimatedMonthlyUsd: number;
+    capMonthlyUsd: number | null;
+    status: "ok" | "exceeds-cap" | "no-cap-set" | "no-backend-yet";
   };
   assumptions: string[];
   sources: string[];
@@ -241,6 +273,88 @@ async function readUkSetupSnippet(
 }
 
 // ---------------------------------------------------------------------------
+// Backend checkpoint reader (best-effort, never throws)
+// ---------------------------------------------------------------------------
+
+type BackendSnippet = {
+  resolvedEngine: BackendEngine | null;
+  hasFile: boolean;
+};
+
+/**
+ * Read `12_backend/backend-checkpoint.json` (slice 4 of backend arc).
+ * Returns the engine name from `instance.engine` if present, otherwise
+ * null. Best-effort, never throws -- when the BACKEND stage hasn't run
+ * yet, the file simply isn't there and we return `{null, false}`. When
+ * the file exists but doesn't have an `instance.engine` (skipped run,
+ * config_only short-circuit), we also return null with hasFile=true so
+ * the comparison block can distinguish "no backend yet" from "ran but
+ * no engine".
+ */
+async function readBackendSnippet(
+  fs: Filesystem,
+  ventureRoot: string
+): Promise<BackendSnippet> {
+  // Hardcoded path rather than depending on @founder-os/workspace-core's
+  // getBackendCheckpointPath -- the helper exists but importing it here
+  // would force pipeline-runner to upgrade its workspace-core
+  // dependency surface unnecessarily. Slice 7 keeps the touch surface
+  // minimal; a follow-up can route through the helper.
+  const path = `${ventureRoot}/12_backend/backend-checkpoint.json`;
+  if (!(await fs.exists(path))) {
+    return { resolvedEngine: null, hasFile: false };
+  }
+  try {
+    const raw = await fs.readFile(path);
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const instance = parsed.instance as Record<string, unknown> | undefined;
+    const engine = instance?.engine;
+    if (typeof engine === "string") {
+      return { resolvedEngine: engine as BackendEngine, hasFile: true };
+    }
+    return { resolvedEngine: null, hasFile: true };
+  } catch (err) {
+    const m = err instanceof Error ? err.message : String(err);
+    log.warn(`backend-checkpoint.json present but unparseable -- ignoring: ${m}`);
+    return { resolvedEngine: null, hasFile: false };
+  }
+}
+
+/**
+ * Resolve the `backendHosting` block on FinancePlanJson from the
+ * resolved engine + the canvas cap. Pure -- safe to unit test.
+ */
+export function computeBackendHosting(args: {
+  resolvedEngine: BackendEngine | null;
+  capMonthlyUsd: number | null;
+}): FinancePlanJson["backendHosting"] {
+  const { resolvedEngine, capMonthlyUsd } = args;
+  if (resolvedEngine === null) {
+    return {
+      resolvedEngine: null,
+      estimatedMonthlyUsd: 0,
+      capMonthlyUsd,
+      status: "no-backend-yet",
+    };
+  }
+  const estimatedMonthlyUsd = estimatedMonthlyHostingUsd(resolvedEngine);
+  if (capMonthlyUsd === null) {
+    return {
+      resolvedEngine,
+      estimatedMonthlyUsd,
+      capMonthlyUsd: null,
+      status: "no-cap-set",
+    };
+  }
+  return {
+    resolvedEngine,
+    estimatedMonthlyUsd,
+    capMonthlyUsd,
+    status: estimatedMonthlyUsd > capMonthlyUsd ? "exceeds-cap" : "ok",
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Canvas scaffolding
 // ---------------------------------------------------------------------------
 
@@ -258,6 +372,11 @@ function buildScaffoldCanvas(args: {
     createdAt: new Date().toISOString(),
     monthlyBudgetCapGBP: cap,
     startingCapitalGBP: null,
+    // Default to 0 = "must be free-tier / self-hosted". Explicit opt-in
+    // to paid hosting matches the BackendConfig.monthlyUsdCap default
+    // and keeps the LAUNCH advance-gate strict by default; raise via
+    // the FinanceTab to allow a paid tier.
+    backendHostingMonthlyUsdCap: 0,
     revenueModel: null,
     pricingTiers: [],
     costProjections: null,
@@ -449,6 +568,7 @@ function buildAssumptions(args: {
   pricePointParsed: number | null;
   validation: ValidationSummarySnippet;
   uk: UkSetupSnippet;
+  backendHosting: FinancePlanJson["backendHosting"];
 }): string[] {
   const out: string[] = [];
   out.push(`Currency: GBP. Defaults follow UK SaaS norms.`);
@@ -499,6 +619,20 @@ function buildAssumptions(args: {
   out.push(
     `Budget cap: GBP ${args.manifest.monthlyBudgetCapGBP ?? DEFAULT_MONTHLY_BUDGET_CAP_GBP}/month (from manifest, fallback ${DEFAULT_MONTHLY_BUDGET_CAP_GBP}).`
   );
+  const bh = args.backendHosting;
+  if (bh.status === "no-backend-yet") {
+    out.push(
+      `Backend hosting cap: USD ${bh.capMonthlyUsd === null ? "_unset_" : bh.capMonthlyUsd}/month (canvas). BACKEND stage hasn't produced a checkpoint yet -- LAUNCH gating will activate once it does.`
+    );
+  } else if (bh.status === "no-cap-set") {
+    out.push(
+      `Backend engine resolved to ${bh.resolvedEngine} (estimated USD ${bh.estimatedMonthlyUsd}/month). No backend-hosting cap set on the canvas; LAUNCH is not gated by this rule.`
+    );
+  } else {
+    out.push(
+      `Backend engine resolved to ${bh.resolvedEngine} (estimated USD ${bh.estimatedMonthlyUsd}/month) against canvas cap USD ${bh.capMonthlyUsd}/month -> ${bh.status === "exceeds-cap" ? "EXCEEDS cap -- LAUNCH blocked" : "within cap"}.`
+    );
+  }
   return out;
 }
 
@@ -626,32 +760,88 @@ function renderPlanMarkdown(args: {
   lines.push("## Revenue assumption");
   lines.push("");
   lines.push(
-    `- Price per customer / month: ${r.monthlyPricePerCustomerGBP === null ? "_unset (set on validation canvas)_" : `GBP ${r.monthlyPricePerCustomerGBP.toFixed(2)}`}`
+    "- Price per customer / month: " +
+      (r.monthlyPricePerCustomerGBP === null
+        ? "_unset (set on validation canvas)_"
+        : "GBP " + r.monthlyPricePerCustomerGBP.toFixed(2))
   );
-  lines.push(`- Target customers (month 12): ${r.targetCustomers12m}`);
+  lines.push("- Target customers (month 12): " + r.targetCustomers12m);
   lines.push(
-    `- Projected MRR (month 12): ${r.projectedMrr12mGBP === null ? "_unset_" : `GBP ${r.projectedMrr12mGBP.toFixed(2)}`}`
+    "- Projected MRR (month 12): " +
+      (r.projectedMrr12mGBP === null
+        ? "_unset_"
+        : "GBP " + r.projectedMrr12mGBP.toFixed(2))
   );
-  lines.push(`- Ramp: ${r.rampMonths} months`);
+  lines.push("- Ramp: " + r.rampMonths + " months");
   lines.push("");
 
   const rw = args.plan.runway;
   lines.push("## Runway + break-even");
   lines.push("");
   lines.push(
-    `- Runway: ${rw.months === null ? "_unknown (no capital input)_" : `${rw.months} months`}`
+    "- Runway: " + (rw.months === null ? "_unknown (no capital input)_" : rw.months + " months")
   );
   lines.push(
-    `- Break-even customers: ${rw.breakEvenCustomers === null ? "_unset_" : `${rw.breakEvenCustomers}`}`
+    "- Break-even customers: " +
+      (rw.breakEvenCustomers === null ? "_unset_" : String(rw.breakEvenCustomers))
   );
   lines.push("");
 
   const fr = args.plan.fundingRecommendation;
   lines.push("## Funding recommendation");
   lines.push("");
-  lines.push(`**Path: ${fr.path}**`);
+  lines.push("**Path: " + fr.path + "**");
   lines.push("");
   lines.push(fr.rationale);
+  lines.push("");
+
+  const bh = args.plan.backendHosting;
+  lines.push("## Backend hosting (USD)");
+  lines.push("");
+  if (bh.status === "no-backend-yet") {
+    if (bh.capMonthlyUsd === null) {
+      lines.push(
+        "- BACKEND stage hasn't run yet. Set a `backendHostingMonthlyUsdCap` on the canvas to gate LAUNCH against the resolved engine's hosting cost."
+      );
+    } else {
+      lines.push(
+        "- BACKEND stage hasn't run yet. Cap on the canvas: USD " +
+          bh.capMonthlyUsd.toFixed(2) +
+          "/month."
+      );
+    }
+  } else if (bh.status === "no-cap-set") {
+    lines.push(
+      "- Resolved engine: `" +
+        bh.resolvedEngine +
+        "` (estimated USD " +
+        bh.estimatedMonthlyUsd.toFixed(2) +
+        "/month)."
+    );
+    lines.push(
+      "- No `backendHostingMonthlyUsdCap` on the canvas. LAUNCH is not gated by this rule until a cap is set."
+    );
+  } else {
+    lines.push(
+      "- Resolved engine: `" +
+        bh.resolvedEngine +
+        "` (estimated USD " +
+        bh.estimatedMonthlyUsd.toFixed(2) +
+        "/month)."
+    );
+    lines.push(
+      "- Cap on the canvas: USD " +
+        (bh.capMonthlyUsd === null ? "_unset_" : bh.capMonthlyUsd.toFixed(2)) +
+        "/month."
+    );
+    if (bh.status === "exceeds-cap") {
+      lines.push(
+        "- **Status: exceeds cap.** Advance into LAUNCH is blocked by the `finance.backend-hosting.exceeds-cap` audit rule until either the cap is raised or the BACKEND stage re-runs with a cheaper engine."
+      );
+    } else {
+      lines.push("- Status: ok -- estimate fits inside the cap.");
+    }
+  }
   lines.push("");
 
   lines.push("## Strategic narrative");
@@ -661,12 +851,14 @@ function renderPlanMarkdown(args: {
 
   lines.push("## Assumptions");
   for (const a of args.plan.assumptions) {
-    lines.push(`- ${a}`);
+    lines.push("- " + a);
   }
   lines.push("");
 
   lines.push(
-    `_Generation source: ${args.plan.generationSource}. Re-run with a configured LLM provider for richer narratives._`
+    "_Generation source: " +
+      args.plan.generationSource +
+      ". Re-run with a configured LLM provider for richer narratives._"
   );
   lines.push("");
   return lines.join("\n");
@@ -693,10 +885,17 @@ export async function createFinancePlanStep(
 
   const validation = await readValidationSummary(ctx.fs, ctx.ventureRoot);
   const uk = await readUkSetupSnippet(ctx.fs, ctx.ventureRoot, ctx.manifest);
+  const backend = await readBackendSnippet(ctx.fs, ctx.ventureRoot);
 
   const sources: string[] = ["finance-canvas.json"];
   if (validation.hasFile) sources.push("validation-summary.json");
   if (uk.hasFile) sources.push("uk-setup.json");
+  if (backend.hasFile) sources.push("backend-checkpoint.json");
+
+  const backendHosting = computeBackendHosting({
+    resolvedEngine: backend.resolvedEngine,
+    capMonthlyUsd: canvas.backendHostingMonthlyUsdCap,
+  });
 
   const pricePointParsed = parsePricePointGBP(validation.pricePoint);
   const revenueAssumption = computeRevenueAssumption({
@@ -728,6 +927,7 @@ export async function createFinancePlanStep(
     pricePointParsed,
     validation,
     uk,
+    backendHosting,
   });
 
   const planNoNarrative: FinancePlanJson = {
@@ -741,6 +941,7 @@ export async function createFinancePlanStep(
       monthlyBudgetCapGBP:
         canvas.monthlyBudgetCapGBP ?? ctx.manifest.monthlyBudgetCapGBP ?? null,
       startingCapitalGBP: canvas.startingCapitalGBP,
+      backendHostingMonthlyUsdCap: canvas.backendHostingMonthlyUsdCap,
       entityType: uk.entityType,
       takesPayments: ctx.manifest.takesPayments,
       regulated: ctx.manifest.regulated,
@@ -754,6 +955,7 @@ export async function createFinancePlanStep(
     revenueAssumption,
     runway,
     fundingRecommendation,
+    backendHosting,
     assumptions,
     sources,
     generationSource: "deterministic",
@@ -785,7 +987,11 @@ export async function createFinancePlanStep(
   await ctx.fs.writeFile(planMdPath, md.endsWith("\n") ? md : `${md}\n`);
 
   log.info(
-    `Finance plan written (canvas: ${canvasStatus}, monthlyCostsGBP: ${monthlyCosts.totalGBP}, fundingPath: ${fundingRecommendation.path}, generationSource: ${generationSource})`
+    "Finance plan written (canvas: " + canvasStatus +
+      ", monthlyCostsGBP: " + monthlyCosts.totalGBP +
+      ", fundingPath: " + fundingRecommendation.path +
+      ", generationSource: " + generationSource +
+      ", backendHostingStatus: " + backendHosting.status + ")"
   );
 
   return {

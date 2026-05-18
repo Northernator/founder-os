@@ -1,0 +1,36 @@
+{
+  "name": "@founder-os/crm-providers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node.ts",
+    "./cli": "./src/cli.ts"
+  },
+  "bin": {
+    "crm-providers": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cli": "tsx src/cli.ts",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@founder-os/crm-core": "workspace:*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@founder-os/domain": "workspace:*",
+    "@founder-os/pipeline-runner": "workspace:*",
+    "@founder-os/stage-runners": "workspace:*",
+    "tsx": "^4.7.0",
+    "@types/node": "^20.0.0",
+    "vitest": "^1.6.0"
+  }
+}

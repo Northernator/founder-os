@@ -1,10 +1,10 @@
-import { ProjectChat } from "@founder-os/chat-ui";
+import { ProjectChat, ProjectChatComposer } from "@founder-os/chat-ui";
 import type { ChatMessage } from "@founder-os/chat-ui";
 import type { ChatAttachment } from "@founder-os/chat-ui";
 import type { StageName, Venture, VentureManifest, VentureStage } from "@founder-os/domain";
 import { VentureManifestSchema } from "@founder-os/domain";
 import { StageGraph } from "@founder-os/graph-ui";
-import { PROVIDER_CATALOG, getProvider } from "@founder-os/llm-providers";
+import { type LlmProviderId, PROVIDER_CATALOG, getProvider } from "@founder-os/llm-providers";
 import { runPipeline } from "@founder-os/pipeline-runner";
 import { optimize } from "@founder-os/prompt-master";
 import {
@@ -32,6 +32,7 @@ import {
 import { buildAttachmentBlock, extractAttachment } from "../../lib/chat-attachments.js";
 import * as db from "../../lib/db.js";
 import { pickActiveProvider, streamChat } from "../../lib/llm-client.js";
+import { ProviderModeBadge } from "../../lib/ProviderModeBadge.js";
 import { tauriFs } from "../../lib/pipeline-fs.js";
 import { buildPipelineLlmCaller } from "../../lib/pipeline-llm.js";
 import { runResearchStage } from "../../lib/run-research-stage.js";
@@ -50,7 +51,11 @@ import { RunAllStagesButton } from "./RunAllStagesButton.js";
 import { SalesTab } from "./SalesTab.js";
 import { ScreensTab } from "./ScreensTab.js";
 import { SpecTab } from "./SpecTab.js";
+import { BackendTab } from "./BackendTab.js";
+import { CrmTab } from "./CrmTab.js";
+import { HandoffPackTab } from "./HandoffPackTab.js";
 import { MediaTab } from "./MediaTab.js";
+import { MediaEditTab } from "./MediaEditTab.js";
 import { UkSetupTab } from "./UkSetupTab.js";
 import { ValidationTab } from "./ValidationTab.js";
 import { VentureProviderPicker } from "./VentureProviderPicker.js";
@@ -75,13 +80,44 @@ type Tab =
   | "spec"
   | "screens"
   | "overview"
-  | "chat"
   | "pipeline"
   | "artifacts"
   | "sales"
   | "audit"
+  | "backend"
   | "media"
+  | "media-edit"
+  | "crm"
+  | "handoff-pack"
   | "options";
+
+/**
+ * Human-readable tab labels. Hoisted to module scope so `handleSend` can
+ * pass the active tab's label into `buildSystemPromptForSend` (the chat
+ * is now a persistent left sidebar; the assistant needs to know which
+ * tab the founder is actually looking at). Order here drives the tab
+ * row order in the header.
+ */
+const TAB_LABELS: Record<Tab, string> = {
+  overview: "Overview",
+  idea: "Idea Canvas",
+  research: "Research",
+  validation: "Validation",
+  brand: "Brand",
+  spec: "Spec",
+  screens: "Screens",
+  options: "Options",
+  pipeline: "Pipeline",
+  artifacts: "Artifacts",
+  audit: "Audit",
+  sales: "Sales",
+  backend: "Backend",
+  media: "Media",
+  "media-edit": "Polish",
+  crm: "CRM",
+  "uk-setup": "UK Setup",
+  "handoff-pack": "Handoff Pack",
+};
 
 function makeMsgId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -115,7 +151,7 @@ const BRAND_DIRECTION_CUE = "BRAND_DIRECTION_READY";
 /**
  * UK Setup stage cue (pt.34a). Emitted by `ukSetupStagePrompt()` when the
  * coach thinks the founder has covered the entity / HMRC / banking /
- * insurance / IP basics enough to advance to Spec. Same edge-detector
+ * insurance / IP basics enough to go live. Same edge-detector
  * pattern as the brand cues — one-shot toast, no button driven by it.
  *
  * Keep this in sync with the prompt's instructions.
@@ -190,14 +226,26 @@ function buildSystemPromptForSend(args: {
   ventureName: string;
   ventureStage: VentureStage;
   manifest: VentureManifest | null;
+  activeTabLabel?: string;
 }): string {
-  const { ventureName, ventureStage, manifest } = args;
+  const { ventureName, ventureStage, manifest, activeTabLabel } = args;
+
+  // Tab-aware overlay. The chat now lives as a persistent left sidebar
+  // (no longer a tab of its own), so the assistant needs an explicit
+  // signal about which tab the founder is looking at. Helps it tailor
+  // help — e.g. "you're on the Brand tab, want me to summarise your
+  // current candidates?" — without the user having to spell it out.
+  const tabLine = activeTabLabel
+    ? `The founder is currently viewing the "${activeTabLabel}" tab. Tailor any help, suggestions, or next-step nudges to what's visible in that view.`
+    : null;
 
   if (!manifest) {
-    return `You are the Founder OS AI coach for the venture "${ventureName}". The founder is currently at stage: ${ventureStage.replace(/_/g, " ")}. Be concise, practical, and business-savvy. Offer concrete next actions where helpful.`;
+    const base = `You are the Founder OS AI coach for the venture "${ventureName}". The founder is currently at stage: ${ventureStage.replace(/_/g, " ")}. Be concise, practical, and business-savvy. Offer concrete next actions where helpful.`;
+    return tabLine ? `${base}\n\n${tabLine}` : base;
   }
 
   const parts: string[] = [baseSystemPrompt(manifest)];
+  if (tabLine) parts.push(tabLine);
 
   // Stage overlay — one of research / brand / build. Other stages fall
   // through with just the base prompt for now; we'll add overlays as we
@@ -371,6 +419,16 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   // a small footer on the chat composer so the founder gets a passive
   // signal that the optimizer is doing real work.
   const [promptMasterTokensSaved, setPromptMasterTokensSaved] = useState(0);
+  // Active LLM provider + transport mode for the always-visible header
+  // badge. The user has explicitly asked for "API" vs "Subscription" to be
+  // obvious everywhere a call could fire, so the venture header gets the
+  // first-class indicator. Refreshes on (a) initial venture load, (b) any
+  // time the user lands back on the Options tab (likely to have toggled
+  // something), and (c) after a manual setActiveProvider change.
+  const [headerProvider, setHeaderProvider] = useState<{
+    provider: string | null;
+    mode: db.LlmMode | null;
+  }>({ provider: null, mode: null });
   // Same idea for the Audit tab — bumped after a pipeline run so the
   // tab refreshes even if the user wasn't looking at it during the run.
   const [auditRefreshToken, setAuditRefreshToken] = useState(0);
@@ -422,6 +480,12 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   // tab Export menu pattern).
   const [chatExportMenuOpen, setChatExportMenuOpen] = useState(false);
   const chatExportMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // AI Chat is now a persistent left sidebar (no longer a tab). Collapsed
+  // state is per-session — defaults to open so the founder always sees
+  // the assistant. Width is fixed at 320px when open, matching the
+  // CoDesign reference. The chevron in the sidebar header toggles this.
+  const [chatSidebarCollapsed, setChatSidebarCollapsed] = useState(false);
 
   // Derived: has the assistant signalled it's ready to generate? Drives
   // the button's pulsing glow + inline "ready" cue. Memoised because
@@ -513,7 +577,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
       pushToast({
         kind: "info",
         message: "UK setup looking complete",
-        detail: "Open the UK Setup tab to confirm the must-haves and advance to Spec.",
+        detail: "Open the UK Setup tab to confirm the must-haves before going live.",
         ttlMs: 6000,
       });
     }
@@ -654,6 +718,35 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
   // Default to the stage-specific guided tab when switching ventures so the
   // walkthrough is the first thing the founder sees.
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally omitted
+  // Refresh the header's "Active: <provider> · <mode>" badge whenever the
+  // venture changes or the user navigates away from the Options tab (where
+  // they're most likely to have edited LLM settings). Cheap -- one DB row
+  // + one lookup. Never throws into render.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const providerId = await pickActiveProvider(ventureId);
+        if (cancelled) return;
+        if (!providerId) {
+          setHeaderProvider({ provider: null, mode: null });
+          return;
+        }
+        const setting = await db.getLlmSetting(providerId);
+        if (cancelled) return;
+        setHeaderProvider({
+          provider: providerId,
+          mode: setting?.mode ?? null,
+        });
+      } catch {
+        if (!cancelled) setHeaderProvider({ provider: null, mode: null });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ventureId, tab]);
+
   useEffect(() => {
     setChatAttachments([]);
     setPromptMasterTokensSaved(0);
@@ -673,21 +766,20 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
       setTab("brand");
     } else if (venture?.stage === "BRAND_READY") {
       setTab("brand");
-    } else if (venture?.stage === "UK_SETUP_READY") {
-      // pt.34a — re-opening a venture already at UK_SETUP_READY lands in
-      // the UK Setup tab so the founder picks up where they left off.
-      // Stage-advance from BRAND_READY already routes here via STAGE_TAB.
-      setTab("uk-setup");
     } else if (venture?.stage === "SPEC_READY") {
-      // pt.41 — same routing rationale as UK_SETUP_READY. Re-opening
-      // lands on the Spec tab; stage-advance from UK_SETUP_READY
-      // already routes here via STAGE_TAB.
+      // pt.41 — re-opening lands on the Spec tab; stage-advance from
+      // BRAND_READY routes here via STAGE_TAB.
       setTab("spec");
     } else if (venture?.stage === "WIREFRAME_READY") {
       // pt.45 — re-opening at WIREFRAME_READY lands in the Screens tab
       // (legacy stage name, user-facing label is "Screens"). Stage-
       // advance from SPEC_READY also routes here via STAGE_TAB.
       setTab("screens");
+    } else if (venture?.stage === "CRM_READY") {
+      setTab("crm");
+    } else if (venture?.stage === "UK_SETUP_READY") {
+      // Late-stage UK setup now follows CRM in the pipeline.
+      setTab("uk-setup");
     } else {
       setTab("overview");
     }
@@ -984,18 +1076,13 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
     RESEARCHED: "research",
     VALIDATED: "brand",
     BRAND_READY: "brand",
-    // pt.33: advancing to UK_SETUP_READY drops the founder straight
-    // into the UK Setup workshop tab so the next batch of decisions
-    // (entity, HMRC, banking, insurance, IP) is the first thing they see.
-    UK_SETUP_READY: "uk-setup",
-    // pt.41: SPEC_READY → spec canvas. Same routing pattern as UK
-    // Setup — the structured spec tab is the first thing the founder
-    // sees on stage advance, with the chat overlay coaching alongside.
     SPEC_READY: "spec",
     // pt.45: WIREFRAME_READY (legacy enum) → "screens" tab (user-
     // facing label). Same routing pattern; the screen inventory is
     // the first thing the founder sees on stage advance.
     WIREFRAME_READY: "screens",
+    CRM_READY: "crm",
+    UK_SETUP_READY: "uk-setup",
   };
 
   const handleStageChange = async (nextStage: VentureStage) => {
@@ -1114,10 +1201,17 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
 
     // Pull the saved setting so we can tag the assistant bubble with the
     // transport (api_key vs subscription) alongside the provider id. This
-    // drives the "via Claude · PRO" / "via ChatGPT · API" caption in the
+    // drives the "via Claude · SUB" / "via ChatGPT · API" caption in the
     // chat bubble. Reads cheap — just the one row we're about to use.
+    //
+    // Mode is always a concrete value here -- migration 0005 declared the
+    // column NOT NULL DEFAULT 'api_key', and rowToLlmSetting coerces any
+    // stray NULL into 'api_key'. We trust the value directly; the previous
+    // `?? 'api_key'` coercion masked subscription-mode rows when the row
+    // existed but `mode` somehow read as undefined upstream -- which is
+    // exactly the bug class that produced the unexpected API charges.
     const activeSetting = await db.getLlmSetting(providerId);
-    const providerMode = activeSetting?.mode === "subscription" ? "subscription" : "api_key";
+    const providerMode: db.LlmMode = activeSetting?.mode ?? "api_key";
 
     // Seed an empty assistant bubble we'll progressively fill with streaming
     // deltas. Using a stable id means the bubble stays in place as tokens
@@ -1163,6 +1257,10 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
       ventureName: venture.name,
       ventureStage: venture.stage,
       manifest,
+      // Sidebar chat is tab-aware: pass the active tab's human label so
+      // the assistant can ground its suggestions in what the founder is
+      // actually looking at right now.
+      activeTabLabel: TAB_LABELS[tab],
     });
 
     // Run the system prompt through Prompt Master before sending. By
@@ -1670,26 +1768,516 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
     return () => document.removeEventListener("mousedown", handler);
   }, [chatExportMenuOpen]);
 
-  const TAB_LABELS: Record<Tab, string> = {
-    idea: "Idea Canvas",
-    research: "Research",
-    validation: "Validation",
-    brand: "Brand",
-    "uk-setup": "UK Setup",
-    spec: "Spec",
-    screens: "Screens",
-    overview: "Overview",
-    options: "Options",
-    chat: "AI Chat",
-    pipeline: "Pipeline",
-    artifacts: "Artifacts",
-    audit: "Audit",
-    sales: "Sales",
-    media: "Media",
-  };
+  // ──────────────────────────────────────────────────────────────────
+  // AI Chat sidebar (persistent left column).
+  //
+  // Previously the assistant lived behind a "chat" tab. Now it's
+  // always visible alongside whatever tab the founder is working in,
+  // matching the Open CoDesign layout. The chevron in the sidebar
+  // header collapses/expands it. The chat itself is tab-aware via
+  // `buildSystemPromptForSend(... activeTabLabel: TAB_LABELS[tab])`
+  // — see handleSend above.
+  //
+  // All chat state (messages / chatLoading / attachments / reports
+  // cue / Save-chat dropdown / etc.) stays owned by the dashboard
+  // because it's tightly entangled with handleSend's closure scope;
+  // we just relocate the JSX into a sidebar instead of a tab body.
+  // ──────────────────────────────────────────────────────────────────
+  const chatSidebar = chatSidebarCollapsed ? (
+    <div
+      style={{
+        width: 40,
+        flexShrink: 0,
+        borderRight: "1px solid var(--border-subtle)",
+        background: "var(--bg-surface, #FFFFFF)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        paddingTop: 12,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setChatSidebarCollapsed(false)}
+        title="Expand AI Chat"
+        aria-label="Expand AI Chat"
+        style={{
+          width: 28,
+          height: 28,
+          background: "transparent",
+          border: "1px solid var(--border-subtle)",
+          borderRadius: 6,
+          cursor: "pointer",
+          color: "var(--text-secondary)",
+          fontSize: 14,
+          lineHeight: 1,
+        }}
+      >
+        ›
+      </button>
+      <div
+        style={{
+          writingMode: "vertical-rl",
+          transform: "rotate(180deg)",
+          marginTop: 12,
+          fontSize: 11,
+          fontWeight: 600,
+          letterSpacing: 0.5,
+          color: "var(--text-tertiary)",
+          textTransform: "uppercase",
+          userSelect: "none",
+        }}
+      >
+        AI Chat
+      </div>
+    </div>
+  ) : (
+    <div
+      style={{
+        width: 320,
+        flexShrink: 0,
+        borderRight: "1px solid var(--border-subtle)",
+        background: "var(--bg-surface, #FFFFFF)",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+      }}
+    >
+      {/* Sidebar header — title, venture name + stage pill (promoted
+          here from the chat-body header so we don't duplicate info in
+          the cramped sidebar), tab-context line, collapse chevron. */}
+      <div
+        style={{
+          padding: "12px 14px",
+          borderBottom: "1px solid var(--border-subtle)",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 700,
+              color: "var(--text-primary)",
+              lineHeight: 1.2,
+            }}
+          >
+            AI Chat
+          </div>
+          {/* Venture name + stage badge — promoted from the chat-body
+              header (hideHeader={true} on <ProjectChat/>) so users can
+              still see the project they're chatting about + its current
+              stage without the cramped duplicate row inside the chat. */}
+          <div
+            style={{
+              marginTop: 4,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              minWidth: 0,
+              flexWrap: "wrap",
+            }}
+          >
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: "100%",
+              }}
+              title={venture.name}
+            >
+              {venture.name}
+            </span>
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                background: "#EEF2FF",
+                color: "#4338CA",
+                padding: "1px 6px",
+                borderRadius: 10,
+                letterSpacing: 0.3,
+                whiteSpace: "nowrap",
+              }}
+              title={`Stage: ${venture.stage.replace(/_/g, " ")}`}
+            >
+              {venture.stage.replace(/_/g, " ")}
+            </span>
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--text-tertiary)",
+              marginTop: 4,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+            title={`Helping with: ${TAB_LABELS[tab]}`}
+          >
+            on <span style={{ fontWeight: 600 }}>{TAB_LABELS[tab]}</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setChatSidebarCollapsed(true)}
+          title="Collapse AI Chat"
+          aria-label="Collapse AI Chat"
+          style={{
+            width: 24,
+            height: 24,
+            background: "transparent",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: 4,
+            cursor: "pointer",
+            color: "var(--text-secondary)",
+            fontSize: 13,
+            lineHeight: 1,
+            flexShrink: 0,
+          }}
+        >
+          ‹
+        </button>
+      </div>
+
+      {/* Status / actions strip — message counter, web-search pill,
+          Generate Reports, Save Chat, Stop, Clear. Identical wiring
+          to the old tab header, just laid out in the narrower column. */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          padding: "8px 14px",
+          borderBottom: "1px solid #F3F4F6",
+          fontSize: 11,
+          color: "#9CA3AF",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flexWrap: "wrap",
+            minWidth: 0,
+          }}
+        >
+          <span>
+            {chatHydrating
+              ? "Loading thread…"
+              : `${messages.length} message${messages.length === 1 ? "" : "s"}`}
+          </span>
+          {venture.stage === "RESEARCHED" && <WebSearchPill ventureId={venture.id} />}
+          {reportsCueActive &&
+            venture.stage === "RESEARCHED" &&
+            manifest?.appType === "saas" &&
+            !reportsGenerating && (
+              <span
+                style={{
+                  background: "#EEF2FF",
+                  color: "#4338CA",
+                  border: "1px solid #C7D2FE",
+                  padding: "2px 8px",
+                  borderRadius: 10,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ✨ Ready to generate
+              </span>
+            )}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flexWrap: "wrap",
+          }}
+        >
+          {venture.stage === "RESEARCHED" && manifest?.appType === "saas" && !chatLoading && (
+            <button
+              type="button"
+              onClick={handleGenerateResearchReports}
+              disabled={reportsGenerating}
+              title={
+                reportsGenerating
+                  ? "Running 4 LLM calls in parallel…"
+                  : reportsCueActive
+                    ? "Assistant signalled it's ready — click to generate the Core 4 research docs"
+                    : "Generate the Core 4 research docs from this chat"
+              }
+              style={{
+                background: reportsGenerating
+                  ? "#E0E7FF"
+                  : reportsCueActive
+                    ? "#6366F1"
+                    : "#4F46E5",
+                border: `1px solid ${
+                  reportsGenerating ? "#C7D2FE" : reportsCueActive ? "#818CF8" : "#4338CA"
+                }`,
+                color: reportsGenerating ? "#4338CA" : "#FFFFFF",
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "3px 8px",
+                borderRadius: 4,
+                cursor: reportsGenerating ? "not-allowed" : "pointer",
+                opacity: reportsGenerating ? 0.85 : 1,
+                animation:
+                  reportsCueActive && !reportsGenerating
+                    ? "cuePulse 2s ease-in-out infinite"
+                    : "none",
+              }}
+            >
+              {reportsGenerating
+                ? "Generating…"
+                : reportsCueActive
+                  ? "✨ Reports"
+                  : "Generate Reports"}
+            </button>
+          )}
+          {reportsGenerating && reportsTask.ref.current && (
+            <button
+              type="button"
+              onClick={reportsTask.cancel}
+              disabled={reportsTask.stopping}
+              title={
+                reportsTask.stopping
+                  ? "Cancelling — waiting for in-flight calls to settle"
+                  : "Cancel this reports run"
+              }
+              style={{
+                background: "#FFFFFF",
+                border: "1px solid #D1D5DB",
+                color: reportsTask.stopping ? "#9CA3AF" : "#374151",
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "3px 8px",
+                borderRadius: 4,
+                cursor: reportsTask.stopping ? "not-allowed" : "pointer",
+                opacity: reportsTask.stopping ? 0.7 : 1,
+              }}
+            >
+              {reportsTask.stopping ? "Stopping…" : "Stop"}
+            </button>
+          )}
+          {messages.length > 0 && !chatHydrating && (
+            <div ref={chatExportMenuRef} style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => setChatExportMenuOpen((v) => !v)}
+                title="Save the current chat thread as Markdown"
+                style={{
+                  background: "#FFFFFF",
+                  border: "1px solid #D1D5DB",
+                  color: "#374151",
+                  fontSize: 11,
+                  fontWeight: 500,
+                  padding: "2px 8px",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                Save
+                <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span>
+              </button>
+              {chatExportMenuOpen && (
+                <div
+                  role="menu"
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 4px)",
+                    left: 0,
+                    background: "#FFFFFF",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: 6,
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                    minWidth: 180,
+                    zIndex: 20,
+                    overflow: "hidden",
+                  }}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleCopyChatMarkdown}
+                    style={chatExportMenuItemStyle}
+                  >
+                    Copy as Markdown
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleSaveChatMarkdown}
+                    style={chatExportMenuItemStyle}
+                  >
+                    Save as Markdown…
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          {chatLoading && (
+            <button
+              type="button"
+              onClick={handleCancelChat}
+              disabled={chatStopping}
+              title={
+                chatStopping
+                  ? "Waiting for the provider to flush and close…"
+                  : "Stop generating"
+              }
+              style={{
+                background: "#FFFFFF",
+                border: `1px solid ${chatStopping ? "#FCA5A5" : "#DC2626"}`,
+                color: chatStopping ? "#9CA3AF" : "#B91C1C",
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "2px 8px",
+                borderRadius: 4,
+                cursor: chatStopping ? "not-allowed" : "pointer",
+                opacity: chatStopping ? 0.7 : 1,
+              }}
+            >
+              {chatStopping ? "Stopping…" : "Stop"}
+            </button>
+          )}
+          {messages.length > 0 && !chatHydrating && !chatLoading && (
+            <button
+              type="button"
+              onClick={handleClearChat}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#6B7280",
+                fontSize: 11,
+                cursor: "pointer",
+                padding: "2px 4px",
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Chat body — the ProjectChat component renders only header +
+          scrolling messages here. The composer is mounted separately
+          below in its own dedicated full-width section so it's not
+          squished into the bottom of the sidebar column. flex:1 so it
+          fills the remaining vertical space; minHeight:0 so its internal
+          scroll container behaves correctly inside the flex column. */}
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <ProjectChat
+          ventureId={venture.id}
+          ventureName={venture.name}
+          currentStage={venture.stage}
+          messages={
+            messages.length === 0
+              ? [
+                  {
+                    id: "welcome",
+                    role: "assistant",
+                    content: STAGE_FIRST_MESSAGE[venture.stage],
+                    createdAt: new Date().toISOString(),
+                  },
+                ]
+              : messages
+          }
+          isLoading={chatLoading}
+          onSend={handleSend}
+          attachments={chatAttachments}
+          onAttach={handleAttach}
+          onRemoveAttachment={handleRemoveAttachment}
+          hideComposer={true}
+          hideHeader={true}
+        />
+      </div>
+
+      {/* Dedicated full-width composer panel — detached from the
+          messages scroll, lives in its own bordered section with a
+          tall textarea (rows=5) so users can compose multi-paragraph
+          prompts without the box feeling cramped. flex:0 0 auto so it
+          claims a fixed slice of the sidebar height and the messages
+          area above takes the rest. */}
+      <div
+        style={{
+          flex: "0 0 auto",
+          borderTop: "2px solid var(--border-subtle, #E5E7EB)",
+          background: "var(--bg-elevated, #F9FAFB)",
+        }}
+      >
+        <div
+          style={{
+            padding: "6px 14px 4px",
+            fontSize: 10,
+            fontWeight: 600,
+            color: "var(--text-tertiary, #6B7280)",
+            textTransform: "uppercase",
+            letterSpacing: 0.5,
+          }}
+        >
+          Compose
+        </div>
+        <ProjectChatComposer
+          isLoading={chatLoading}
+          onSend={handleSend}
+          attachments={chatAttachments}
+          onAttach={handleAttach}
+          onRemoveAttachment={handleRemoveAttachment}
+          rows={5}
+          minHeight={140}
+          maxHeight={260}
+          containerStyle={{
+            background: "transparent",
+            borderTop: "none",
+            padding: "4px 14px 12px",
+          }}
+        />
+      </div>
+
+      {/* Prompt Master savings ticker (sidebar variant). */}
+      {promptMasterTokensSaved > 0 && (
+        <div
+          style={{
+            fontSize: 10,
+            color: "#6B7280",
+            padding: "4px 14px 8px",
+            borderTop: "1px solid #F3F4F6",
+            textAlign: "right",
+          }}
+          title="Total tokens Prompt Master has shaved off this session's system prompts"
+        >
+          Prompt Master: {promptMasterTokensSaved.toLocaleString()} tokens saved
+        </div>
+      )}
+    </div>
+  );
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "row" }}>
+      {chatSidebar}
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
       {/* Venture header */}
       <div
         style={{
@@ -1700,7 +2288,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
           gap: 12,
         }}
       >
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>
             {venture.name}
           </h2>
@@ -1708,6 +2296,64 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
             <StageBadge stage={venture.stage} />
           </div>
         </div>
+        {/*
+          Always-visible "Active: <provider> · <Subscription|API>" indicator.
+          Subscription -> green (free under user's existing Pro plan).
+          API -> amber (warning: billed against user's API key on every call).
+          The amber is deliberate: an unexpected api_key route is exactly
+          what surprised the user with a £5 charge -- this badge makes the
+          mismatch obvious before another call is made. Click navigates to
+          Options so the user can flip the row if it's wrong.
+        */}
+        {headerProvider.provider && (
+          <button
+            type="button"
+            onClick={() => setTab("options")}
+            title="Click to open LLM settings"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 10px",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: 6,
+              background: "transparent",
+              cursor: "pointer",
+              fontSize: 12,
+              color: "var(--text-secondary)",
+            }}
+          >
+            <span style={{ fontWeight: 600 }}>Active:</span>
+            <span>{getProvider(headerProvider.provider as LlmProviderId).displayName}</span>
+            <ProviderModeBadge
+              mode={headerProvider.mode}
+              provider={headerProvider.provider}
+              variant="pill"
+            />
+          </button>
+        )}
+        {!headerProvider.provider && (
+          <button
+            type="button"
+            onClick={() => setTab("options")}
+            title="No LLM provider configured -- click to set one up"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 10px",
+              border: "1px solid #FECACA",
+              borderRadius: 6,
+              background: "#FEF2F2",
+              cursor: "pointer",
+              fontSize: 12,
+              color: "#991B1B",
+              fontWeight: 600,
+            }}
+          >
+            No LLM configured
+          </button>
+        )}
       </div>
 
       {error && (
@@ -1875,317 +2521,18 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
             isRunning={isRunning}
           />
         )}
-        {tab === "chat" && (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "8px 28px",
-                borderBottom: "1px solid #F3F4F6",
-                fontSize: 12,
-                color: "#9CA3AF",
-              }}
-            >
-              <span
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  minWidth: 0,
-                }}
-              >
-                <span>
-                  {chatHydrating
-                    ? "Loading thread…"
-                    : `${messages.length} message${messages.length === 1 ? "" : "s"} in this stage`}
-                </span>
-                {/* Web-search-active pill — only shown when the current
-                    stage gets the tool attached AND the active provider
-                    actually supports it. We compute both conditions
-                    inline so the pill is honest: showing it when the
-                    user's on a non-Anthropic provider would be a lie. */}
-                {venture.stage === "RESEARCHED" && <WebSearchPill ventureId={venture.id} />}
-                {/* Inline cue — rendered alongside the message counter
-                    when the assistant has signalled readiness. Extra
-                    surface for the same signal the button already pulses
-                    on, in case the user's scrolled and the button's
-                    drawn attention to the header as a whole. */}
-                {reportsCueActive &&
-                  venture.stage === "RESEARCHED" &&
-                  manifest?.appType === "saas" &&
-                  !reportsGenerating && (
-                    <span
-                      style={{
-                        background: "#EEF2FF",
-                        color: "#4338CA",
-                        border: "1px solid #C7D2FE",
-                        padding: "2px 8px",
-                        borderRadius: 10,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      ✨ Ready to generate
-                    </span>
-                  )}
-              </span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {/* Generate Reports — only on RESEARCHED + appType=saas.
-                    Dual trigger: always clickable manually; when the
-                    assistant emits READY_TO_GENERATE_REPORTS in its
-                    latest reply (see saasResearchIntakePrompt), the
-                    button pulses + brightens + gets a ✨ prefix so the
-                    founder can't miss the handoff. We don't auto-fire —
-                    4 LLM calls aren't cheap and the founder should
-                    approve the moment. */}
-                {venture.stage === "RESEARCHED" && manifest?.appType === "saas" && !chatLoading && (
-                  <button
-                    type="button"
-                    onClick={handleGenerateResearchReports}
-                    disabled={reportsGenerating}
-                    title={
-                      reportsGenerating
-                        ? "Running 4 LLM calls in parallel…"
-                        : reportsCueActive
-                          ? "Assistant signalled it's ready — click to generate the Core 4 research docs"
-                          : "Generate the Core 4 research docs from this chat"
-                    }
-                    style={{
-                      background: reportsGenerating
-                        ? "#E0E7FF"
-                        : reportsCueActive
-                          ? "#6366F1"
-                          : "#4F46E5",
-                      border: `1px solid ${
-                        reportsGenerating ? "#C7D2FE" : reportsCueActive ? "#818CF8" : "#4338CA"
-                      }`,
-                      color: reportsGenerating ? "#4338CA" : "#FFFFFF",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      padding: "4px 12px",
-                      borderRadius: 4,
-                      cursor: reportsGenerating ? "not-allowed" : "pointer",
-                      opacity: reportsGenerating ? 0.85 : 1,
-                      // When cued, pulse the box-shadow to draw the eye.
-                      // 2s loop is slow enough to feel inviting, not
-                      // anxious. Kept off otherwise to avoid constant
-                      // motion in the chat header.
-                      animation:
-                        reportsCueActive && !reportsGenerating
-                          ? "cuePulse 2s ease-in-out infinite"
-                          : "none",
-                    }}
-                  >
-                    {reportsGenerating
-                      ? "Generating…"
-                      : reportsCueActive
-                        ? "✨ Generate Reports"
-                        : "Generate Reports"}
-                  </button>
-                )}
-                {/* pt.29 / pt.30a: Stop button for in-flight reports
-                    run via the abort hook. Only rendered while a
-                    controller is live (i.e. inside the try block of
-                    handleGenerateResearchReports). Same optimistic-
-                    stopping pattern as the pipeline / chat Stop
-                    buttons — flips to disabled "Stopping…" the instant
-                    the user clicks, before the Rust cancel round-trip
-                    lands. */}
-                {reportsGenerating && reportsTask.ref.current && (
-                  <button
-                    type="button"
-                    onClick={reportsTask.cancel}
-                    disabled={reportsTask.stopping}
-                    title={
-                      reportsTask.stopping
-                        ? "Cancelling — waiting for in-flight calls to settle"
-                        : "Cancel this reports run"
-                    }
-                    style={{
-                      background: "#FFFFFF",
-                      border: "1px solid #D1D5DB",
-                      color: reportsTask.stopping ? "#9CA3AF" : "#374151",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      padding: "4px 12px",
-                      borderRadius: 4,
-                      cursor: reportsTask.stopping ? "not-allowed" : "pointer",
-                      opacity: reportsTask.stopping ? 0.7 : 1,
-                    }}
-                  >
-                    {reportsTask.stopping ? "Stopping…" : "Stop"}
-                  </button>
-                )}
-                {/* Save Chat dropdown — export the (ventureId, stage)
-                    thread as Markdown. Two actions: Copy (clipboard) and
-                    Save as… (native file dialog). Stays visible during a
-                    streaming reply so the user can snapshot even a
-                    partial thread. Disabled when the thread is empty or
-                    still hydrating from disk. */}
-                {messages.length > 0 && !chatHydrating && (
-                  <div ref={chatExportMenuRef} style={{ position: "relative" }}>
-                    <button
-                      type="button"
-                      onClick={() => setChatExportMenuOpen((v) => !v)}
-                      title="Save the current chat thread as Markdown"
-                      style={{
-                        background: "#FFFFFF",
-                        border: "1px solid #D1D5DB",
-                        color: "#374151",
-                        fontSize: 12,
-                        fontWeight: 500,
-                        padding: "3px 10px",
-                        borderRadius: 4,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                    >
-                      Save Chat
-                      <span style={{ fontSize: 10, opacity: 0.7 }}>▾</span>
-                    </button>
-                    {chatExportMenuOpen && (
-                      <div
-                        role="menu"
-                        style={{
-                          position: "absolute",
-                          top: "calc(100% + 4px)",
-                          right: 0,
-                          background: "#FFFFFF",
-                          border: "1px solid #E5E7EB",
-                          borderRadius: 6,
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                          minWidth: 200,
-                          zIndex: 20,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={handleCopyChatMarkdown}
-                          style={chatExportMenuItemStyle}
-                        >
-                          Copy as Markdown
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={handleSaveChatMarkdown}
-                          style={chatExportMenuItemStyle}
-                        >
-                          Save as Markdown…
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {chatLoading && (
-                  // Stop button — aborts the in-flight stream via the
-                  // chatAbortRef controller. The partial reply already
-                  // streamed in stays in the bubble (and gets persisted on
-                  // settle) so the thread is an honest transcript of what
-                  // happened. Red outline to match the Audit-tab Stop.
-                  // Flips to a disabled "Stopping…" state the instant the
-                  // user clicks, so the UI feels responsive during the
-                  // few-hundred-ms cancel round-trip through Rust.
-                  <button
-                    type="button"
-                    onClick={handleCancelChat}
-                    disabled={chatStopping}
-                    title={
-                      chatStopping
-                        ? "Waiting for the provider to flush and close…"
-                        : "Stop generating"
-                    }
-                    style={{
-                      background: "#FFFFFF",
-                      border: `1px solid ${chatStopping ? "#FCA5A5" : "#DC2626"}`,
-                      color: chatStopping ? "#9CA3AF" : "#B91C1C",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      padding: "3px 10px",
-                      borderRadius: 4,
-                      cursor: chatStopping ? "not-allowed" : "pointer",
-                      opacity: chatStopping ? 0.7 : 1,
-                    }}
-                  >
-                    {chatStopping ? "Stopping…" : "Stop"}
-                  </button>
-                )}
-                {messages.length > 0 && !chatHydrating && !chatLoading && (
-                  <button
-                    type="button"
-                    onClick={handleClearChat}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#6B7280",
-                      fontSize: 12,
-                      cursor: "pointer",
-                      padding: "2px 6px",
-                    }}
-                  >
-                    Clear thread
-                  </button>
-                )}
-              </div>
-            </div>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <ProjectChat
-                ventureId={venture.id}
-                ventureName={venture.name}
-                currentStage={venture.stage}
-                messages={
-                  messages.length === 0
-                    ? [
-                        {
-                          id: "welcome",
-                          role: "assistant",
-                          content: STAGE_FIRST_MESSAGE[venture.stage],
-                          createdAt: new Date().toISOString(),
-                        },
-                      ]
-                    : messages
-                }
-                isLoading={chatLoading}
-                onSend={handleSend}
-                // Attachment props are only meaningful during the
-                // RESEARCHED-stage SaaS intake today, but we expose them
-                // for every chat so the user can paste context in any
-                // stage. The composer is a no-op UI change for stages
-                // that don't feed attachments into a pipeline.
-                attachments={chatAttachments}
-                onAttach={handleAttach}
-                onRemoveAttachment={handleRemoveAttachment}
-              />
-            </div>
-            {/* Prompt Master savings ticker. Shown only after a real
-                optimisation has registered savings (>0); otherwise the
-                row is suppressed so a fallback transport doesn't
-                advertise itself with a confusing "0 tokens saved" line. */}
-            {promptMasterTokensSaved > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  fontSize: 11,
-                  color: "#6B7280",
-                  padding: "4px 12px 0",
-                }}
-                title="Total tokens Prompt Master has shaved off this session's system prompts"
-              >
-                Prompt Master: {promptMasterTokensSaved.toLocaleString()} tokens saved this session
-              </div>
-            )}
-          </div>
-        )}
+        {/* AI Chat used to live as a dedicated tab here. It's now a
+            persistent left sidebar (see chatSidebar below) so the
+            assistant is available regardless of which tab is active. */}
         {tab === "pipeline" && (
-          <div style={{ padding: 28 }}>
+          <div
+            style={{
+              padding: 28,
+              height: "100%",
+              overflowY: "auto",
+              boxSizing: "border-box",
+            }}
+          >
             {/* Pending review gates across all stages, with inline
                 Approve/Reject. Self-hides when there are none. */}
             <PendingReviewsPanel
@@ -2218,9 +2565,13 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
                   PRODUCT_SPEC: "spec",
                   WIREFRAME: "screens",
                   HANDOFF: "screens",
+                  BACKEND: "backend",
                   AUDIT: "audit",
                   BUILD: "audit",
                   MEDIA: "media",
+                  MEDIA_EDIT: "media-edit",
+                  CRM: "crm",
+                  HANDOFF_PACK: "handoff-pack",
                   // FINANCE + LAUNCH have no dedicated tab yet -- the
                   // skeletal runners exist but the UI hasn't been built.
                 };
@@ -2349,7 +2700,41 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
           // MediaStageRunner. providers=[] in slice 5a so every shot
           // routes through gemini_flow paste-in. Slice 5b will inject
           // the HyperFrames provider for auto-render of structured shots.
-          <MediaTab key={venture.id} venture={venture} manifest={manifest} />
+          <MediaTab key={venture.id} venture={venture} manifest={manifest} onManifestUpdate={handleManifestUpdate} />
+        )}
+        {tab === "media-edit" && (
+          // Slice 5a (media-edit arc): MediaEditTab surfaces the
+          // skeletal MediaEditStageRunner + a real config_only path.
+          // engine=config_only routes through the pure provider (no
+          // node deps) and produces a synthetic receipt pointing at
+          // the raw MEDIA_READY reel. engine=opencut falls through to
+          // the slice-3 skeletal path -- the webview cannot spawn
+          // bun. Slice 5b adds Tauri commands and constructs an
+          // IPC-shaped provider here.
+          <MediaEditTab key={venture.id} venture={venture} manifest={manifest} onManifestUpdate={handleManifestUpdate} />
+        )}
+        {tab === "crm" && (
+          // Slice 5a (CRM arc): CrmTab orchestrates the 3-step
+          // CrmStageRunner. providers=config_only in slice 5a so every
+          // run writes JSON exports only. Slice 5b probes Docker + bench
+          // via Tauri and injects real Frappe providers.
+          <CrmTab key={venture.id} venture={venture} manifest={manifest} onManifestUpdate={handleManifestUpdate} />
+        )}
+        {tab === "handoff-pack" && (
+          <HandoffPackTab
+            key={venture.id}
+            venture={venture}
+            manifest={manifest}
+            onManifestUpdate={handleManifestUpdate}
+          />
+        )}
+        {tab === "backend" && (
+          // Slice 5a (backend arc): BackendTab orchestrates the 4-step
+          // BackendStageRunner. providers=config_only in slice 5a so
+          // every run writes JSON + SDK exports only. Slice 5b probes
+          // the PocketBase binary via Tauri and injects the real
+          // pocketbase provider for live schema application.
+          <BackendTab key={venture.id} venture={venture} manifest={manifest} onManifestUpdate={handleManifestUpdate} />
         )}
         {tab === "sales" && <SalesTab venture={venture} />}
         {tab === "options" && <OptionsTab />}
@@ -2369,6 +2754,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
           busy={deleting}
         />
       )}
+      </div>
     </div>
   );
 }

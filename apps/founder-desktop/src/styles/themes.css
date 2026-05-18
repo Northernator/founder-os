@@ -22,6 +22,51 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Dreamlauncher tunable surface (CoDesign --ocd-tweak-* contract)     */
+/* Sits above the per-theme blocks so the tunables apply regardless of */
+/* which [data-theme] is active. The fallback values are the CoDesign  */
+/* slider defaults; they are overridden at runtime by setting the      */
+/* --ocd-tweak-* vars on :root.                                        */
+/* ------------------------------------------------------------------ */
+:root {
+  --ocd-tweak-accent-hue: 238;
+  --ocd-tweak-radius-scale: 1;
+  --ocd-tweak-panel-elevation: 1;
+  --ocd-tweak-sidebar-width: 240;
+  --ocd-tweak-density: comfortable;
+  --ocd-tweak-font-family: Inter;
+
+  --accent-hue: var(--ocd-tweak-accent-hue, 238);
+  --radius-scale: var(--ocd-tweak-radius-scale, 1);
+  --panel-elevation: var(--ocd-tweak-panel-elevation, 1);
+  --sidebar-width: calc(var(--ocd-tweak-sidebar-width, 240) * 1px);
+  --density-mode: var(--ocd-tweak-density, comfortable);
+  --font-family-choice: var(--ocd-tweak-font-family, Inter);
+  --font-family: var(--font-family-choice), system-ui, sans-serif;
+  --density: 1;
+
+  --radius-sm: calc(5px * var(--radius-scale));
+  --radius-md: calc(6px * var(--radius-scale));
+  --radius-lg: calc(10px * var(--radius-scale));
+  --radius-xl: calc(18px * var(--radius-scale));
+  --radius-cloud: calc(28px * var(--radius-scale));
+
+  /* Dreamlauncher brand palette -- referenced by sky-glow, clouds,
+     wordmark, journey button, launch-arc. Theme-independent so the
+     identity reads the same in dark / grey / rainbow. */
+  --dream-blue: #0ea5e9;
+  --dream-amber: #f59e0b;
+  --dream-purple: #8b3fa8;
+  --cloud-white: rgba(255, 255, 255, 0.86);
+  --sky-wash: linear-gradient(
+    135deg,
+    rgba(224, 247, 255, 0.96),
+    rgba(238, 242, 255, 0.92) 42%,
+    rgba(255, 239, 248, 0.88)
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Light (default)                                                     */
 /* ------------------------------------------------------------------ */
 :root,
@@ -43,7 +88,9 @@
   --text-muted: #9ca3af;
   --text-inverse: #ffffff;
 
-  --accent: #6366f1;
+  /* --accent driven by the accent-hue tweak so the CoDesign slider can
+     re-tune the whole UI live without a JS rebuild. */
+  --accent: hsl(var(--accent-hue) 84% 67%);
   --accent-hover: #4f46e5;
   --accent-soft: #eef2ff;
   --accent-fg: #ffffff;
@@ -61,8 +108,10 @@
   --danger-border: #fecaca;
   --danger-fg: #ffffff;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, calc(0.04 * var(--panel-elevation)));
+  --shadow-md: 0 calc(4px + (var(--panel-elevation) * 2px))
+    calc(12px + (var(--panel-elevation) * 6px))
+    rgba(17, 24, 39, calc(0.045 + (0.025 * var(--panel-elevation))));
 }
 
 /* ------------------------------------------------------------------ */
@@ -105,7 +154,8 @@
   --danger-fg: #1a0606;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.6);
+  --shadow-md: 0 calc(6px + (var(--panel-elevation) * 2px))
+    calc(16px + (var(--panel-elevation) * 8px)) rgba(0, 0, 0, 0.6);
 }
 
 /* ------------------------------------------------------------------ */

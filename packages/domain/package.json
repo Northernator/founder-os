@@ -15,6 +15,10 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@founder-os/media-core": "workspace:*",
+    "@founder-os/media-edit-core": "workspace:*",
+    "@founder-os/crm-core": "workspace:*",
+    "@founder-os/social-core": "workspace:*"
   }
 }

@@ -1,5 +1,5 @@
 /**
- * skeletal-runners.test.ts -- placeholder for future skeletal runners.
+ * skeletal-runners.test.ts -- placeholder + active skeletal-runner tests.
  *
  * History:
  *   - 2026-05-03: original skeletal Validation/Wireframe/Finance/Launch
@@ -12,6 +12,14 @@
  *   - 2026-05-07 (later): MediaStageRunner promoted to real (slice 4).
  *     Tests moved to media-runner-real.test.ts. File reverts to
  *     it.todo placeholder, mirroring the same lifecycle as the prior 4.
+ *   - 2026-05-17: HandoffPackStageRunner shipped here as a skeletal
+ *     placeholder (slice 4 of the handoff-pack arc) -- 5 tests landed.
+ *   - 2026-05-17 (later): HandoffPackStageRunner promoted to real
+ *     (slice 5 of the handoff-pack arc). Those 5 tests + 3 new
+ *     real-runner tests moved to handoff-pack-runner-real.test.ts.
+ *     File reverts to it.todo placeholder, mirroring the lifecycle
+ *     above. Next stage that ships a skeletal placeholder will
+ *     repurpose this file again.
  *
  * Pattern: when a future stage runner ships as a placeholder before
  * its underlying step lands, its tests go here. On promotion, they
@@ -20,6 +28,9 @@
  */
 import { describe, it } from "vitest";
 
-describe("skeletal-runners (placeholder)", () => {
-  it.todo("re-add skeletal-runner tests if a new placeholder runner ships");
+describe("skeletal-runners", () => {
+  it.todo(
+    "next skeletal placeholder lands here. Current runners are all real " +
+      "(HandoffPack promoted in slice 5 of the handoff-pack arc).",
+  );
 });
