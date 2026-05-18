@@ -14,6 +14,7 @@ import type { Venture, VentureManifest, VentureStage } from "@founder-os/domain"
 import type { LogEntry, StageRunResult } from "@founder-os/stage-runners";
 import { AuditStageRunner, PipelineOrchestrator } from "@founder-os/stage-runners";
 import { tauriFs } from "./pipeline-fs.js";
+import { buildPipelineLlmCaller } from "./pipeline-llm.js";
 
 export type RunAuditStageOpts = {
   venture: Venture;
@@ -34,10 +35,16 @@ export type RunAuditStageResult = {
 };
 
 export async function runAuditStage(opts: RunAuditStageOpts): Promise<RunAuditStageResult> {
+  const llmCaller = await buildPipelineLlmCaller({
+    ventureId: opts.venture.id,
+    enableWebSearch: false,
+  });
   const runner = new AuditStageRunner({
     manifest: opts.manifest,
     ventureRoot: opts.venture.rootPath,
     fs: tauriFs,
+    enableDeepResearch: llmCaller !== null,
+    ...(llmCaller !== null ? { callLlm: llmCaller.callLlm } : {}),
     ...(opts.ventureStage !== undefined ? { ventureStage: opts.ventureStage } : {}),
   });
   const orchestrator = new PipelineOrchestrator({

@@ -134,11 +134,11 @@ export async function renderPdfStep(
   //    folder name is intentionally identical to the slot ID today;
   //    handoff-pack-core's CATEGORY_DIR_NAMES is the source of truth
   //    if that ever changes.
-  const pdfBasename = `${opts.descriptor.slot}-${opts.descriptor.id}.pdf`;
   const outputPath = getHandoffPackDocPdfPath(
     opts.ventureRoot,
     opts.descriptor.category,
-    pdfBasename
+    opts.descriptor.slot,
+    opts.descriptor.id
   );
 
   const status = inferStatus(opts.descriptor.tier, templated.unresolvedPlaceholders.length);

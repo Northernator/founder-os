@@ -20,10 +20,58 @@ import { InMemoryFs } from "./_helpers/in-memory-fs.js";
 import { makeManifest } from "./_helpers/manifest.js";
 
 const stepSpy = vi.fn();
+const orchestrateTopic = vi.fn(async () => ({
+  briefing: {
+    ventureSlug: "test",
+    topicSlug: "wireframe-screen-patterns",
+    topicLabel: "Wireframe screen-pattern conventions",
+    questions: [
+      {
+        id: "q-wireframe-screen-patterns",
+        question: "What current screen-pattern conventions are best-in-class?",
+        angle: "technical",
+        priority: "must",
+      },
+    ],
+    sections: [
+      {
+        heading: "Screen patterns",
+        body: "Dense B2B tools should prioritise scannable layouts, fast empty states, and predictable task flows.",
+        sources: ["https://example.com/wireframes"],
+      },
+    ],
+    sources: [
+      {
+        url: "https://example.com/wireframes",
+        title: "Wireframe patterns",
+        publisher: "Example",
+        accessedAt: "2026-05-18T00:00:00.000Z",
+        retrievedBy: "claude-sub",
+        trustTier: "secondary",
+      },
+    ],
+    channelsUsed: ["claude-sub"],
+    crossReferencedBy: [],
+    synthesisedBy: "claude-sub",
+    disagreements: [],
+    unanswered: [],
+    generatedAt: "2026-05-18T00:00:00.000Z",
+    staleAfterDays: 30,
+  },
+  plan: { questions: [], fallbackIndex: 0 },
+  transcripts: {
+    planner: null,
+    crossReference: null,
+    synthesiser: null,
+    workers: { outcomes: [], successes: new Map(), failures: new Map() },
+  },
+}));
 
 vi.mock("@founder-os/pipeline-runner", () => ({
   createWireframesStep: (ctx: unknown) => stepSpy(ctx),
 }));
+
+vi.mock("@founder-os/research-deep-orchestrator", () => ({ orchestrateTopic }));
 
 const { WireframeStageRunner } = await import("../src/runners/wireframe-runner.js");
 const { PipelineOrchestrator } = await import("../src/orchestrator.js");
@@ -91,6 +139,7 @@ describe("WireframeStageRunner.run() (real path)", () => {
 
   it("forwards callLlm into the step ctx when provided", async () => {
     stepSpy.mockReset();
+    orchestrateTopic.mockClear();
     stepSpy.mockResolvedValue(defaultStepResult({ generationSource: "llm" }));
     const fs = setupFs();
     const manifest = makeManifest();
@@ -106,6 +155,15 @@ describe("WireframeStageRunner.run() (real path)", () => {
     expect(result.success).toBe(true);
     const ctx = stepSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(ctx.callLlm).toBe(callLlm);
+    expect(ctx.deepResearch).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filename: "wireframe-screen-patterns.md",
+          excerpt: expect.stringContaining("Screen patterns"),
+        }),
+      ])
+    );
+    expect(orchestrateTopic).toHaveBeenCalledTimes(1);
   });
 
   it("runs without callLlm and still succeeds", async () => {

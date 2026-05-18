@@ -34,6 +34,7 @@
     "@founder-os/logger": "workspace:*",
     "@founder-os/llm-providers": "workspace:*",
     "@founder-os/research-runner": "workspace:*",
+    "@founder-os/research-deep-core": "workspace:*",
     "@founder-os/sales-agents": "workspace:*",
     "@founder-os/stage-runners": "workspace:*",
     "@founder-os/media-core": "workspace:*",

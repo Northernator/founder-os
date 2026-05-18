@@ -177,6 +177,13 @@ export type CreateFinancePlanContext = {
   manifest: VentureManifest;
   ventureRoot: string;
   callLlm?: SaasLlmCaller;
+  /**
+   * Optional deep-research excerpts. When provided and `callLlm` is set,
+   * the strategic-narrative LLM prompt receives a "Deep research context"
+   * block listing each excerpt under its filename, and each filename is
+   * appended to `plan.sources`. Mirrors create-wireframes.ts's contract.
+   */
+  deepResearch?: { filename: string; excerpt: string }[];
   runId?: string;
 };
 
@@ -652,7 +659,11 @@ Output rules:
 function buildNarrativeUserPrompt(args: {
   manifest: VentureManifest;
   plan: FinancePlanJson;
+  deepResearch?: { filename: string; excerpt: string }[];
 }): string {
+  const researchBlock = args.deepResearch?.length
+    ? args.deepResearch.map((r) => `### ${r.filename}\n\n${r.excerpt}`).join("\n\n")
+    : "(none)";
   return `Write the **Strategic narrative** for the SaaS venture "${args.manifest.name}".
 
 Plan snapshot (JSON):
@@ -668,18 +679,26 @@ ${JSON.stringify(
   },
   null,
   2
-)}`;
+)}
+
+Deep research context:
+${researchBlock}`;
 }
 
 async function enrichNarrative(args: {
   manifest: VentureManifest;
   plan: FinancePlanJson;
   callLlm: SaasLlmCaller;
+  deepResearch?: { filename: string; excerpt: string }[];
 }): Promise<{ narrative: string; usedLlm: boolean }> {
   try {
     const text = await args.callLlm({
       system: NARRATIVE_SYSTEM,
-      user: buildNarrativeUserPrompt({ manifest: args.manifest, plan: args.plan }),
+      user: buildNarrativeUserPrompt({
+        manifest: args.manifest,
+        plan: args.plan,
+        deepResearch: args.deepResearch,
+      }),
     });
     const cleaned = text.trim();
     if (!cleaned) throw new Error("LLM returned empty narrative");
@@ -891,6 +910,7 @@ export async function createFinancePlanStep(
   if (validation.hasFile) sources.push("validation-summary.json");
   if (uk.hasFile) sources.push("uk-setup.json");
   if (backend.hasFile) sources.push("backend-checkpoint.json");
+  for (const r of ctx.deepResearch ?? []) sources.push(r.filename);
 
   const backendHosting = computeBackendHosting({
     resolvedEngine: backend.resolvedEngine,
@@ -968,6 +988,7 @@ export async function createFinancePlanStep(
       manifest: ctx.manifest,
       plan: planNoNarrative,
       callLlm: ctx.callLlm,
+      ...(ctx.deepResearch !== undefined ? { deepResearch: ctx.deepResearch } : {}),
     });
     narrative = out.narrative;
     generationSource = out.usedLlm ? "llm" : "deterministic-fallback";

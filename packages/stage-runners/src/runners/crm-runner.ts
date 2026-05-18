@@ -56,13 +56,40 @@ import {
   createCrmProvisionStep,
   createCrmSeedStep,
 } from "@founder-os/pipeline-runner";
+import type { ResearchProvider, ResearchQuestion, RequestPasteIn } from "@founder-os/research-deep-core";
+import { emitSourcedSectionsMarkdown } from "@founder-os/research-deep-core";
 import {
   getCrmCheckpointPath,
   getCrmDir,
 } from "@founder-os/workspace-core";
 
+import { gatherDeepResearch } from "../deep-research.js";
 import { BaseStageRunner } from "../runner-base.js";
 import type { StageRunner } from "../types.js";
+
+const CRM_DEEP_RESEARCH_QUESTIONS: ResearchQuestion[] = [
+  {
+    id: "q-crm-frappe-current-state",
+    question:
+      "What are the current Frappe CRM v1.7x release notes, breaking changes, and ecosystem warnings (Docker tags, doctype additions, port conflicts) right now?",
+    angle: "technical",
+    priority: "must",
+  },
+  {
+    id: "q-crm-outreach-patterns",
+    question:
+      "Which cold-outreach hook patterns, subject-line conventions, and send-timing windows are landing well for UK B2B SaaS launches in this category right now?",
+    angle: "market",
+    priority: "must",
+  },
+  {
+    id: "q-crm-segmentation-targeting",
+    question:
+      "What segment-targeting and personalisation approaches are differentiating high-reply-rate sequences from low-reply ones for early-stage B2B SaaS founders?",
+    angle: "customer",
+    priority: "should",
+  },
+];
 
 export type CrmStageRunnerOpts = {
   manifest: VentureManifest;
@@ -84,6 +111,16 @@ export type CrmStageRunnerOpts = {
    */
   providers?: Partial<Record<CrmEngine, CrmProvider>>;
   /**
+   * Gates the deep-research helper. Off by default. When on AND callLlm
+   * is set, the runner gathers a "crm-frappe-and-outreach-current-state"
+   * briefing AFTER provision/seed BUT BEFORE the campaign template step,
+   * and threads its excerpt into the per-template rewrite prompt so the
+   * model can use current outreach conventions to ground tone + timing.
+   */
+  enableDeepResearch?: boolean;
+  requestPaste?: RequestPasteIn;
+  deepResearchWorkers?: ReadonlyArray<ResearchProvider>;
+  /**
    * Optional clock injection for tests.
    */
   now?: () => Date;
@@ -94,12 +131,18 @@ export class CrmStageRunner extends BaseStageRunner implements StageRunner {
   readonly stageName: StageName = "CRM";
   private readonly callLlm: SaasLlmCaller | undefined;
   private readonly providers: Partial<Record<CrmEngine, CrmProvider>>;
+  private readonly enableDeepResearch: boolean;
+  private readonly requestPaste: RequestPasteIn | undefined;
+  private readonly deepResearchWorkers: ReadonlyArray<ResearchProvider> | undefined;
   private readonly now: () => Date;
 
   constructor(opts: CrmStageRunnerOpts) {
     super(opts.ventureRoot, opts.fs, opts.manifest, opts.runId);
     this.callLlm = opts.callLlm;
     this.providers = opts.providers ?? {};
+    this.enableDeepResearch = opts.enableDeepResearch ?? false;
+    this.requestPaste = opts.requestPaste;
+    this.deepResearchWorkers = opts.deepResearchWorkers;
     this.now = opts.now ?? (() => new Date());
   }
 
@@ -177,6 +220,24 @@ export class CrmStageRunner extends BaseStageRunner implements StageRunner {
         artifactPaths.push(path);
       }
 
+      // Gather deep research before the campaign step so the per-template
+      // LLM prompt can ground in current outreach + Frappe conventions.
+      // Failure is non-fatal; the campaign falls back to deterministic.
+      const deepResearch = await this.gatherCrmDeepResearch();
+      if (deepResearch !== null) {
+        for (const path of deepResearch.artifacts) {
+          indexEntries.push(
+            this.indexEntry(
+              `crm:deep-research:${path.split("/").pop() ?? path}`,
+              path.endsWith(".md") ? "crm-deep-research" : "crm-deep-research-json",
+              path,
+              startIso,
+            ),
+          );
+        }
+        artifactPaths.push(...deepResearch.artifacts);
+      }
+
       // Step 3: campaign + templates.
       const campaignCtx: Parameters<typeof createCrmCampaignTemplateStep>[0] = {
         fs: this.fs,
@@ -186,6 +247,7 @@ export class CrmStageRunner extends BaseStageRunner implements StageRunner {
         runId: this.runId,
       };
       if (this.callLlm !== undefined) campaignCtx.callLlm = this.callLlm;
+      if (deepResearch !== null) campaignCtx.deepResearch = [deepResearch.excerpt];
       const campaignResult = await createCrmCampaignTemplateStep(campaignCtx);
       templatesUpserted = campaignResult.templates.length;
       campaignId = campaignResult.campaignResult.id;
@@ -331,4 +393,76 @@ export class CrmStageRunner extends BaseStageRunner implements StageRunner {
       })),
     };
   }
+
+  private async gatherCrmDeepResearch(): Promise<{
+    excerpt: { filename: string; excerpt: string };
+    artifacts: string[];
+  } | null> {
+    if (!this.enableDeepResearch || this.callLlm === undefined) return null;
+    try {
+      this.log("info", "crm: deep-research starting", {
+        topicSlug: "crm-frappe-and-outreach-current-state",
+      });
+      const result = await gatherDeepResearch({
+        manifest: this.manifest,
+        ventureRoot: this.ventureRoot,
+        fs: this.fs,
+        topic: {
+          slug: "crm-frappe-and-outreach-current-state",
+          label: "Frappe CRM v1.7x release notes and outreach pattern current state",
+        },
+        questions: CRM_DEEP_RESEARCH_QUESTIONS,
+        ventureContext: await this.buildCrmResearchContext(),
+        callLlm: this.callLlm,
+        workers: this.deepResearchWorkers,
+        requestPaste: this.requestPaste,
+        consumers: ["CRM", "HANDOFF_PACK"],
+        staleAfterDays: 7,
+        runId: this.runId,
+      });
+      this.log(result.fromCache ? "info" : "info", result.fromCache ? "crm: deep-research cache-hit" : "crm: deep-research ready", {
+        topicSlug: result.briefing.topicSlug,
+        channelsUsed: result.briefing.channelsUsed,
+        sources: result.briefing.sources.length,
+      });
+      return {
+        excerpt: {
+          filename: `${result.briefing.topicSlug}.md`,
+          excerpt: excerptMarkdown(emitSourcedSectionsMarkdown(result.briefing), 1800),
+        },
+        artifacts: result.artifactsCreated.filter((path) => path.endsWith(".md") || path.endsWith(".json")),
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log("warn", "crm: deep-research skipped", { error: message });
+      return null;
+    }
+  }
+
+  private async buildCrmResearchContext(): Promise<string> {
+    const parts = [
+      `Venture: ${this.manifest.name}`,
+      `App type: ${this.manifest.appType}`,
+      this.manifest.industry ? `Industry: ${this.manifest.industry}` : "",
+      `Flags: takesPayments=${this.manifest.takesPayments}, regulated=${this.manifest.regulated}, handlesPersonalData=${this.manifest.handlesPersonalData}`,
+      this.manifest.crm?.engineTiers?.length
+        ? `CRM engine tiers: ${this.manifest.crm.engineTiers.join(", ")}`
+        : "",
+    ].filter(Boolean);
+    const brandVoicePath = `${this.ventureRoot}/03_brand/brand-voice.md`;
+    if (await this.fs.exists(brandVoicePath)) {
+      try {
+        const voice = await this.fs.readFile(brandVoicePath);
+        if (voice.trim()) parts.push(`Brand voice notes:\n${excerptMarkdown(voice, 1200)}`);
+      } catch {
+        // Manifest context is enough to proceed.
+      }
+    }
+    return parts.join("\n\n");
+  }
+}
+
+function excerptMarkdown(markdown: string, maxChars: number): string {
+  const trimmed = markdown.trim();
+  return trimmed.length > maxChars ? `${trimmed.slice(0, maxChars)}\n\n...[truncated]` : trimmed;
 }

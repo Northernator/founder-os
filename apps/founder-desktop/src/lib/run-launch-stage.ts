@@ -71,6 +71,7 @@ export async function runLaunchStage(opts: RunLaunchStageOpts): Promise<RunLaunc
     manifest: opts.manifest,
     ventureRoot: opts.venture.rootPath,
     fs: tauriFs,
+    enableDeepResearch: llmCaller !== null,
     ...(llmCaller !== null ? { callLlm: llmCaller.callLlm } : {}),
   });
   const orchestrator = new PipelineOrchestrator({

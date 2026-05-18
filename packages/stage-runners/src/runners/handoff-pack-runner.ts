@@ -69,6 +69,7 @@ import type {
 } from "@founder-os/handoff-pack-providers/node";
 import { renderHandoffPackArtefactsStep } from "@founder-os/handoff-pack-providers/node";
 import type { Filesystem } from "@founder-os/pipeline-runner";
+import type { ResearchProvider, ResearchQuestion, RequestPasteIn } from "@founder-os/research-deep-core";
 import {
   getBrandKitDir,
   getHandoffPackCheckpointPath,
@@ -76,8 +77,33 @@ import {
   getHandoffPackIndexPath,
 } from "@founder-os/workspace-core";
 
+import { gatherDeepResearch } from "../deep-research.js";
 import { BaseStageRunner } from "../runner-base.js";
 import type { StageRunner } from "../types.js";
+
+const HANDOFF_PACK_DEEP_RESEARCH_QUESTIONS: ResearchQuestion[] = [
+  {
+    id: "q-handoff-investor-due-diligence",
+    question:
+      "What are current investor-due-diligence document expectations for a UK pre-seed/seed SaaS (data room sections, financial-model conventions, KPI definitions)?",
+    angle: "financial",
+    priority: "must",
+  },
+  {
+    id: "q-handoff-engineering-ops-conventions",
+    question:
+      "Which engineering / ops handoff document standards (runbook structure, incident-response templates, on-call expectations) are landing well for early-stage SaaS teams right now?",
+    angle: "technical",
+    priority: "must",
+  },
+  {
+    id: "q-handoff-role-pack-expectations",
+    question:
+      "What do operator / founder-CEO / CTO / designer / sales role packs typically contain in current best-of-class handoff packages, and which sections are commonly missed?",
+    angle: "competitor",
+    priority: "should",
+  },
+];
 
 export type RenderHandoffPackArtefactsFn = (
   opts: RenderHandoffPackArtefactsOpts
@@ -109,6 +135,27 @@ export type HandoffPackStageRunnerOpts = {
    * stub-only smoke tests). Default false.
    */
   skipTierB?: boolean;
+  /**
+   * Closing slice of the deep-research arc. Gates the handoff-pack
+   * cross-cutting briefing helper. Off by default so existing Tier-A
+   * and Tier-B dispatchers + the desktop sidecar keep their current
+   * deterministic + GoldenLlmCaller behaviour. When on AND callLlm is
+   * set, the runner gathers a "handoff-pack-investor-handoff-current-
+   * state" briefing BEFORE renderHandoffPackArtefactsStep runs. The
+   * briefing is indexed alongside the inventory + checkpoint and
+   * attached to the HANDOFF_PACK review gate so the reviewer sees
+   * current-best-practice context alongside the rendered docs.
+   *
+   * Future iterations of this slice can additionally pass the briefing
+   * excerpt down into the Golden-16 / Tier-B dispatcher contexts so
+   * individual Tier-A/B docs can use it per-section. That requires a
+   * multi-file refactor in @founder-os/handoff-pack-providers/node
+   * (the GoldenStepContext + dispatcher signatures); intentionally
+   * deferred here to keep the closing slice scoped.
+   */
+  enableDeepResearch?: boolean;
+  requestPaste?: RequestPasteIn;
+  deepResearchWorkers?: ReadonlyArray<ResearchProvider>;
 };
 
 export type HandoffPackCheckpointShape = HandoffPackCheckpoint;
@@ -123,6 +170,9 @@ export class HandoffPackStageRunner
   private readonly callLlm?: GoldenLlmCaller;
   private readonly skipGolden: boolean;
   private readonly skipTierB: boolean;
+  private readonly enableDeepResearch: boolean;
+  private readonly requestPaste: RequestPasteIn | undefined;
+  private readonly deepResearchWorkers: ReadonlyArray<ResearchProvider> | undefined;
   private readonly handoffPackConfig: VentureManifest["handoffPack"];
 
   constructor(opts: HandoffPackStageRunnerOpts) {
@@ -132,6 +182,9 @@ export class HandoffPackStageRunner
     this.callLlm = opts.callLlm;
     this.skipGolden = opts.skipGolden ?? false;
     this.skipTierB = opts.skipTierB ?? false;
+    this.enableDeepResearch = opts.enableDeepResearch ?? false;
+    this.requestPaste = opts.requestPaste;
+    this.deepResearchWorkers = opts.deepResearchWorkers;
     this.handoffPackConfig = opts.manifest.handoffPack;
   }
 
@@ -196,8 +249,29 @@ export class HandoffPackStageRunner
     let artefacts: RenderHandoffPackArtefactsResult | undefined;
     let inventoryPath: string | undefined;
 
+    let deepResearchBriefingMarkdownPath: string | undefined;
     try {
       await this.fs.mkdir(getHandoffPackDir(this.ventureRoot));
+
+      // Closing slice of the deep-research arc: gather a cross-cutting
+      // briefing BEFORE the renderer fires. Failures are non-fatal --
+      // the pack renders deterministically + with the existing
+      // Golden/Tier-B dispatchers regardless.
+      const deepResearch = await this.gatherHandoffPackDeepResearch();
+      if (deepResearch !== null) {
+        for (const path of deepResearch.artifacts) {
+          indexEntries.push(
+            this.indexEntry(
+              `handoff-pack-deep-research-${this.runId}:${path.split("/").pop() ?? path}`,
+              path.endsWith(".md") ? "handoff-pack-deep-research" : "handoff-pack-deep-research-json",
+              path,
+              startedIso,
+            ),
+          );
+        }
+        artifactPaths.push(...deepResearch.artifacts);
+        deepResearchBriefingMarkdownPath = deepResearch.briefingMarkdownPath;
+      }
 
       this.log("info", "Preparing brand assets in 13_handoff_pack/.brand/", {
         ventureSlug: this.manifest.slug,
@@ -360,7 +434,11 @@ export class HandoffPackStageRunner
       await this.appendArtifactIndex(indexEntries);
 
       if (requiresReview) {
-        const gate = this.buildReviewGate(artifactPaths, artefacts.inventory);
+        const gate = this.buildReviewGate(
+          artifactPaths,
+          artefacts.inventory,
+          deepResearchBriefingMarkdownPath,
+        );
         await this.appendReviewGate(gate);
         reviewGateId = gate.gateId;
         this.log("info", "review gate created", {
@@ -443,6 +521,7 @@ export class HandoffPackStageRunner
   private buildReviewGate(
     artifactPaths: string[],
     inventory: HandoffPackInventory,
+    deepResearchBriefingMarkdownPath: string | undefined,
   ): ReviewGate {
     return {
       gateId: `gate-${this.stageName}-${this.runId}`,
@@ -455,7 +534,9 @@ export class HandoffPackStageRunner
         path: p,
         type: p.endsWith(HANDOFF_PACK_INDEX_FILE_NAME)
           ? "handoff-pack-inventory"
-          : "handoff-pack-artifact",
+          : deepResearchBriefingMarkdownPath !== undefined && p === deepResearchBriefingMarkdownPath
+            ? "handoff-pack-deep-research"
+            : "handoff-pack-artifact",
         humanReadableContent:
           p.endsWith(HANDOFF_PACK_INDEX_FILE_NAME)
             ? `${inventory.totalDocs} docs across ${countCategories(inventory)} categories`
@@ -463,6 +544,75 @@ export class HandoffPackStageRunner
       })),
     };
   }
+
+  private async gatherHandoffPackDeepResearch(): Promise<{
+    briefingMarkdownPath: string | undefined;
+    artifacts: string[];
+  } | null> {
+    if (!this.enableDeepResearch || this.callLlm === undefined) return null;
+    try {
+      this.log("info", "handoff-pack deep-research starting", {
+        topicSlug: "handoff-pack-investor-handoff-current-state",
+      });
+      const result = await gatherDeepResearch({
+        manifest: this.manifest,
+        ventureRoot: this.ventureRoot,
+        fs: this.fs,
+        topic: {
+          slug: "handoff-pack-investor-handoff-current-state",
+          label: "Investor due-diligence + operational handoff current-state advisory",
+        },
+        questions: HANDOFF_PACK_DEEP_RESEARCH_QUESTIONS,
+        ventureContext: await this.buildHandoffPackResearchContext(),
+        callLlm: this.callLlm,
+        workers: this.deepResearchWorkers,
+        requestPaste: this.requestPaste,
+        consumers: ["HANDOFF_PACK"],
+        staleAfterDays: 7,
+        runId: this.runId,
+      });
+      this.log(result.fromCache ? "info" : "info", result.fromCache ? "handoff-pack deep-research cache-hit" : "handoff-pack deep-research ready", {
+        topicSlug: result.briefing.topicSlug,
+        channelsUsed: result.briefing.channelsUsed,
+        sources: result.briefing.sources.length,
+      });
+      const artifacts = result.artifactsCreated.filter((path) => path.endsWith(".md") || path.endsWith(".json"));
+      const briefingMarkdownPath = artifacts.find((path) => path.endsWith(`${result.briefing.topicSlug}.md`));
+      return { briefingMarkdownPath, artifacts };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log("warn", "handoff-pack deep-research skipped", { error: message });
+      return null;
+    }
+  }
+
+  private async buildHandoffPackResearchContext(): Promise<string> {
+    const parts = [
+      `Venture: ${this.manifest.name}`,
+      `App type: ${this.manifest.appType}`,
+      this.manifest.industry ? `Industry: ${this.manifest.industry}` : "",
+      this.manifest.entityType ? `Entity type: ${this.manifest.entityType}` : "",
+      `Flags: takesPayments=${this.manifest.takesPayments}, regulated=${this.manifest.regulated}, handlesPersonalData=${this.manifest.handlesPersonalData}, hiresStaff=${this.manifest.hiresStaff}`,
+      this.handoffPackConfig?.includeRolePacks?.length
+        ? `Role packs in scope: ${this.handoffPackConfig.includeRolePacks.join(", ")}`
+        : "",
+    ].filter(Boolean);
+    const intakePath = `${this.ventureRoot}/00_research/intake.md`;
+    if (await this.fs.exists(intakePath)) {
+      try {
+        const intake = await this.fs.readFile(intakePath);
+        if (intake.trim()) parts.push(`Founder intake:\n${excerptMarkdown(intake, 1600)}`);
+      } catch {
+        // Manifest context is enough to proceed.
+      }
+    }
+    return parts.join("\n\n");
+  }
+}
+
+function excerptMarkdown(markdown: string, maxChars: number): string {
+  const trimmed = markdown.trim();
+  return trimmed.length > maxChars ? `${trimmed.slice(0, maxChars)}\n\n...[truncated]` : trimmed;
 }
 
 function countCategories(inventory: HandoffPackInventory): number {

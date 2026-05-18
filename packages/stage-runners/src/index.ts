@@ -28,6 +28,28 @@
 export * from "./types.js";
 export { BaseStageRunner, generateRunId } from "./runner-base.js";
 export { ResearchStageRunner, type ResearchStageRunnerOpts } from "./runners/research-runner.js";
+export {
+  DeepResearchStageRunner,
+  DeepResearchCostCapError,
+  DEFAULT_DEEP_RESEARCH_TOPIC_SEEDS,
+  gatherDeepResearch,
+  getDeepResearchBriefingJsonPath,
+  getDeepResearchBriefingMarkdownPath,
+  getDeepResearchCheckpointPath,
+  getDeepResearchDir,
+  getDeepResearchPasteInDir,
+  getDeepResearchPasteInPromptPath,
+  getDeepResearchPasteInResponsePath,
+  getDeepResearchPasteInStatusPath,
+  getDeepResearchPlanPath,
+  getDeepResearchSourcesIndexPath,
+  getDeepResearchTranscriptPath,
+  type DeepResearchStageRunnerOpts,
+  type DeepResearchPasteInStatus,
+  type DeepResearchTopicSeed,
+  type GatherDeepResearchOpts,
+  type GatherDeepResearchResult,
+} from "./deep-research.js";
 export { BrandStageRunner, type BrandStageRunnerOpts } from "./runners/brand-runner.js";
 export { ProductStageRunner, type ProductStageRunnerOpts } from "./runners/product-runner.js";
 export { UkSetupStageRunner, type UkSetupStageRunnerOpts } from "./runners/uk-setup-runner.js";

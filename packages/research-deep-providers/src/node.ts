@@ -40,3 +40,11 @@ export {
   GeminiSubInvocationError,
   type CreateGeminiSubProviderOpts,
 } from "./gemini-sub-provider.js";
+
+// Node-only: research_py sidecar provider (reads gpt-researcher's report
+// from the local filesystem via node:fs).
+export {
+  createResearchPyProvider,
+  ResearchPyInvocationError,
+  type CreateResearchPyProviderOpts,
+} from "./research-py-provider.js";

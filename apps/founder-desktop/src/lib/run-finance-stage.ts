@@ -74,6 +74,7 @@ export async function runFinanceStage(
     manifest: opts.manifest,
     ventureRoot: opts.venture.rootPath,
     fs: tauriFs,
+    enableDeepResearch: llmCaller !== null,
     ...(llmCaller !== null ? { callLlm: llmCaller.callLlm } : {}),
   });
   const orchestrator = new PipelineOrchestrator({

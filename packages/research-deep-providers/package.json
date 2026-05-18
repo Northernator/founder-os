@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@founder-os/research-deep-core": "workspace:*",
+    "@founder-os/research-runner": "workspace:*",
     "zod": "^3.23.8"
   },
   "devDependencies": {

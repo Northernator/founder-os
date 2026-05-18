@@ -53,3 +53,43 @@ export {
   createPasteInProvider,
   type CreatePasteInProviderOpts,
 } from "./paste-in-provider.js";
+
+// Slice 3 — programmatic API fallbacks (all fetch-based, client-safe).
+
+// claude-api fallback — wraps claude-sub with a fetch-based CallLlm to
+// /v1/messages with the web_search server tool.
+export {
+  createClaudeApiProvider,
+  ClaudeApiInvocationError,
+  CLAUDE_API_DEFAULT_MODEL,
+  CLAUDE_API_DEFAULT_MAX_TOKENS,
+  CLAUDE_API_DEFAULT_BASE_URL,
+  CLAUDE_API_DEFAULT_ANTHROPIC_VERSION,
+  type CreateClaudeApiProviderOpts,
+} from "./claude-api-provider.js";
+
+// gemini-api fallback — direct ResearchProvider over Google AI Studio's
+// generateContent with the googleSearch grounding tool.
+export {
+  createGeminiApiProvider,
+  GeminiApiInvocationError,
+  GEMINI_API_DEFAULT_MODEL,
+  GEMINI_API_DEFAULT_BASE_URL,
+  GEMINI_API_DEFAULT_VERSION,
+  type CreateGeminiApiProviderOpts,
+} from "./gemini-api-provider.js";
+
+// chatgpt-api fallback — OpenAI Responses API with web_search_preview.
+// Off by default per spec §6; the orchestrator only wires it when the
+// founder opts in.
+export {
+  createChatgptApiProvider,
+  ChatgptApiInvocationError,
+  CHATGPT_API_DEFAULT_MODEL,
+  CHATGPT_API_DEFAULT_BASE_URL,
+  type CreateChatgptApiProviderOpts,
+} from "./chatgpt-api-provider.js";
+
+// NOTE: createResearchPyProvider lives in "./node" — it reads the
+// gpt-researcher report from disk via node:fs and isn't safe for the
+// WebView bundle.

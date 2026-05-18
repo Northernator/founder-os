@@ -84,6 +84,8 @@ export type CreateValidationSummaryContext = {
   ventureRoot: string;
   /** Optional SaaS-style LLM caller. Omit for deterministic-only. */
   callLlm?: SaasLlmCaller;
+  /** Optional deep-research briefings gathered by stage-runners before this step. */
+  deepResearch?: { filename: string; excerpt: string }[];
   /** Optional explicit runId; the runner forwards its own. */
   runId?: string;
 };
@@ -551,7 +553,10 @@ export async function createValidationSummaryStep(
   await ctx.fs.mkdir(stageDir);
 
   const { canvas, sourcePresent } = await readValidationCanvas(ctx.fs, ctx.ventureRoot);
-  const research = await readResearchExcerpts(ctx.fs, ctx.ventureRoot, ctx.manifest);
+  const research = [
+    ...(await readResearchExcerpts(ctx.fs, ctx.ventureRoot, ctx.manifest)),
+    ...(ctx.deepResearch ?? []),
+  ];
 
   const sources: string[] = [];
   if (sourcePresent) sources.push("validation-canvas.json");

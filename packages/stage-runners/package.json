@@ -30,6 +30,9 @@
     "@founder-os/backend-core": "workspace:*",
     "@founder-os/handoff-pack-core": "workspace:*",
     "@founder-os/handoff-pack-providers": "workspace:*",
+    "@founder-os/research-deep-core": "workspace:*",
+    "@founder-os/research-deep-orchestrator": "workspace:*",
+    "@founder-os/research-deep-providers": "workspace:*",
     "@founder-os/artifacts-core": "workspace:*",
     "@founder-os/artifacts-index": "workspace:*",
     "zod": "^3.23.8"

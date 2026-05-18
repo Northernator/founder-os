@@ -39,9 +39,33 @@ import {
   createLogoPackStep,
   generateNamingCandidatesStep,
 } from "@founder-os/pipeline-runner";
+import type { ResearchProvider, ResearchQuestion, RequestPasteIn } from "@founder-os/research-deep-core";
+import { emitSourcedSectionsMarkdown } from "@founder-os/research-deep-core";
 import { getBrandKitDir, getLogoExportsDir } from "@founder-os/workspace-core";
+import { gatherDeepResearch } from "../deep-research.js";
 import { BaseStageRunner } from "../runner-base.js";
 import type { StageRunner } from "../types.js";
+
+const BRAND_DEEP_RESEARCH_QUESTIONS: ResearchQuestion[] = [
+  {
+    id: "q-brand-positioning-landscape",
+    question: "What positioning patterns, promises, and vocabulary are currently common in this venture's category?",
+    angle: "competitor",
+    priority: "must",
+  },
+  {
+    id: "q-brand-naming-collision-risk",
+    question: "Which naming collision risks, trademark-adjacent risks, domain conflicts, or social-handle conflicts should be avoided?",
+    angle: "risk",
+    priority: "must",
+  },
+  {
+    id: "q-brand-voice-benchmarks",
+    question: "Which voice, tone, and visual identity conventions are overused versus differentiated for this audience?",
+    angle: "market",
+    priority: "should",
+  },
+];
 
 export type BrandStageRunnerOpts = {
   manifest: VentureManifest;
@@ -58,6 +82,9 @@ export type BrandStageRunnerOpts = {
   seedHints?: string;
   /** How many naming candidates to ask the LLM for. Default 8 (5-10 prompt). */
   targetCount?: number;
+  enableDeepResearch?: boolean;
+  requestPaste?: RequestPasteIn;
+  deepResearchWorkers?: ReadonlyArray<ResearchProvider>;
   runId?: string;
 };
 
@@ -66,12 +93,18 @@ export class BrandStageRunner extends BaseStageRunner implements StageRunner {
   private readonly callLlm: NamingLlmCaller;
   private readonly seedHints: string | undefined;
   private readonly targetCount: number | undefined;
+  private readonly enableDeepResearch: boolean;
+  private readonly requestPaste: RequestPasteIn | undefined;
+  private readonly deepResearchWorkers: ReadonlyArray<ResearchProvider> | undefined;
 
   constructor(opts: BrandStageRunnerOpts) {
     super(opts.ventureRoot, opts.fs, opts.manifest, opts.runId);
     this.callLlm = opts.callLlm;
     this.seedHints = opts.seedHints;
     this.targetCount = opts.targetCount;
+    this.enableDeepResearch = opts.enableDeepResearch ?? false;
+    this.requestPaste = opts.requestPaste;
+    this.deepResearchWorkers = opts.deepResearchWorkers;
   }
 
   async validate(): Promise<ValidationResult> {
@@ -107,6 +140,7 @@ export class BrandStageRunner extends BaseStageRunner implements StageRunner {
     let failureMessage: string | undefined;
 
     try {
+      const deepResearch = await this.gatherBrandDeepResearch();
       // ----- Step 1: Naming candidates -----
       this.log("info", "generating naming candidates");
       const namingCtx = {
@@ -114,7 +148,9 @@ export class BrandStageRunner extends BaseStageRunner implements StageRunner {
         manifest: this.manifest,
         ventureRoot: this.ventureRoot,
         callLlm: this.callLlm,
-        ...(this.seedHints !== undefined ? { seedHints: this.seedHints } : {}),
+        ...((this.seedHints !== undefined || deepResearch !== null)
+          ? { seedHints: [this.seedHints, deepResearch?.seedHint].filter(Boolean).join("\n\n") }
+          : {}),
         ...(this.targetCount !== undefined ? { targetCount: this.targetCount } : {}),
       };
       const naming = await generateNamingCandidatesStep(namingCtx);
@@ -134,6 +170,20 @@ export class BrandStageRunner extends BaseStageRunner implements StageRunner {
         runId: this.runId,
       });
       artifactPaths.push(naming.scanPath);
+      if (deepResearch !== null) {
+        for (const path of deepResearch.artifacts) {
+          indexEntries.push({
+            artifactId: `brand:deep-research:${path.split("/").pop() ?? path}`,
+            stageName: "BRAND",
+            type: path.endsWith(".md") ? "brand-deep-research" : "brand-deep-research-json",
+            path,
+            createdAt: nowIso,
+            status: "ready",
+            runId: this.runId,
+          });
+        }
+        artifactPaths.push(...deepResearch.artifacts);
+      }
 
       // ----- Step 2: Brand brief -----
       this.log("info", "creating brand brief");
@@ -276,4 +326,68 @@ export class BrandStageRunner extends BaseStageRunner implements StageRunner {
       ],
     };
   }
+
+  private async gatherBrandDeepResearch(): Promise<{ seedHint: string; artifacts: string[] } | null> {
+    if (!this.enableDeepResearch) return null;
+    try {
+      this.log("info", "brand deep-research starting", {
+        topicSlug: "brand-positioning-and-naming",
+      });
+      const result = await gatherDeepResearch({
+        manifest: this.manifest,
+        ventureRoot: this.ventureRoot,
+        fs: this.fs,
+        topic: {
+          slug: "brand-positioning-and-naming",
+          label: "Brand positioning and naming collision risk",
+        },
+        questions: BRAND_DEEP_RESEARCH_QUESTIONS,
+        ventureContext: await this.buildBrandResearchContext(),
+        callLlm: this.callLlm,
+        workers: this.deepResearchWorkers,
+        requestPaste: this.requestPaste,
+        consumers: ["BRAND", "LAUNCH", "HANDOFF_PACK"],
+        staleAfterDays: 30,
+        runId: this.runId,
+      });
+      this.log(result.fromCache ? "info" : "info", result.fromCache ? "brand deep-research cache-hit" : "brand deep-research ready", {
+        topicSlug: result.briefing.topicSlug,
+        channelsUsed: result.briefing.channelsUsed,
+        sources: result.briefing.sources.length,
+      });
+      return {
+        seedHint: `### Deep research context for naming\n\n${excerptMarkdown(emitSourcedSectionsMarkdown(result.briefing), 1800)}`,
+        artifacts: result.artifactsCreated.filter((path) => path.endsWith(".md") || path.endsWith(".json")),
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log("warn", "brand deep-research skipped", { error: message });
+      return null;
+    }
+  }
+
+  private async buildBrandResearchContext(): Promise<string> {
+    const parts = [
+      `Venture: ${this.manifest.name}`,
+      `Slug: ${this.manifest.slug}`,
+      `App type: ${this.manifest.appType}`,
+      this.manifest.industry ? `Industry: ${this.manifest.industry}` : "",
+      this.seedHints?.trim() ? `Founder brand hints:\n${this.seedHints.trim()}` : "",
+    ].filter(Boolean);
+    const intakePath = `${this.ventureRoot}/00_research/intake.md`;
+    if (await this.fs.exists(intakePath)) {
+      try {
+        const intake = await this.fs.readFile(intakePath);
+        if (intake.trim()) parts.push(`Founder intake:\n${excerptMarkdown(intake, 1600)}`);
+      } catch {
+        // Manifest + brand hints are enough to proceed.
+      }
+    }
+    return parts.join("\n\n");
+  }
+}
+
+function excerptMarkdown(markdown: string, maxChars: number): string {
+  const trimmed = markdown.trim();
+  return trimmed.length > maxChars ? `${trimmed.slice(0, maxChars)}\n\n...[truncated]` : trimmed;
 }

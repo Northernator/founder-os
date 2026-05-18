@@ -99,6 +99,7 @@ export type CreateWireframesContext = {
   manifest: VentureManifest;
   ventureRoot: string;
   callLlm?: SaasLlmCaller;
+  deepResearch?: { filename: string; excerpt: string }[];
   runId?: string;
 };
 
@@ -407,6 +408,7 @@ function buildLayoutUserPrompt(args: {
   manifest: VentureManifest;
   screen: ScreenCanvasEntry;
   spec: SpecSnapshot;
+  deepResearch?: { filename: string; excerpt: string }[];
 }): string {
   const featureNames = args.screen.featureIds.map((id) => {
     const f = args.spec.features.find((x) => x.id === id);
@@ -416,6 +418,9 @@ function buildLayoutUserPrompt(args: {
     const e = args.spec.entities.find((x) => x.id === id);
     return e ? e.name : id;
   });
+  const researchBlock = args.deepResearch?.length
+    ? args.deepResearch.map((r) => `### ${r.filename}\n\n${r.excerpt}`).join("\n\n")
+    : "(none)";
   return `Write the **Layout & states** narrative for the screen "${args.screen.name}" in the SaaS venture "${args.manifest.name}".
 
 Screen metadata:
@@ -423,7 +428,10 @@ Screen metadata:
 - Description: ${args.screen.description.trim() || "(none provided)"}
 - Features fulfilled: ${featureNames.length > 0 ? featureNames.join(", ") : "(none)"}
 - Entities touched: ${entityNames.length > 0 ? entityNames.join(", ") : "(none)"}
-- Founder notes: ${args.screen.notes.trim() || "(none)"}`;
+- Founder notes: ${args.screen.notes.trim() || "(none)"}
+
+Deep research context:
+${researchBlock}`;
 }
 
 async function enrichScreen(args: {
@@ -431,6 +439,7 @@ async function enrichScreen(args: {
   screen: ScreenCanvasEntry;
   spec: SpecSnapshot;
   callLlm: SaasLlmCaller;
+  deepResearch?: { filename: string; excerpt: string }[];
 }): Promise<{ narrative: string; usedLlm: boolean }> {
   try {
     const text = await args.callLlm({
@@ -439,6 +448,7 @@ async function enrichScreen(args: {
         manifest: args.manifest,
         screen: args.screen,
         spec: args.spec,
+        deepResearch: args.deepResearch,
       }),
     });
     const cleaned = text.trim();
@@ -605,6 +615,7 @@ export async function createWireframesStep(
   );
   const sources: string[] = ["screens-canvas.json"];
   if (specPresent) sources.push("spec-canvas.json");
+  for (const r of ctx.deepResearch ?? []) sources.push(r.filename);
 
   const runId = ctx.runId ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -621,6 +632,7 @@ export async function createWireframesStep(
           screen,
           spec,
           callLlm: ctx.callLlm,
+          deepResearch: ctx.deepResearch,
         });
         narrative = out.narrative;
         source = out.usedLlm ? "llm" : "deterministic";

@@ -128,6 +128,9 @@
       "@founder-os/research-deep-providers/node": [
         "packages/research-deep-providers/src/node.ts"
       ],
+      "@founder-os/research-deep-orchestrator": [
+        "packages/research-deep-orchestrator/src/index.ts"
+      ],
       "@founder-os/sales-agents": [
         "packages/sales-agents/src/index.ts"
       ],

@@ -120,6 +120,13 @@ export type CreateLaunchPackageContext = {
   manifest: VentureManifest;
   ventureRoot: string;
   callLlm?: SaasLlmCaller;
+  /**
+   * Optional deep-research excerpts. When provided AND `callLlm` is
+   * set, the announcement LLM prompt receives a "Deep research context"
+   * block (channel benchmarks / PR templates / launch-window market
+   * notes). Filenames also append to `receipt.sources`.
+   */
+  deepResearch?: { filename: string; excerpt: string }[];
   runId?: string;
 };
 
@@ -564,7 +571,11 @@ Output rules:
 function buildAnnouncementUserPrompt(args: {
   manifest: VentureManifest;
   receipt: LaunchReceiptJson;
+  deepResearch?: { filename: string; excerpt: string }[];
 }): string {
+  const researchBlock = args.deepResearch?.length
+    ? args.deepResearch.map((r) => `### ${r.filename}\n\n${r.excerpt}`).join("\n\n")
+    : "(none)";
   return `Write the launch announcement for "${args.receipt.brand.name || args.manifest.name}".
 
 Receipt (JSON):
@@ -583,13 +594,17 @@ ${JSON.stringify(
   },
   null,
   2
-)}`;
+)}
+
+Deep research context:
+${researchBlock}`;
 }
 
 async function enrichAnnouncement(args: {
   manifest: VentureManifest;
   receipt: LaunchReceiptJson;
   callLlm: SaasLlmCaller;
+  deepResearch?: { filename: string; excerpt: string }[];
 }): Promise<{ markdown: string; usedLlm: boolean }> {
   try {
     const text = await args.callLlm({
@@ -597,6 +612,7 @@ async function enrichAnnouncement(args: {
       user: buildAnnouncementUserPrompt({
         manifest: args.manifest,
         receipt: args.receipt,
+        deepResearch: args.deepResearch,
       }),
     });
     const cleaned = text.trim();
@@ -641,6 +657,7 @@ export async function createLaunchPackageStep(
   if (finance.hasFile) sources.push("finance-plan.json");
   if (uk.hasFile) sources.push("uk-setup.json");
   if (build.hasHandoff) sources.push("build-handoff.json");
+  for (const r of ctx.deepResearch ?? []) sources.push(r.filename);
 
   const checklist = buildPreLaunchChecklist({ brand, validation, finance, uk, build });
   const status = deriveReceiptStatus(checklist);
@@ -686,6 +703,7 @@ export async function createLaunchPackageStep(
       manifest: ctx.manifest,
       receipt: receiptNoSource,
       callLlm: ctx.callLlm,
+      ...(ctx.deepResearch !== undefined ? { deepResearch: ctx.deepResearch } : {}),
     });
     announcementMd = out.markdown;
     generationSource = out.usedLlm ? "llm" : "deterministic-fallback";

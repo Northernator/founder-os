@@ -38,9 +38,27 @@ import type {
 } from "@founder-os/domain";
 import type { Filesystem, SaasLlmCaller } from "@founder-os/pipeline-runner";
 import { createWireframesStep } from "@founder-os/pipeline-runner";
+import type { ResearchProvider, ResearchQuestion, RequestPasteIn } from "@founder-os/research-deep-core";
+import { emitSourcedSectionsMarkdown } from "@founder-os/research-deep-core";
 import { getScreensCanvasPath } from "@founder-os/workspace-core";
+import { gatherDeepResearch } from "../deep-research.js";
 import { BaseStageRunner } from "../runner-base.js";
 import type { StageRunner } from "../types.js";
+
+const WIREFRAME_DEEP_RESEARCH_QUESTIONS: ResearchQuestion[] = [
+  {
+    id: "q-wireframe-screen-patterns",
+    question: "What current screen-pattern conventions and interaction models are best-in-class for this category?",
+    angle: "technical",
+    priority: "must",
+  },
+  {
+    id: "q-wireframe-empty-error-states",
+    question: "Which loading, empty, error, onboarding, and mobile-responsive states should be reflected in low-fidelity wireframes?",
+    angle: "technical",
+    priority: "should",
+  },
+];
 
 export type WireframeStageRunnerOpts = {
   manifest: VentureManifest;
@@ -53,16 +71,22 @@ export type WireframeStageRunnerOpts = {
    * not require an LLM caller in validate().
    */
   callLlm?: SaasLlmCaller;
+  requestPaste?: RequestPasteIn;
+  deepResearchWorkers?: ReadonlyArray<ResearchProvider>;
   runId?: string;
 };
 
 export class WireframeStageRunner extends BaseStageRunner implements StageRunner {
   readonly stageName: StageName = "WIREFRAME";
   private readonly callLlm: SaasLlmCaller | undefined;
+  private readonly requestPaste: RequestPasteIn | undefined;
+  private readonly deepResearchWorkers: ReadonlyArray<ResearchProvider> | undefined;
 
   constructor(opts: WireframeStageRunnerOpts) {
     super(opts.ventureRoot, opts.fs, opts.manifest, opts.runId);
     this.callLlm = opts.callLlm;
+    this.requestPaste = opts.requestPaste;
+    this.deepResearchWorkers = opts.deepResearchWorkers;
   }
 
   async validate(): Promise<ValidationResult> {
@@ -96,12 +120,14 @@ export class WireframeStageRunner extends BaseStageRunner implements StageRunner
     let failureMessage: string | undefined;
 
     try {
+      const deepResearch = await this.gatherWireframeDeepResearch();
       const stepCtx = {
         fs: this.fs,
         manifest: this.manifest,
         ventureRoot: this.ventureRoot,
         runId: this.runId,
         ...(this.callLlm !== undefined ? { callLlm: this.callLlm } : {}),
+        ...(deepResearch !== null ? { deepResearch: [deepResearch.excerpt] } : {}),
       };
       const result = await createWireframesStep(stepCtx);
 
@@ -134,6 +160,20 @@ export class WireframeStageRunner extends BaseStageRunner implements StageRunner
         runId: this.runId,
       });
       artifactPaths.push(result.jsonPath, result.mdPath);
+      if (deepResearch !== null) {
+        for (const path of deepResearch.artifacts) {
+          indexEntries.push({
+            artifactId: `wireframe:deep-research:${path.split("/").pop() ?? path}`,
+            stageName: "WIREFRAME",
+            type: path.endsWith(".md") ? "wireframe-deep-research" : "wireframe-deep-research-json",
+            path,
+            createdAt: nowIso,
+            status: "ready",
+            runId: this.runId,
+          });
+        }
+        artifactPaths.push(...deepResearch.artifacts);
+      }
       await this.appendArtifactIndex(indexEntries);
 
       if (requiresReview) {
@@ -197,4 +237,72 @@ export class WireframeStageRunner extends BaseStageRunner implements StageRunner
       ],
     };
   }
+
+  private async gatherWireframeDeepResearch(): Promise<{
+    excerpt: { filename: string; excerpt: string };
+    artifacts: string[];
+  } | null> {
+    if (this.callLlm === undefined) return null;
+    try {
+      this.log("info", "wireframe deep-research starting", {
+        topicSlug: "wireframe-screen-patterns",
+      });
+      const result = await gatherDeepResearch({
+        manifest: this.manifest,
+        ventureRoot: this.ventureRoot,
+        fs: this.fs,
+        topic: {
+          slug: "wireframe-screen-patterns",
+          label: "Wireframe screen-pattern conventions",
+        },
+        questions: WIREFRAME_DEEP_RESEARCH_QUESTIONS,
+        ventureContext: await this.buildWireframeResearchContext(),
+        callLlm: this.callLlm,
+        workers: this.deepResearchWorkers,
+        requestPaste: this.requestPaste,
+        consumers: ["WIREFRAME", "HANDOFF", "BUILD", "HANDOFF_PACK"],
+        staleAfterDays: 30,
+        runId: this.runId,
+      });
+      this.log(result.fromCache ? "info" : "info", result.fromCache ? "wireframe deep-research cache-hit" : "wireframe deep-research ready", {
+        topicSlug: result.briefing.topicSlug,
+        channelsUsed: result.briefing.channelsUsed,
+        sources: result.briefing.sources.length,
+      });
+      return {
+        excerpt: {
+          filename: `${result.briefing.topicSlug}.md`,
+          excerpt: excerptMarkdown(emitSourcedSectionsMarkdown(result.briefing), 1800),
+        },
+        artifacts: result.artifactsCreated.filter((path) => path.endsWith(".md") || path.endsWith(".json")),
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log("warn", "wireframe deep-research skipped", { error: message });
+      return null;
+    }
+  }
+
+  private async buildWireframeResearchContext(): Promise<string> {
+    const parts = [
+      `Venture: ${this.manifest.name}`,
+      `App type: ${this.manifest.appType}`,
+      this.manifest.industry ? `Industry: ${this.manifest.industry}` : "",
+    ].filter(Boolean);
+    const screensPath = getScreensCanvasPath(this.ventureRoot);
+    if (await this.fs.exists(screensPath)) {
+      try {
+        const screens = await this.fs.readFile(screensPath);
+        if (screens.trim()) parts.push(`Screens canvas:\n${excerptMarkdown(screens, 1800)}`);
+      } catch {
+        // validate() already checks existence; ignore read errors here.
+      }
+    }
+    return parts.join("\n\n");
+  }
+}
+
+function excerptMarkdown(markdown: string, maxChars: number): string {
+  const trimmed = markdown.trim();
+  return trimmed.length > maxChars ? `${trimmed.slice(0, maxChars)}\n\n...[truncated]` : trimmed;
 }

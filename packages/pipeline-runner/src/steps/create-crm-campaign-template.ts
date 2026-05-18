@@ -39,6 +39,14 @@ export type CreateCrmCampaignTemplateContext = {
   ventureRoot: string;
   provider: CrmProvider;
   callLlm?: SaasLlmCaller;
+  /**
+   * Optional deep-research excerpts. When provided AND `callLlm` is set
+   * AND brandVoice is present, the per-template rewrite prompt receives
+   * a "Deep research context" block (current outreach patterns, send
+   * timing, Frappe v1.7x merge-tag conventions). The LLM is instructed
+   * to ground tone and hook timing in this material.
+   */
+  deepResearch?: { filename: string; excerpt: string }[];
   runId?: string;
 };
 
@@ -115,21 +123,30 @@ export async function createCrmCampaignTemplateStep(
   let templates = seedTemplates;
 
   if (ctx.callLlm && brandVoice) {
+    const researchBlock = ctx.deepResearch?.length
+      ? ctx.deepResearch.map((r) => `### ${r.filename}\n\n${r.excerpt}`).join("\n\n")
+      : "";
     try {
       const enrichedBodies = await Promise.all(
         seedTemplates.map(async (tpl) => {
+          const userLines = [
+            `Brand voice notes:\n${brandVoice.slice(0, 1500)}`,
+            "",
+            `Email kind: ${tpl.id}`,
+            `Venture: ${ctx.manifest.name}`,
+            `Existing draft:\n${tpl.body}`,
+          ];
+          if (researchBlock) {
+            userLines.push("", `Deep research context:\n${researchBlock}`);
+          }
           const enriched = await ctx.callLlm!({
             system:
               "You rewrite SaaS outreach emails in the founder's brand voice. " +
               "Keep them under 120 words. Preserve any {{ doc.first_name }} merge tags. " +
+              "When a Deep research context block is present, use it to ground hook " +
+              "patterns, send timing, and outreach conventions. " +
               "Output only the email body -- no subject, no signature block.",
-            user: [
-              `Brand voice notes:\n${brandVoice.slice(0, 1500)}`,
-              "",
-              `Email kind: ${tpl.id}`,
-              `Venture: ${ctx.manifest.name}`,
-              `Existing draft:\n${tpl.body}`,
-            ].join("\n"),
+            user: userLines.join("\n"),
           });
           return { ...tpl, body: enriched.trim() || tpl.body };
         }),

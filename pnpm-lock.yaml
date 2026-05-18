@@ -226,6 +226,9 @@ importers:
       '@founder-os/query':
         specifier: workspace:*
         version: link:../../packages/query
+      '@founder-os/research-deep-core':
+        specifier: workspace:*
+        version: link:../../packages/research-deep-core
       '@founder-os/research-runner':
         specifier: workspace:*
         version: link:../../packages/research-runner
@@ -926,11 +929,30 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
 
+  packages/research-deep-orchestrator:
+    dependencies:
+      '@founder-os/research-deep-core':
+        specifier: workspace:*
+        version: link:../research-deep-core
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.39)
+
   packages/research-deep-providers:
     dependencies:
       '@founder-os/research-deep-core':
         specifier: workspace:*
         version: link:../research-deep-core
+      '@founder-os/research-runner':
+        specifier: workspace:*
+        version: link:../research-runner
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -1037,6 +1059,15 @@ importers:
       '@founder-os/pipeline-runner':
         specifier: workspace:*
         version: link:../pipeline-runner
+      '@founder-os/research-deep-core':
+        specifier: workspace:*
+        version: link:../research-deep-core
+      '@founder-os/research-deep-orchestrator':
+        specifier: workspace:*
+        version: link:../research-deep-orchestrator
+      '@founder-os/research-deep-providers':
+        specifier: workspace:*
+        version: link:../research-deep-providers
       '@founder-os/workspace-core':
         specifier: workspace:*
         version: link:../workspace-core

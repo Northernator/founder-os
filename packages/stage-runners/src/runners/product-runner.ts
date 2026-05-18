@@ -33,6 +33,7 @@ import type {
 } from "@founder-os/domain";
 import type { Filesystem } from "@founder-os/pipeline-runner";
 import { ensureBriefStep, ensureScreensStep, ensureSpecStep } from "@founder-os/pipeline-runner";
+import type { CallLlm, ResearchProvider, ResearchQuestion, RequestPasteIn } from "@founder-os/research-deep-core";
 import {
   getBriefDir,
   getProductSpecMarkdownPath,
@@ -40,21 +41,55 @@ import {
   getScreensMarkdownPath,
   getSpecCanvasPath,
 } from "@founder-os/workspace-core";
+import { gatherDeepResearch } from "../deep-research.js";
 import { BaseStageRunner } from "../runner-base.js";
 import type { StageRunner } from "../types.js";
+
+const PRODUCT_DEEP_RESEARCH_QUESTIONS: ResearchQuestion[] = [
+  {
+    id: "q-product-ux-patterns",
+    question: "What best-in-class UX patterns are current for this product category and target user?",
+    angle: "technical",
+    priority: "must",
+  },
+  {
+    id: "q-product-accessibility-baseline",
+    question: "Which accessibility, onboarding, data-entry, and empty-state conventions should shape the v1 product spec?",
+    angle: "technical",
+    priority: "should",
+  },
+  {
+    id: "q-product-api-conventions",
+    question: "Which API, integration, and data-model conventions are common in adjacent products?",
+    angle: "technical",
+    priority: "should",
+  },
+];
 
 export type ProductStageRunnerOpts = {
   manifest: VentureManifest;
   ventureRoot: string;
   fs: Filesystem;
+  callLlm?: CallLlm;
+  enableDeepResearch?: boolean;
+  requestPaste?: RequestPasteIn;
+  deepResearchWorkers?: ReadonlyArray<ResearchProvider>;
   runId?: string;
 };
 
 export class ProductStageRunner extends BaseStageRunner implements StageRunner {
   readonly stageName: StageName = "PRODUCT_SPEC";
+  private readonly callLlm: CallLlm | undefined;
+  private readonly enableDeepResearch: boolean;
+  private readonly requestPaste: RequestPasteIn | undefined;
+  private readonly deepResearchWorkers: ReadonlyArray<ResearchProvider> | undefined;
 
   constructor(opts: ProductStageRunnerOpts) {
     super(opts.ventureRoot, opts.fs, opts.manifest, opts.runId);
+    this.callLlm = opts.callLlm;
+    this.enableDeepResearch = opts.enableDeepResearch ?? false;
+    this.requestPaste = opts.requestPaste;
+    this.deepResearchWorkers = opts.deepResearchWorkers;
   }
 
   async validate(): Promise<ValidationResult> {
@@ -92,6 +127,7 @@ export class ProductStageRunner extends BaseStageRunner implements StageRunner {
     let failureMessage: string | undefined;
 
     try {
+      const productResearchArtifacts = await this.gatherProductDeepResearch();
       // ----- Step 1: dev-brief.md -----
       this.log("info", "ensuring dev brief");
       const briefResult = await ensureBriefStep({
@@ -185,6 +221,19 @@ export class ProductStageRunner extends BaseStageRunner implements StageRunner {
         runId: this.runId,
       });
       artifactPaths.push(screensCanvasPath, screensMdPath);
+
+      for (const path of productResearchArtifacts) {
+        indexEntries.push({
+          artifactId: `product:deep-research:${path.split("/").pop() ?? path}`,
+          stageName: "PRODUCT_SPEC",
+          type: path.endsWith(".md") ? "product-deep-research" : "product-deep-research-json",
+          path,
+          createdAt: nowIso,
+          status: "ready",
+          runId: this.runId,
+        });
+      }
+      artifactPaths.push(...productResearchArtifacts);
 
       await this.appendArtifactIndex(indexEntries);
 
@@ -288,4 +337,63 @@ export class ProductStageRunner extends BaseStageRunner implements StageRunner {
       ],
     };
   }
+
+  private async gatherProductDeepResearch(): Promise<string[]> {
+    if (!this.enableDeepResearch || this.callLlm === undefined) return [];
+    try {
+      this.log("info", "product deep-research starting", {
+        topicSlug: "product-ux-baseline",
+      });
+      const result = await gatherDeepResearch({
+        manifest: this.manifest,
+        ventureRoot: this.ventureRoot,
+        fs: this.fs,
+        topic: {
+          slug: "product-ux-baseline",
+          label: "Product UX patterns and technical baseline",
+        },
+        questions: PRODUCT_DEEP_RESEARCH_QUESTIONS,
+        ventureContext: await this.buildProductResearchContext(),
+        callLlm: this.callLlm,
+        workers: this.deepResearchWorkers,
+        requestPaste: this.requestPaste,
+        consumers: ["PRODUCT_SPEC", "WIREFRAME", "BUILD", "HANDOFF_PACK"],
+        staleAfterDays: 90,
+        runId: this.runId,
+      });
+      this.log(result.fromCache ? "info" : "info", result.fromCache ? "product deep-research cache-hit" : "product deep-research ready", {
+        topicSlug: result.briefing.topicSlug,
+        channelsUsed: result.briefing.channelsUsed,
+        sources: result.briefing.sources.length,
+      });
+      return result.artifactsCreated.filter((path) => path.endsWith(".md") || path.endsWith(".json"));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log("warn", "product deep-research skipped", { error: message });
+      return [];
+    }
+  }
+
+  private async buildProductResearchContext(): Promise<string> {
+    const parts = [
+      `Venture: ${this.manifest.name}`,
+      `App type: ${this.manifest.appType}`,
+      this.manifest.industry ? `Industry: ${this.manifest.industry}` : "",
+    ].filter(Boolean);
+    const intakePath = `${this.ventureRoot}/00_research/intake.md`;
+    if (await this.fs.exists(intakePath)) {
+      try {
+        const intake = await this.fs.readFile(intakePath);
+        if (intake.trim()) parts.push(`Founder intake:\n${excerptMarkdown(intake, 1600)}`);
+      } catch {
+        // Manifest context is enough to proceed.
+      }
+    }
+    return parts.join("\n\n");
+  }
+}
+
+function excerptMarkdown(markdown: string, maxChars: number): string {
+  const trimmed = markdown.trim();
+  return trimmed.length > maxChars ? `${trimmed.slice(0, maxChars)}\n\n...[truncated]` : trimmed;
 }

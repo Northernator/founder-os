@@ -42,6 +42,7 @@ import { deleteVentureDir, loadVentureManifest, openInFileManager } from "../../
 import { ArtifactsTab } from "./ArtifactsTab.js";
 import { AuditTab } from "./AuditTab.js";
 import { BrandTab } from "./BrandTab.js";
+import { DeepResearchHeaderBadge } from "./DeepResearchPanel.js";
 import { IdeaTab } from "./IdeaTab.js";
 import { OptionsTab } from "./OptionsTab.js";
 import { PendingReviewsPanel } from "./PendingReviewsPanel.js";
@@ -2332,6 +2333,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
             />
           </button>
         )}
+        <DeepResearchHeaderBadge venture={venture} />
         {!headerProvider.provider && (
           <button
             type="button"

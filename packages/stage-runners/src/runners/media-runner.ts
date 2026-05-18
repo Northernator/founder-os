@@ -56,8 +56,35 @@ import {
   createStitchStep,
   createStoryboardStep,
 } from "@founder-os/pipeline-runner";
+import type { ResearchProvider, ResearchQuestion, RequestPasteIn } from "@founder-os/research-deep-core";
+import { emitSourcedSectionsMarkdown } from "@founder-os/research-deep-core";
+import { gatherDeepResearch } from "../deep-research.js";
 import { BaseStageRunner } from "../runner-base.js";
 import type { StageRunner } from "../types.js";
+
+const MEDIA_DEEP_RESEARCH_QUESTIONS: ResearchQuestion[] = [
+  {
+    id: "q-media-format-conventions",
+    question:
+      "What are the current per-platform format conventions (TikTok aspect, IG Reel length, YouTube Shorts duration, X/LinkedIn video sizing) for a UK SaaS launch reel?",
+    angle: "technical",
+    priority: "must",
+  },
+  {
+    id: "q-media-hook-patterns",
+    question:
+      "Which opening-hook patterns and first-3-second conventions are landing well on each platform right now, and which look stale?",
+    angle: "market",
+    priority: "must",
+  },
+  {
+    id: "q-media-captions-accessibility",
+    question:
+      "What captioning, on-screen text density, and accessibility baselines should the launch reel meet for current platform algorithms and UK WCAG expectations?",
+    angle: "regulatory",
+    priority: "should",
+  },
+];
 
 export type MediaStageRunnerOpts = {
   manifest: VentureManifest;
@@ -79,6 +106,15 @@ export type MediaStageRunnerOpts = {
    * every shot falls through to the gemini_flow paste-in path.
    */
   providers?: ReadonlyArray<MediaProvider>;
+  /**
+   * Gates the deep-research helper. Off by default. When on AND callLlm
+   * is set, the runner gathers a "media-format-conventions" briefing
+   * BEFORE the script step and threads its excerpt into the
+   * voiceover-enrichment LLM prompt.
+   */
+  enableDeepResearch?: boolean;
+  requestPaste?: RequestPasteIn;
+  deepResearchWorkers?: ReadonlyArray<ResearchProvider>;
   runId?: string;
 };
 
@@ -86,11 +122,17 @@ export class MediaStageRunner extends BaseStageRunner implements StageRunner {
   readonly stageName: StageName = "MEDIA";
   private readonly callLlm: SaasLlmCaller | undefined;
   private readonly providers: ReadonlyArray<MediaProvider>;
+  private readonly enableDeepResearch: boolean;
+  private readonly requestPaste: RequestPasteIn | undefined;
+  private readonly deepResearchWorkers: ReadonlyArray<ResearchProvider> | undefined;
 
   constructor(opts: MediaStageRunnerOpts) {
     super(opts.ventureRoot, opts.fs, opts.manifest, opts.runId);
     this.callLlm = opts.callLlm;
     this.providers = opts.providers ?? [];
+    this.enableDeepResearch = opts.enableDeepResearch ?? false;
+    this.requestPaste = opts.requestPaste;
+    this.deepResearchWorkers = opts.deepResearchWorkers;
   }
 
   async validate(): Promise<ValidationResult> {
@@ -118,6 +160,20 @@ export class MediaStageRunner extends BaseStageRunner implements StageRunner {
     let pendingFlow = false;
 
     try {
+      const deepResearch = await this.gatherMediaDeepResearch();
+      if (deepResearch !== null) {
+        for (const path of deepResearch.artifacts) {
+          indexEntries.push(
+            this.indexEntry(
+              `media:deep-research:${path.split("/").pop() ?? path}`,
+              path.endsWith(".md") ? "media-deep-research" : "media-deep-research-json",
+              path,
+              nowIso,
+            ),
+          );
+        }
+        artifactPaths.push(...deepResearch.artifacts);
+      }
       // Step 1: media script.
       const baseCtx = {
         fs: this.fs,
@@ -128,6 +184,7 @@ export class MediaStageRunner extends BaseStageRunner implements StageRunner {
       const scriptCtx = {
         ...baseCtx,
         ...(this.callLlm !== undefined ? { callLlm: this.callLlm } : {}),
+        ...(deepResearch !== null ? { deepResearch: [deepResearch.excerpt] } : {}),
       };
       const scriptResult = await createMediaScriptStep(scriptCtx);
       this.log("info", "media script written", {
@@ -295,4 +352,73 @@ export class MediaStageRunner extends BaseStageRunner implements StageRunner {
       })),
     };
   }
+
+  private async gatherMediaDeepResearch(): Promise<{
+    excerpt: { filename: string; excerpt: string };
+    artifacts: string[];
+  } | null> {
+    if (!this.enableDeepResearch || this.callLlm === undefined) return null;
+    try {
+      this.log("info", "media deep-research starting", {
+        topicSlug: "media-format-conventions",
+      });
+      const result = await gatherDeepResearch({
+        manifest: this.manifest,
+        ventureRoot: this.ventureRoot,
+        fs: this.fs,
+        topic: {
+          slug: "media-format-conventions",
+          label: "Per-platform format conventions and hook patterns for launch reels",
+        },
+        questions: MEDIA_DEEP_RESEARCH_QUESTIONS,
+        ventureContext: await this.buildMediaResearchContext(),
+        callLlm: this.callLlm,
+        workers: this.deepResearchWorkers,
+        requestPaste: this.requestPaste,
+        consumers: ["MEDIA", "HANDOFF_PACK"],
+        staleAfterDays: 7,
+        runId: this.runId,
+      });
+      this.log(result.fromCache ? "info" : "info", result.fromCache ? "media deep-research cache-hit" : "media deep-research ready", {
+        topicSlug: result.briefing.topicSlug,
+        channelsUsed: result.briefing.channelsUsed,
+        sources: result.briefing.sources.length,
+      });
+      return {
+        excerpt: {
+          filename: `${result.briefing.topicSlug}.md`,
+          excerpt: excerptMarkdown(emitSourcedSectionsMarkdown(result.briefing), 1800),
+        },
+        artifacts: result.artifactsCreated.filter((path) => path.endsWith(".md") || path.endsWith(".json")),
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log("warn", "media deep-research skipped", { error: message });
+      return null;
+    }
+  }
+
+  private async buildMediaResearchContext(): Promise<string> {
+    const parts = [
+      `Venture: ${this.manifest.name}`,
+      `App type: ${this.manifest.appType}`,
+      this.manifest.industry ? `Industry: ${this.manifest.industry}` : "",
+      `Flags: takesPayments=${this.manifest.takesPayments}, regulated=${this.manifest.regulated}, handlesPersonalData=${this.manifest.handlesPersonalData}`,
+    ].filter(Boolean);
+    const announcementPath = `${this.ventureRoot}/08_launch/launch-announcement.md`;
+    if (await this.fs.exists(announcementPath)) {
+      try {
+        const announcement = await this.fs.readFile(announcementPath);
+        if (announcement.trim()) parts.push(`Launch announcement excerpt:\n${excerptMarkdown(announcement, 1400)}`);
+      } catch {
+        // Manifest context is enough to proceed.
+      }
+    }
+    return parts.join("\n\n");
+  }
+}
+
+function excerptMarkdown(markdown: string, maxChars: number): string {
+  const trimmed = markdown.trim();
+  return trimmed.length > maxChars ? `${trimmed.slice(0, maxChars)}\n\n...[truncated]` : trimmed;
 }

@@ -97,6 +97,7 @@ export async function runBrandStage(opts: RunBrandStageOpts): Promise<RunBrandSt
     ventureRoot: opts.venture.rootPath,
     fs: tauriFs,
     callLlm: llmCaller.callLlm,
+    enableDeepResearch: true,
     ...(opts.seedHints !== undefined ? { seedHints: opts.seedHints } : {}),
     ...(opts.targetCount !== undefined ? { targetCount: opts.targetCount } : {}),
   });

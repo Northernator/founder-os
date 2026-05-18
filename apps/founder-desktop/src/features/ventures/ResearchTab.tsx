@@ -15,6 +15,7 @@ import {
 import { pushToast } from "../../lib/toasts.js";
 import { joinPath } from "../../lib/venture-io.js";
 import { AdvanceConfirmModal } from "./AdvanceConfirmModal.js";
+import { DeepResearchPanel } from "./DeepResearchPanel.js";
 import { DistillDiffModal, type DistillFieldConfig, distillTextField } from "./DistillDiffModal.js";
 import { FailedRunBanner } from "./FailedRunBanner.js";
 import { ResearchChatPanel } from "./ResearchChatPanel.js";
@@ -877,6 +878,9 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
               full list.
             </p>
             <ResearchChatPanel venture={venture} />
+          </Section>
+          <Section title="0b. Deep Research Vault" icon="◎">
+            <DeepResearchPanel venture={venture} />
           </Section>
           <Section title="1. Research Documents" icon="📎">
             <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--text-tertiary)" }}>

@@ -45,6 +45,14 @@ export type CreateMediaScriptContext = {
   manifest: VentureManifest;
   ventureRoot: string;
   callLlm?: SaasLlmCaller;
+  /**
+   * Optional deep-research excerpts. When provided AND `callLlm` is set,
+   * the voiceover-enrichment LLM prompt receives a "Deep research
+   * context" block (format conventions per channel, aspect ratios,
+   * platform-current hook patterns). Filenames append to
+   * `result.sources`.
+   */
+  deepResearch?: { filename: string; excerpt: string }[];
   runId?: string;
 };
 
@@ -193,6 +201,7 @@ async function maybeLlmEnrich(
   callLlm: SaasLlmCaller | undefined,
   brand: BrandSnippet | null,
   scenes: Scene[],
+  deepResearch?: { filename: string; excerpt: string }[],
 ): Promise<{ scenes: Scene[]; source: "llm" | "deterministic" | "deterministic-fallback" }> {
   if (!callLlm) return { scenes, source: "deterministic" };
   try {
@@ -203,7 +212,10 @@ async function maybeLlmEnrich(
       "optionally return shotPlan: an array of 1-4 entries each with " +
       "a full prompt + durationSec. Sum of shotPlan durations should " +
       "approximately equal scene durationSec. Omit shotPlan for short " +
-      "or single-angle scenes (under 6 seconds). Return JSON of the form " +
+      "or single-angle scenes (under 6 seconds). When a deepResearch " +
+      "block is present, use it to ground per-channel format conventions " +
+      "(aspect ratios, hook timing, on-screen text density). Return JSON " +
+      "of the form " +
       `{"scenes":[{"id":"...","voiceover":"...","onScreen":"...","shotPlan":[{"prompt":"...","durationSec":N}]?}]}.`;
     const user = JSON.stringify({
       brand,
@@ -213,6 +225,9 @@ async function maybeLlmEnrich(
         onScreen: s.onScreen,
         visualBrief: s.visualBrief,
       })),
+      deepResearch: deepResearch?.length
+        ? deepResearch.map((r) => ({ filename: r.filename, excerpt: r.excerpt }))
+        : undefined,
     });
     const out = await callLlm({ system, user });
     const parsed = JSON.parse(out) as {
@@ -280,6 +295,7 @@ export async function createMediaScriptStep(
   if (brand) sources.push("brand-brief.json");
   const announcement = await readLaunchAnnouncement(ctx.fs, ctx.ventureRoot);
   if (announcement) sources.push("launch-announcement.md");
+  for (const r of ctx.deepResearch ?? []) sources.push(r.filename);
 
   const baseScenes = announcement
     ? deriveScenesFromAnnouncement(announcement, brand)
@@ -293,7 +309,12 @@ export async function createMediaScriptStep(
         } satisfies Scene,
       ];
 
-  const { scenes, source } = await maybeLlmEnrich(ctx.callLlm, brand, baseScenes);
+  const { scenes, source } = await maybeLlmEnrich(
+    ctx.callLlm,
+    brand,
+    baseScenes,
+    ctx.deepResearch,
+  );
 
   const script: MediaScript = {
     schemaVersion: 1,

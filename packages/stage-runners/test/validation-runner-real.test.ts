@@ -25,10 +25,65 @@ import { makeManifest } from "./_helpers/manifest.js";
 // Spy that captures the ctx the runner forwards. Each test re-assigns
 // the implementation via the spy to control success vs failure.
 const stepSpy = vi.fn();
+const orchestrateTopic = vi.fn(async () => ({
+  briefing: {
+    ventureSlug: "test",
+    topicSlug: "validation-icp-refinement",
+    topicLabel: "ICP refinement and willingness to pay",
+    questions: [
+      {
+        id: "q-validation-icp-refinement",
+        question: "Which customer segment appears most urgent and best-fit for early validation, and why?",
+        angle: "customer",
+        priority: "must",
+      },
+    ],
+    sections: [
+      {
+        heading: "Best-fit segment",
+        body: "SMB operators show urgent buying intent when workflow notes fragment across tools.",
+        sources: ["https://example.com/validation"],
+      },
+    ],
+    sources: [
+      {
+        url: "https://example.com/validation",
+        title: "Validation report",
+        publisher: "Example",
+        accessedAt: "2026-05-18T00:00:00.000Z",
+        retrievedBy: "claude-sub",
+        trustTier: "secondary",
+      },
+    ],
+    channelsUsed: ["claude-sub"],
+    crossReferencedBy: [],
+    synthesisedBy: "claude-sub",
+    disagreements: [],
+    unanswered: [],
+    generatedAt: "2026-05-18T00:00:00.000Z",
+    staleAfterDays: 30,
+  },
+  plan: {
+    questions: [],
+    fallbackIndex: 0,
+  },
+  transcripts: {
+    planner: null,
+    crossReference: null,
+    synthesiser: null,
+    workers: {
+      outcomes: [],
+      successes: new Map(),
+      failures: new Map(),
+    },
+  },
+}));
 
 vi.mock("@founder-os/pipeline-runner", () => ({
   createValidationSummaryStep: (ctx: unknown) => stepSpy(ctx),
 }));
+
+vi.mock("@founder-os/research-deep-orchestrator", () => ({ orchestrateTopic }));
 
 const { ValidationStageRunner } = await import("../src/runners/validation-runner.js");
 const { PipelineOrchestrator } = await import("../src/orchestrator.js");
@@ -103,6 +158,7 @@ describe("ValidationStageRunner.run() (real path)", () => {
 
   it("forwards callLlm into the step ctx when provided", async () => {
     stepSpy.mockReset();
+    orchestrateTopic.mockClear();
     stepSpy.mockResolvedValue(defaultStepResult({ summarySource: "llm" }));
     const fs = new InMemoryFs();
     const manifest = makeManifest();
@@ -118,6 +174,15 @@ describe("ValidationStageRunner.run() (real path)", () => {
     expect(result.success).toBe(true);
     const ctx = stepSpy.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(ctx.callLlm).toBe(callLlm);
+    expect(ctx.deepResearch).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filename: "validation-icp-refinement.md",
+          excerpt: expect.stringContaining("Best-fit segment"),
+        }),
+      ])
+    );
+    expect(orchestrateTopic).toHaveBeenCalledTimes(1);
   });
 
   it("runs without callLlm and still succeeds", async () => {

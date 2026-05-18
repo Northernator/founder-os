@@ -34,8 +34,32 @@ import type {
 } from "@founder-os/domain";
 import type { Filesystem, SaasLlmCaller } from "@founder-os/pipeline-runner";
 import { createValidationSummaryStep } from "@founder-os/pipeline-runner";
+import type { ResearchProvider, ResearchQuestion, RequestPasteIn } from "@founder-os/research-deep-core";
+import { emitSourcedSectionsMarkdown } from "@founder-os/research-deep-core";
+import { gatherDeepResearch } from "../deep-research.js";
 import { BaseStageRunner } from "../runner-base.js";
 import type { StageRunner } from "../types.js";
+
+const VALIDATION_DEEP_RESEARCH_QUESTIONS: ResearchQuestion[] = [
+  {
+    id: "q-validation-icp-refinement",
+    question: "Which customer segment appears most urgent and best-fit for early validation, and why?",
+    angle: "customer",
+    priority: "must",
+  },
+  {
+    id: "q-validation-willingness-to-pay",
+    question: "What current evidence exists for willingness to pay, buying process, and alternatives in this segment?",
+    angle: "financial",
+    priority: "must",
+  },
+  {
+    id: "q-validation-riskiest-assumptions",
+    question: "Which assumptions should be validated next before the venture advances toward build?",
+    angle: "risk",
+    priority: "should",
+  },
+];
 
 export type ValidationStageRunnerOpts = {
   manifest: VentureManifest;
@@ -49,16 +73,22 @@ export type ValidationStageRunnerOpts = {
    * validate().
    */
   callLlm?: SaasLlmCaller;
+  requestPaste?: RequestPasteIn;
+  deepResearchWorkers?: ReadonlyArray<ResearchProvider>;
   runId?: string;
 };
 
 export class ValidationStageRunner extends BaseStageRunner implements StageRunner {
   readonly stageName: StageName = "VALIDATION";
   private readonly callLlm: SaasLlmCaller | undefined;
+  private readonly requestPaste: RequestPasteIn | undefined;
+  private readonly deepResearchWorkers: ReadonlyArray<ResearchProvider> | undefined;
 
   constructor(opts: ValidationStageRunnerOpts) {
     super(opts.ventureRoot, opts.fs, opts.manifest, opts.runId);
     this.callLlm = opts.callLlm;
+    this.requestPaste = opts.requestPaste;
+    this.deepResearchWorkers = opts.deepResearchWorkers;
   }
 
   async validate(): Promise<ValidationResult> {
@@ -84,12 +114,14 @@ export class ValidationStageRunner extends BaseStageRunner implements StageRunne
     let failureMessage: string | undefined;
 
     try {
+      const deepResearch = await this.gatherValidationDeepResearch();
       const stepCtx = {
         fs: this.fs,
         manifest: this.manifest,
         ventureRoot: this.ventureRoot,
         runId: this.runId,
         ...(this.callLlm !== undefined ? { callLlm: this.callLlm } : {}),
+        ...(deepResearch !== null ? { deepResearch: [deepResearch] } : {}),
       };
       const result = await createValidationSummaryStep(stepCtx);
 
@@ -189,4 +221,65 @@ export class ValidationStageRunner extends BaseStageRunner implements StageRunne
       ],
     };
   }
+
+  private async gatherValidationDeepResearch(): Promise<{ filename: string; excerpt: string } | null> {
+    if (this.callLlm === undefined) return null;
+    try {
+      this.log("info", "validation deep-research starting", {
+        topicSlug: "validation-icp-refinement",
+      });
+      const result = await gatherDeepResearch({
+        manifest: this.manifest,
+        ventureRoot: this.ventureRoot,
+        fs: this.fs,
+        topic: {
+          slug: "validation-icp-refinement",
+          label: "ICP refinement and willingness to pay",
+        },
+        questions: VALIDATION_DEEP_RESEARCH_QUESTIONS,
+        ventureContext: await this.buildValidationResearchContext(),
+        callLlm: this.callLlm,
+        workers: this.deepResearchWorkers,
+        requestPaste: this.requestPaste,
+        consumers: ["VALIDATION"],
+        runId: this.runId,
+      });
+      this.log(result.fromCache ? "info" : "info", result.fromCache ? "validation deep-research cache-hit" : "validation deep-research ready", {
+        topicSlug: result.briefing.topicSlug,
+        channelsUsed: result.briefing.channelsUsed,
+        sources: result.briefing.sources.length,
+      });
+      return {
+        filename: `${result.briefing.topicSlug}.md`,
+        excerpt: excerptMarkdown(emitSourcedSectionsMarkdown(result.briefing), 1800),
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.log("warn", "validation deep-research skipped", { error: message });
+      return null;
+    }
+  }
+
+  private async buildValidationResearchContext(): Promise<string> {
+    const parts = [
+      `Venture: ${this.manifest.name}`,
+      `App type: ${this.manifest.appType}`,
+      this.manifest.industry ? `Industry: ${this.manifest.industry}` : "",
+    ].filter(Boolean);
+    const intakePath = `${this.ventureRoot}/00_research/intake.md`;
+    if (await this.fs.exists(intakePath)) {
+      try {
+        const intake = await this.fs.readFile(intakePath);
+        if (intake.trim()) parts.push(`Founder intake:\n${excerptMarkdown(intake, 1600)}`);
+      } catch {
+        // Ignore missing/unreadable intake; manifest context is enough to proceed.
+      }
+    }
+    return parts.join("\n\n");
+  }
+}
+
+function excerptMarkdown(markdown: string, maxChars: number): string {
+  const trimmed = markdown.trim();
+  return trimmed.length > maxChars ? `${trimmed.slice(0, maxChars)}\n\n...[truncated]` : trimmed;
 }

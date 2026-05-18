@@ -136,6 +136,7 @@ export async function runCrmStage(opts: RunCrmStageOpts): Promise<RunCrmStageRes
     ventureRoot: opts.venture.rootPath,
     fs: tauriFs,
     providers,
+    enableDeepResearch: llmCaller !== null,
     ...(llmCaller !== null ? { callLlm: llmCaller.callLlm } : {}),
   });
   const orchestrator = new PipelineOrchestrator({

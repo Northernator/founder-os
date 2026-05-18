@@ -33,6 +33,7 @@ import type { Venture, VentureManifest } from "@founder-os/domain";
 import type { LogEntry, StageRunResult } from "@founder-os/stage-runners";
 import { PipelineOrchestrator, ProductStageRunner } from "@founder-os/stage-runners";
 import { tauriFs } from "./pipeline-fs.js";
+import { buildPipelineLlmCaller } from "./pipeline-llm.js";
 
 export type RunProductStageOpts = {
   venture: Venture;
@@ -70,10 +71,16 @@ export type RunProductStageResult = {
  * branch -- ProductStageRunner is LLM-free.
  */
 export async function runProductStage(opts: RunProductStageOpts): Promise<RunProductStageResult> {
+  const llmCaller = await buildPipelineLlmCaller({
+    ventureId: opts.venture.id,
+    enableWebSearch: false,
+  });
   const runner = new ProductStageRunner({
     manifest: opts.manifest,
     ventureRoot: opts.venture.rootPath,
     fs: tauriFs,
+    enableDeepResearch: llmCaller !== null,
+    ...(llmCaller !== null ? { callLlm: llmCaller.callLlm } : {}),
   });
 
   const orchestrator = new PipelineOrchestrator({

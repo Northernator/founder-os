@@ -274,6 +274,54 @@ vi.mock("@founder-os/pipeline-runner", () => ({
   }),
 }));
 
+vi.mock("@founder-os/research-deep-orchestrator", () => ({
+  orchestrateTopic: async (opts: {
+    topic: { slug: string; label: string };
+    onProgress?: (event: { phase: string; topicSlug: string }) => void;
+  }) => {
+    if (opts.topic.slug === "launch-plan") throw new Error("stub deep-research failure");
+    opts.onProgress?.({ phase: "cross-reference-degraded", topicSlug: opts.topic.slug });
+    return {
+      briefing: {
+        ventureSlug: "test",
+        topicSlug: opts.topic.slug,
+        topicLabel: opts.topic.label,
+        questions: [
+          {
+            id: "q1",
+            question: "What matters?",
+            angle: "market",
+            priority: "must",
+          },
+        ],
+        sections: [{ heading: "Finding", body: "A sourced finding.", sources: ["https://example.com/source"] }],
+        sources: [
+          {
+            url: "https://example.com/source",
+            title: "Source",
+            accessedAt: "2026-05-18T00:00:00.000Z",
+            retrievedBy: "claude-sub",
+            trustTier: "secondary",
+          },
+        ],
+        channelsUsed: ["claude-sub"],
+        crossReferencedBy: [],
+        disagreements: [],
+        unanswered: [],
+        generatedAt: "2026-05-18T00:00:00.000Z",
+        staleAfterDays: 30,
+      },
+      plan: { questions: [], fallbackIndex: 0 },
+      transcripts: {
+        planner: {},
+        crossReference: null,
+        synthesiser: null,
+        workers: { outcomes: [], successes: new Map(), failures: new Map() },
+      },
+    };
+  },
+}));
+
 const { ResearchStageRunner } = await import("../src/runners/research-runner.js");
 const { BrandStageRunner } = await import("../src/runners/brand-runner.js");
 const { ProductStageRunner } = await import("../src/runners/product-runner.js");
@@ -296,19 +344,50 @@ function messages(logs: { message: string }[]): string[] {
 describe("ResearchStageRunner emits 'wrote'/'skipped'/'failed' prefixes per outcome", () => {
   it("each outcome status produces a log message starting with the helper-parsed prefix", async () => {
     const fs = new InMemoryFs();
+    fs.files.set("v/01_research/saas/market-research.md", "# Existing\n");
     const runner = new ResearchStageRunner({
       manifest: makeManifest({ appType: "saas" }),
       ventureRoot: "/v",
       fs,
       intake: "Founder: ...",
       callLlm: noopLlm,
+      workers: [],
     });
     const result = await runner.run();
     const msgs = messages(result.logs);
     // run-research-stage.ts:deriveCounts looks for these prefixes.
-    expect(msgs.some((m) => m.startsWith("wrote "))).toBe(true);
-    expect(msgs.some((m) => m.startsWith("skipped "))).toBe(true);
-    expect(msgs.some((m) => m.startsWith("failed "))).toBe(true);
+    expect(msgs.some((m) => m.startsWith("wrote ")), msgs.join("\n")).toBe(true);
+    expect(msgs.some((m) => m.startsWith("skipped ")), msgs.join("\n")).toBe(true);
+    expect(msgs.some((m) => m.startsWith("failed ")), msgs.join("\n")).toBe(true);
+  });
+});
+
+describe("DeepResearchStageRunner emits drift-protected phase messages", () => {
+  it("includes warm-up lifecycle and cross-reference-degraded", async () => {
+    const { DeepResearchStageRunner } = await import("../src/deep-research.js");
+    const runner = new DeepResearchStageRunner({
+      manifest: makeManifest(),
+      ventureRoot: "/v",
+      fs: new InMemoryFs(),
+      intake: "Founder intake",
+      callLlm: async () => "{}",
+      workers: [],
+      topicSeeds: [
+        {
+          slug: "deep-fixture",
+          label: "Deep fixture",
+          questions: [{ id: "q1", question: "What matters?", angle: "market", priority: "must" }],
+        },
+      ],
+    });
+
+    const result = await runner.run();
+    const msgs = messages(result.logs);
+
+    expect(msgs).toContain("deep-research warm-up starting");
+    expect(msgs).toContain("cross-reference-degraded");
+    expect(msgs).toContain("deep-research checkpoint written");
+    expect(msgs).toContain("deep-research warm-up finished");
   });
 });
 
