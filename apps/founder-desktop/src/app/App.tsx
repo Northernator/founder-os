@@ -30,6 +30,7 @@ function errDetail(err: unknown): string {
 // Global CSS reset
 const globalStyle = `
   *, *::before, *::after { box-sizing: border-box; }
+  html, body { overflow-x: hidden; max-width: 100vw; }
   body { margin: 0; padding: 0; font-family: Inter, system-ui, sans-serif; }
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   @keyframes bounce {

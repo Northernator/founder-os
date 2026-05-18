@@ -612,7 +612,7 @@ Omit any field where the document has no relevant info.`;
 
   return (
     <div
-      style={{ height: "100%", overflow: "auto", padding: "24px 28px", boxSizing: "border-box" }}
+      style={{ height: "100%", overflowX: "hidden", overflowY: "auto", padding: "24px 28px", boxSizing: "border-box" }}
     >
       {/* Top header bar */}
       <div

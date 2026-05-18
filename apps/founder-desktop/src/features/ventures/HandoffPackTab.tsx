@@ -92,7 +92,7 @@ export function HandoffPackTab({ venture, manifest, onManifestUpdate }: Props) {
   }
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", padding: 16, boxSizing: "border-box" }}>
+    <div style={{ height: "100%", overflowX: "hidden", overflowY: "auto", padding: 16, boxSizing: "border-box" }}>
       <div style={{ display: "grid", gap: 16, maxWidth: 980 }}>
         <section style={panelStyle}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>

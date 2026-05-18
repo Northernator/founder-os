@@ -1471,7 +1471,7 @@ export function AuditTab({ venture, manifest, ventureId, ventureRoot, refreshTok
   }, [ventureRoot, runningAuditStage, runningBuildStage, runningFinanceStage, runningLaunchStage]);
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", minWidth: 0, overflowX: "hidden" }}>
       {ventureRoot && failedAuditRun && (
         <div style={{ padding: "0 28px" }}>
           <FailedRunBanner

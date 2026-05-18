@@ -191,6 +191,8 @@ export function AppShell({ sidebar, children, sidebarWidth }: AppShellProps) {
       <main
         style={{
           flex: 1,
+          minWidth: 0,
+          overflowX: "hidden",
           overflowY: "auto",
           background: "var(--bg-app)",
           color: "var(--text-primary)",

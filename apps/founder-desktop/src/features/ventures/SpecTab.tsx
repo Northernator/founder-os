@@ -994,7 +994,8 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
       data-fos-panel
       style={{
         height: "100%",
-        overflow: "auto",
+        overflowX: "hidden",
+        overflowY: "auto",
         background: "var(--bg-panel)",
         boxSizing: "border-box",
       }}
@@ -1003,7 +1004,7 @@ export function SpecTab({ venture, manifest, onAdvanceStage }: Props) {
         style={{
           padding: 28,
           display: "grid",
-          gridTemplateColumns: "1fr 320px",
+          gridTemplateColumns: "minmax(0, 1fr) minmax(240px, 320px)",
           gap: 24,
         }}
       >

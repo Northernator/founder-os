@@ -292,7 +292,8 @@ export function UkSetupTab({ venture, manifest }: Props) {
   };
 
   return (
-    <div style={{ padding: 28, display: "grid", gridTemplateColumns: "1fr 320px", gap: 24 }}>
+    <div style={{ height: "100%", overflowX: "hidden", overflowY: "auto", boxSizing: "border-box" }}>
+    <div style={{ padding: 28, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(240px, 320px)", gap: 24 }}>
       {failedUkSetupRun && (
         <FailedRunBanner
           label="UK setup"
@@ -726,6 +727,7 @@ export function UkSetupTab({ venture, manifest }: Props) {
           </div>
         )}
       </aside>
+    </div>
     </div>
   );
 }

@@ -775,7 +775,7 @@ For competitors, return an array: [{"name":"...","weakness":"..."}]`;
 
   return (
     <div
-      style={{ height: "100%", overflow: "auto", padding: "24px 28px", boxSizing: "border-box" }}
+      style={{ height: "100%", overflowX: "hidden", overflowY: "auto", padding: "24px 28px", boxSizing: "border-box" }}
     >
       {failedResearchRun && (
         <FailedRunBanner

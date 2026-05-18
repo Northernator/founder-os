@@ -214,7 +214,9 @@ export function MediaTab({ venture, manifest, onManifestUpdate }: Props) {
         flexDirection: "column",
         gap: 20,
         height: "100%",
+        overflowX: "hidden",
         overflowY: "auto",
+        minWidth: 0,
         boxSizing: "border-box",
       }}
     >

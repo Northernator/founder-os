@@ -2411,9 +2411,11 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
             key={`tab-row-${rowIdx}`}
             style={{
               display: "flex",
+              flexWrap: "wrap",
               gap: 0,
               borderBottom: rowIdx === rows.length - 1 ? "1px solid var(--border-subtle)" : "none",
               padding: "0 28px",
+              minWidth: 0,
             }}
           >
             {rowKeys.map((t) => (
@@ -2441,7 +2443,7 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
       })()}
 
       {/* Tab content */}
-      <div style={{ flex: 1, overflow: "hidden" }}>
+      <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
         {tab === "idea" && (
           <IdeaTab
             venture={venture}
@@ -2529,7 +2531,9 @@ export function VentureDashboard({ ventureId }: { ventureId: string }) {
             style={{
               padding: 28,
               height: "100%",
+              overflowX: "hidden",
               overflowY: "auto",
+              minWidth: 0,
               boxSizing: "border-box",
             }}
           >
@@ -2890,7 +2894,7 @@ function OverviewTab({
   isRunning: boolean;
 }) {
   return (
-    <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ padding: 28, display: "flex", flexDirection: "column", gap: 20, height: "100%", overflowX: "hidden", overflowY: "auto", boxSizing: "border-box" }}>
       <div
         style={{
           display: "grid",

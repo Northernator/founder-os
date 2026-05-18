@@ -286,7 +286,7 @@ export function OptionsTab() {
   });
 
   return (
-    <div style={{ padding: 28, overflow: "auto", height: "100%" }}>
+    <div style={{ padding: 28, overflowX: "hidden", overflowY: "auto", height: "100%" }}>
       <AppearanceSection />
 
       <div style={{ height: 20 }} />

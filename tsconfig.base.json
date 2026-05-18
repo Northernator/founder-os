@@ -110,6 +110,24 @@
       "@founder-os/research-runner": [
         "packages/research-runner/src/index.ts"
       ],
+      "@founder-os/research-deep-core": [
+        "packages/research-deep-core/src/index.ts"
+      ],
+      "@founder-os/research-deep-core/constants": [
+        "packages/research-deep-core/src/constants.ts"
+      ],
+      "@founder-os/research-deep-core/emitter": [
+        "packages/research-deep-core/src/emitter.ts"
+      ],
+      "@founder-os/research-deep-core/parse": [
+        "packages/research-deep-core/src/parse.ts"
+      ],
+      "@founder-os/research-deep-providers": [
+        "packages/research-deep-providers/src/index.ts"
+      ],
+      "@founder-os/research-deep-providers/node": [
+        "packages/research-deep-providers/src/node.ts"
+      ],
       "@founder-os/sales-agents": [
         "packages/sales-agents/src/index.ts"
       ],

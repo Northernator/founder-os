@@ -942,7 +942,8 @@ export function ScreensTab({ venture, manifest, onAdvanceStage, onManifestUpdate
       data-fos-panel
       style={{
         height: "100%",
-        overflow: "auto",
+        overflowX: "hidden",
+        overflowY: "auto",
         background: "var(--bg-panel)",
         boxSizing: "border-box",
       }}
@@ -951,7 +952,7 @@ export function ScreensTab({ venture, manifest, onAdvanceStage, onManifestUpdate
         style={{
           padding: 28,
           display: "grid",
-          gridTemplateColumns: "1fr 320px",
+          gridTemplateColumns: "minmax(0, 1fr) minmax(240px, 320px)",
           gap: 24,
         }}
       >

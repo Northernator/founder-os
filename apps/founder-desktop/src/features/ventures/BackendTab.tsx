@@ -234,7 +234,9 @@ export function BackendTab({ venture, manifest, onManifestUpdate }: Props) {
         gap: 16,
         padding: 16,
         height: "100%",
+        overflowX: "hidden",
         overflowY: "auto",
+        minWidth: 0,
         boxSizing: "border-box",
       }}
     >
