@@ -65,18 +65,32 @@ type VaultListJobsRow = {
   updatedAt: string;
 };
 
+/**
+ * Match Tauri's "command not registered" errors only. Predicate
+ * shape mirrors `isCommandNotRegisteredError` in run-vault-import.ts
+ * (see that file for the originating bug report): require both the
+ * command name and a not-registered phrase, otherwise legitimate
+ * runtime errors from a registered command degrade silently.
+ */
+function isCommandNotRegisteredError(err: unknown, command: string): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  if (!message.toLowerCase().includes(command.toLowerCase())) return false;
+  return (
+    /\bnot\s+(found|registered|allowed|defined)\b/i.test(message) ||
+    /\bunknown\s+command\b/i.test(message) ||
+    /\bisn'?t\s+defined\b/i.test(message)
+  );
+}
+
 async function safeInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T | null> {
   try {
     return await invoke<T>(command, args);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (
-      /not found|not registered|unknown command|isn't defined/i.test(message) ||
-      message.includes(command)
-    ) {
+    if (isCommandNotRegisteredError(err, command)) {
       console.warn(`[vault-boot-hydration] Tauri command "${command}" not registered; skipping`);
       return null;
     }
+    console.error(`[vault-boot-hydration] ${command} failed:`, err);
     throw err;
   }
 }
@@ -131,11 +145,7 @@ export async function discardRecoveredVaultJob(jobId: string): Promise<boolean> 
     await invoke<void>("vault_discard_job", { jobId });
     return true;
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (
-      /not found|not registered|unknown command|isn't defined/i.test(message) ||
-      message.includes("vault_discard_job")
-    ) {
+    if (isCommandNotRegisteredError(err, "vault_discard_job")) {
       console.warn(`[vault-boot-hydration] vault_discard_job not registered; clearing local only`);
       return false;
     }

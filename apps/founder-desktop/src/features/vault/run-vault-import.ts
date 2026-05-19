@@ -82,20 +82,53 @@ import { buildDriveClient, DriveCommandNotWiredError } from "./drive-client.js";
 // and returns `null` so the helper degrades to deterministic offline mode.
 // ---------------------------------------------------------------------------
 
+/**
+ * Returns true when `err` is Tauri's "command not registered" error
+ * for `command`, NOT a legitimate runtime error returned BY a
+ * registered command.
+ *
+ * The previous predicate was `/not found|not registered|unknown command|
+ * isn't defined/i.test(msg) || msg.includes(command)`. The plain
+ * `/not found/i` matched legitimate Rust errors like
+ * `"source file not found: C:\\path\\to\\file"` from `vault_fs.rs`'s
+ * `vault_stage_file` -- which swallowed the real "bad path" error
+ * and made the runner silently degrade to the synthetic stub-hash
+ * fallback. The user couldn't see why imports were producing
+ * stub-hashed sources because the diagnostic was eaten.
+ *
+ * Tighter rule: BOTH the command name AND a not-registered
+ * indicator must appear in the message. Tauri 2 emits messages
+ * like:
+ *   `command \`vault_stage_file\` not found`
+ *   `unknown command vault_stage_file`
+ *   `command vault_stage_file is not allowed`
+ * The command name always appears in the phrase. Legitimate runtime
+ * errors from a registered command (the case we want to bubble up)
+ * either omit the command name entirely or word it without the
+ * not-registered indicator.
+ */
+function isCommandNotRegisteredError(err: unknown, command: string): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  if (!message.toLowerCase().includes(command.toLowerCase())) return false;
+  return (
+    /\bnot\s+(found|registered|allowed|defined)\b/i.test(message) ||
+    /\bunknown\s+command\b/i.test(message) ||
+    /\bisn'?t\s+defined\b/i.test(message)
+  );
+}
+
 async function safeInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T | null> {
   try {
     return await invoke<T>(command, args);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (
-      /not found|not registered|unknown command|isn't defined/i.test(message) ||
-      message.includes(command)
-    ) {
-      // Rust side hasn't shipped this command yet -- slice 9 ships UI;
-      // slice 12 wires the IPC. Returning null lets the caller degrade.
+    if (isCommandNotRegisteredError(err, command)) {
       console.warn(`[run-vault-import] Tauri command "${command}" not registered yet -- using stub`);
       return null;
     }
+    // Legitimate runtime error from a registered command. Surface it
+    // to DevTools so the founder can see what actually went wrong --
+    // the previous over-matching predicate hid these completely.
+    console.error(`[run-vault-import] ${command} failed:`, err);
     throw err;
   }
 }
@@ -593,15 +626,24 @@ export async function runVaultImport(opts: RunVaultImportOpts): Promise<RunVault
 
     if (isPaste) {
       const pasteText = globalThis.__VAULT_PASTES__?.get(src.absolutePath) ?? "";
+      // Rust signature: `vault_save_pasted_blob(args: SavePastedBlobArgs)`.
+      // Tauri 2 deserialises the invoke payload as a struct where each
+      // top-level key maps to a parameter name -- a single-struct
+      // command needs the fields nested under the parameter name
+      // ("args" here), not passed flat. Flat fields would surface as
+      // "missing field `args`" once the binary was rebuilt with the
+      // slice-2 commands registered.
       const blob = await safeInvoke<{
         cachedRelativePath: string;
         absolutePath: string;
         contentHash: string;
         byteSize: number;
       } | null>("vault_save_pasted_blob", {
-        workspaceRoot: opts.workspaceRoot,
-        text: pasteText,
-        title: src.originalName,
+        args: {
+          workspaceRoot: opts.workspaceRoot,
+          text: pasteText,
+          title: src.originalName,
+        },
       });
       if (blob) {
         contentHash = blob.contentHash;
@@ -616,16 +658,23 @@ export async function runVaultImport(opts: RunVaultImportOpts): Promise<RunVault
         absolutePath: src.absolutePath,
       });
       if (hashRes) {
+        // Rust signature: `vault_stage_file(args: StageFileArgs)`. See
+        // the vault_save_pasted_blob comment above -- single-struct
+        // params need the wrap. `vault_hash_file` and
+        // `vault_read_file_bytes` above DON'T need this because they
+        // each take a plain `absolute_path: String` rather than a struct.
         const stageRes = await safeInvoke<{
           cachedRelativePath: string;
           absolutePath: string;
           contentHash: string;
           byteSize: number;
         } | null>("vault_stage_file", {
-          absolutePath: src.absolutePath,
-          workspaceRoot: opts.workspaceRoot,
-          hash: hashRes,
-          extension: resolvedExtension ?? null,
+          args: {
+            absolutePath: src.absolutePath,
+            workspaceRoot: opts.workspaceRoot,
+            hash: hashRes,
+            extension: resolvedExtension ?? null,
+          },
         });
         if (stageRes) {
           contentHash = stageRes.contentHash;

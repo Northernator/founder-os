@@ -9,6 +9,7 @@
 import type { SourceDocument } from "@founder-os/vault-contract";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useState } from "react";
+import { normalizeDialogPath } from "../normalize-dialog-path.js";
 import { PrivacyBanner } from "./VaultImportHubScreen.js";
 import type { VaultImportSourceInput } from "../run-vault-import.js";
 
@@ -86,8 +87,16 @@ export function VaultImportLocalScreen({ onBack, onStartImport }: VaultImportLoc
         title: "Pick files for the Dream Vault",
       });
       if (!selection) return;
-      const paths = Array.isArray(selection) ? selection : [selection];
-      const next: StagedSourcePreview[] = paths.map((absolutePath) => {
+      const rawPaths = Array.isArray(selection) ? selection : [selection];
+      // Normalise BEFORE staging. The Tauri dialog plugin has emitted
+      // `file:///C:/...` URIs and `%20`-encoded spaces in past releases;
+      // passing those straight to vault_hash_file / vault_stage_file
+      // would have Rust open a literal filename like "My%20chat.json"
+      // and bail with "source file not found". normalizeDialogPath
+      // strips file:// prefixes + URL-decodes %-escapes; it's a no-op
+      // for already-clean OS-native paths.
+      const next: StagedSourcePreview[] = rawPaths.map((raw) => {
+        const absolutePath = normalizeDialogPath(raw);
         const originalName = absolutePath.split(/[\\/]/).pop() ?? absolutePath;
         const ext = extOf(originalName);
         return {

@@ -27,11 +27,24 @@ export class DriveCommandNotWiredError extends Error {
   }
 }
 
+/**
+ * Returns true only when Tauri reports `command` itself as not
+ * registered. Legitimate runtime errors thrown BY a registered
+ * gdrive_* command (e.g. "Drive API 401 unauthorized", "no such
+ * file in cache") must bubble up so the Drive screen can surface
+ * them; the previous predicate (matching `/not found/i` anywhere
+ * in the message OR matching the command name anywhere) swallowed
+ * those too. See run-vault-import.ts for the originating bug
+ * report -- this is the same class of false-positive applied to
+ * the Drive surface.
+ */
 function isNotRegisteredError(err: unknown, command: string): boolean {
   const message = err instanceof Error ? err.message : String(err);
+  if (!message.toLowerCase().includes(command.toLowerCase())) return false;
   return (
-    /not found|not registered|unknown command|isn't defined/i.test(message) ||
-    message.includes(command)
+    /\bnot\s+(found|registered|allowed|defined)\b/i.test(message) ||
+    /\bunknown\s+command\b/i.test(message) ||
+    /\bisn'?t\s+defined\b/i.test(message)
   );
 }
 
