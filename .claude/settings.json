@@ -8,7 +8,9 @@
       "Bash(pnpm exec *)",
       "Bash(pnpm --filter @founder-os/research-deep-core install)",
       "Bash(pnpm --filter @founder-os/research-deep-core typecheck)",
-      "Bash(pnpm --filter @founder-os/handoff-pack-core typecheck)"
+      "Bash(pnpm --filter @founder-os/handoff-pack-core typecheck)",
+      "mcp__lean-ctx__ctx_shell",
+      "Bash(pnpm --filter @founder-os/__TRACKED_VAR__ test)"
     ]
   }
 }

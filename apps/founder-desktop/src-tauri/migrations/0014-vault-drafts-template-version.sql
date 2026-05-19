@@ -1,0 +1,27 @@
+-- 0014 — track which template revision rendered each persisted draft.
+--
+-- The resumable-imports arc (migration 0013) persists each draft's
+-- pre-rendered `preview_content` so a reload between phase 9 and
+-- commit can resume the review. The resumed finalize byte-copies
+-- that content when the reviewer picks the same slug the classifier
+-- suggested (fast path), or re-renders through writeVaultNote() when
+-- the slug changes.
+--
+-- But the byte-copy fast path is wrong when the TEMPLATE has changed
+-- between the persist and the resume -- the previewContent reflects
+-- the OLD template's output even though the runtime would now render
+-- something different. Committing it byte-for-byte means committed
+-- vault notes drift away from the canonical template-engine output
+-- silently.
+--
+-- This column captures `VAULT_TEMPLATE_VERSION` from
+-- @founder-os/markdown-vault at the moment the draft was persisted.
+-- Boot hydration reads it back; if the persisted version doesn't
+-- match the runtime version, the resumed finalize takes the
+-- re-render branch even when the slug matches.
+--
+-- Default 1 covers every row that existed before this migration: it
+-- represents the first stable revision of the templates. Future
+-- template changes bump the constant in templates.ts; old rows stay
+-- at 1 and get force-re-rendered on resume.
+ALTER TABLE vault_note_drafts ADD COLUMN template_version INTEGER NOT NULL DEFAULT 1;

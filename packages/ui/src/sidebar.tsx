@@ -11,6 +11,15 @@ export type SidebarProps = {
   activeVentureId?: string | null;
   onSelectVenture?: (id: string) => void;
   onNewVenture?: () => void;
+  /**
+   * Optional Dream Vault actions. When both are wired the sidebar
+   * renders compact "Import" + "Vault" buttons above the New Venture
+   * primary action so the trio stays reachable after a venture is
+   * active. Slice 9 DREAM_VAULT_MODULE arc -- safe to omit on apps
+   * that don't yet ship the vault.
+   */
+  onImportToVault?: () => void;
+  onOpenVault?: () => void;
 };
 
 const STAGE_EMOJI: Record<string, string> = {
@@ -33,6 +42,8 @@ export function Sidebar({
   activeVentureId,
   onSelectVenture,
   onNewVenture,
+  onImportToVault,
+  onOpenVault,
 }: SidebarProps) {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -110,13 +121,36 @@ export function Sidebar({
         })}
       </div>
 
-      {/* New venture button */}
+      {/* New venture + (optional) Dream Vault actions */}
       <div
         style={{
           padding: "13px 14px 16px",
           borderTop: "1px solid var(--border-subtle)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
         }}
       >
+        {onImportToVault && (
+          <button
+            type="button"
+            onClick={onImportToVault}
+            style={{
+              width: "100%",
+              padding: "calc(7px * var(--density)) 10px",
+              background: "transparent",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "var(--radius-md)",
+              fontWeight: 700,
+              fontSize: 12,
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            📥 Import AI Chats &amp; Docs
+          </button>
+        )}
         <button
           type="button"
           onClick={onNewVenture}
@@ -136,6 +170,26 @@ export function Sidebar({
         >
           + New Venture
         </button>
+        {onOpenVault && (
+          <button
+            type="button"
+            onClick={onOpenVault}
+            style={{
+              width: "100%",
+              padding: "calc(7px * var(--density)) 10px",
+              background: "transparent",
+              color: "var(--text-secondary)",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: "var(--radius-md)",
+              fontWeight: 700,
+              fontSize: 12,
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            📚 View Dream Vault
+          </button>
+        )}
       </div>
     </div>
   );

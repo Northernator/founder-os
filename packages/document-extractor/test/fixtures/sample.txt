@@ -1,0 +1,2 @@
+This is plain text.
+It has two lines.

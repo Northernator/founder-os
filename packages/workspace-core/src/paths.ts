@@ -486,3 +486,115 @@ export function getHandoffPackDocPdfPath(
 export function getHandoffPackRolePackPath(ventureRoot: string, role: string): string {
   return join(getHandoffPackDir(ventureRoot), "role-packs", `${role}.pdf`);
 }
+
+// ---------------------------------------------------------------------------
+// Dream Vault paths (slice 1 of DREAM_VAULT_MODULE arc).
+//
+// The vault is a workspace-level tree, sibling to `ventures/`. Helpers take a
+// workspaceRoot (the directory that contains ventures/, NOT a venture root)
+// because vault content is not scoped to a single venture -- it includes an
+// inbox + unsorted pool, plus per-project subtrees keyed by venture slug.
+// ---------------------------------------------------------------------------
+
+/** Per-project numbered subfolders under _vault/projects/<slug>/. */
+export const VAULT_PROJECT_DIRS = {
+  index: "00_index",
+  chatSummaries: "10_chat-summaries",
+  documentSummaries: "20_document-summaries",
+  decisions: "30_decisions",
+  tasks: "40_tasks",
+  prompts: "50_prompts",
+  research: "60_research",
+  brandReferences: "70_brand-references",
+  uiReferences: "80_ui-references",
+  rawArchive: "90_raw-archive",
+} as const;
+
+export type VaultProjectDirKey = keyof typeof VAULT_PROJECT_DIRS;
+
+/** <workspace>/_vault/ -- the top-level vault tree. */
+export function getVaultRoot(workspaceRoot: string): string {
+  return join(workspaceRoot, "_vault");
+}
+
+/** <workspace>/_vault/_import-cache/ -- hashed binary originals (internal). */
+export function getImportCacheDir(workspaceRoot: string): string {
+  return join(getVaultRoot(workspaceRoot), "_import-cache");
+}
+
+/** <workspace>/_vault/_jobs/ -- per-job working dirs (logs, draft notes). */
+export function getVaultJobsRoot(workspaceRoot: string): string {
+  return join(getVaultRoot(workspaceRoot), "_jobs");
+}
+
+/** <workspace>/_vault/_jobs/<jobId>/ -- a single import job's working dir. */
+export function getVaultJobDir(workspaceRoot: string, jobId: string): string {
+  return join(getVaultJobsRoot(workspaceRoot), jobId);
+}
+
+/** <workspace>/_vault/_jobs/<jobId>/log.jsonl -- append-only run log. */
+export function getVaultJobLogPath(workspaceRoot: string, jobId: string): string {
+  return join(getVaultJobDir(workspaceRoot, jobId), "log.jsonl");
+}
+
+/** <workspace>/_vault/inbox/ -- unsorted source documents post-extraction. */
+export function getVaultInboxPath(workspaceRoot: string): string {
+  return join(getVaultRoot(workspaceRoot), "inbox");
+}
+
+/** <workspace>/_vault/unsorted/ -- imports with no project match (vault-only). */
+export function getVaultUnsortedDir(workspaceRoot: string): string {
+  return join(getVaultRoot(workspaceRoot), "unsorted");
+}
+
+/** <workspace>/_vault/projects/ -- root of the per-venture vault subtrees. */
+export function getVaultProjectsRoot(workspaceRoot: string): string {
+  return join(getVaultRoot(workspaceRoot), "projects");
+}
+
+/** <workspace>/_vault/projects/<slug>/ -- a single venture's vault tree. */
+export function getVaultProjectRoot(workspaceRoot: string, ventureSlug: string): string {
+  return join(getVaultProjectsRoot(workspaceRoot), ventureSlug);
+}
+
+/** <workspace>/_vault/projects/<slug>/<numbered-dir>/ -- one subtree slot. */
+export function getVaultProjectSubdir(
+  workspaceRoot: string,
+  ventureSlug: string,
+  key: VaultProjectDirKey,
+): string {
+  return join(getVaultProjectRoot(workspaceRoot, ventureSlug), VAULT_PROJECT_DIRS[key]);
+}
+
+/**
+ * Cached-original path under _import-cache/. The two-char shard mirrors how
+ * git stores objects -- avoids fanning a single directory to tens of
+ * thousands of entries when the user imports a Drive folder.
+ */
+export function getImportCacheFilePath(
+  workspaceRoot: string,
+  contentHash: string,
+  fileExtension: string,
+): string {
+  if (contentHash.length < 4) {
+    throw new Error(`contentHash too short: ${contentHash}`);
+  }
+  const shard = contentHash.slice(0, 2);
+  const rest = contentHash.slice(2);
+  const ext = fileExtension.replace(/^\.+/, "");
+  const file = ext ? `${rest}.${ext}` : rest;
+  return join(getImportCacheDir(workspaceRoot), shard, file);
+}
+
+/** All directories that make up a complete _vault/ tree skeleton. */
+export function vaultDirSkeleton(workspaceRoot: string): string[] {
+  const root = getVaultRoot(workspaceRoot);
+  return [
+    root,
+    getImportCacheDir(workspaceRoot),
+    getVaultJobsRoot(workspaceRoot),
+    getVaultInboxPath(workspaceRoot),
+    getVaultUnsortedDir(workspaceRoot),
+    getVaultProjectsRoot(workspaceRoot),
+  ];
+}

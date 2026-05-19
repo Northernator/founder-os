@@ -205,6 +205,54 @@
       ],
       "@founder-os/handoff-pack-templates": [
         "packages/handoff-pack-templates/src/index.ts"
+      ],
+      "@founder-os/vault-contract": [
+        "packages/vault-contract/src/index.ts"
+      ],
+      "@founder-os/import-core": [
+        "packages/import-core/src/index.ts"
+      ],
+      "@founder-os/import-core/node": [
+        "packages/import-core/src/node.ts"
+      ],
+      "@founder-os/local-file-importer": [
+        "packages/local-file-importer/src/index.ts"
+      ],
+      "@founder-os/local-file-importer/node": [
+        "packages/local-file-importer/src/node.ts"
+      ],
+      "@founder-os/document-extractor": [
+        "packages/document-extractor/src/index.ts"
+      ],
+      "@founder-os/document-extractor/node": [
+        "packages/document-extractor/src/node.ts"
+      ],
+      "@founder-os/image-extractor": [
+        "packages/image-extractor/src/index.ts"
+      ],
+      "@founder-os/image-extractor/node": [
+        "packages/image-extractor/src/node.ts"
+      ],
+      "@founder-os/chat-importer": [
+        "packages/chat-importer/src/index.ts"
+      ],
+      "@founder-os/chat-importer/node": [
+        "packages/chat-importer/src/node.ts"
+      ],
+      "@founder-os/knowledge-extractor": [
+        "packages/knowledge-extractor/src/index.ts"
+      ],
+      "@founder-os/project-classifier": [
+        "packages/project-classifier/src/index.ts"
+      ],
+      "@founder-os/markdown-vault": [
+        "packages/markdown-vault/src/index.ts"
+      ],
+      "@founder-os/vault-runner": [
+        "packages/vault-runner/src/index.ts"
+      ],
+      "@founder-os/google-drive-importer": [
+        "packages/google-drive-importer/src/index.ts"
       ]
     }
   }

@@ -73,6 +73,10 @@ notify = { version = "6", default-features = false, features = ["macos_kqueue"] 
 # `bundled` ships a vendored SQLite so Windows/macOS/Linux all build without
 # an external sqlite3 dev package.
 rusqlite = { version = "0.31", features = ["bundled"] }
+# SHA-256 for vault content addressing. Pure-Rust, no native deps. The
+# streaming Digest API (Update + finalize) keeps multi-GB inputs from
+# living in memory all at once -- vault_hash_file reads in 64 KiB chunks.
+sha2 = "0.10"
 
 [features]
 default = ["custom-protocol"]

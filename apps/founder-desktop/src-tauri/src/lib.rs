@@ -9,6 +9,7 @@ mod cache;
 mod cli_agent;
 mod codesign;
 mod crm;
+mod db_smoke;
 mod editor;
 mod handoff_pack;
 mod handoff_watcher;
@@ -20,6 +21,9 @@ mod pricing;
 mod secrets;
 mod sales_report;
 mod social;
+mod vault;
+mod vault_extract;
+mod vault_fs;
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -368,6 +372,24 @@ fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/0011-brand-name-candidates.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 12,
+            description: "vault_schema",
+            sql: include_str!("../migrations/0012-vault.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 13,
+            description: "vault_note_drafts",
+            sql: include_str!("../migrations/0013-vault-drafts.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 14,
+            description: "vault_drafts_template_version",
+            sql: include_str!("../migrations/0014-vault-drafts-template-version.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
@@ -401,6 +423,22 @@ pub fn run() {
         // starve the other on the lock; SQLite handles intra-process
         // concurrency on the same DB file via WAL.
         .manage(brand_names::BrandNamesState::default())
+        // Vault import-job store (slice 1 of the Rust IPC arc). Same lazy
+        // SQLite connection pattern as the other rusqlite-backed modules;
+        // points at the same founder.db that tauri-plugin-sql manages and
+        // shares the journal_mode=WAL setting so writes from this module
+        // and the plugin pool don't block each other.
+        .manage(vault::VaultState::default())
+        // Boot-time schema drift smoke test. Runs after tauri-plugin-sql
+        // applies migrations + the rest of the app is set up. Probes
+        // sqlite_master for every table in db_smoke::REQUIRED_TABLES;
+        // logs loudly to stderr + emits a `db:schema-smoke` event on
+        // failure. Catches the misplaced-migration class of bug (see
+        // db_smoke.rs for the originating incident).
+        .setup(|app| {
+            db_smoke::run_on_boot(&app.handle());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             pick_venture_folder,
             read_file,
@@ -462,6 +500,47 @@ pub fn run() {
             social::social_login_state,
             social::social_post,
             social::social_open_post_log,
+            // Dream Vault SQLite job store (Rust IPC arc slice 1). See
+            // vault.rs for the per-command rationale + the TS contract
+            // they bind to (packages/import-core/src/ports.ts).
+            vault::vault_create_job,
+            vault::vault_update_job_status,
+            vault::vault_get_job,
+            vault::vault_increment_job_counts,
+            vault::vault_insert_source,
+            vault::vault_list_sources_for_job,
+            vault::vault_list_jobs,
+            vault::vault_discard_job,
+            // Resumable-imports arc: drafts / matches / items
+            // persistence so a reload mid-review doesn't lose the
+            // runner state. See vault.rs for per-command details.
+            vault::vault_insert_project_match,
+            vault::vault_list_project_matches_for_job,
+            vault::vault_insert_extracted_item,
+            vault::vault_list_extracted_items_for_job,
+            vault::vault_insert_note_draft,
+            vault::vault_list_note_drafts_for_job,
+            // Drops drafts/matches/items rows once a job is `committed`.
+            // Status-guarded so it can't accidentally wipe state mid-
+            // review. Called from both finalize paths after success.
+            vault::vault_cleanup_committed_job_support,
+            // Vault filesystem (Rust IPC arc slice 2). Streaming hash,
+            // bytes read, import-cache staging, paste-blob writes. See
+            // vault_fs.rs for the contract details.
+            vault_fs::vault_hash_file,
+            vault_fs::vault_read_file_bytes,
+            vault_fs::vault_stage_file,
+            vault_fs::vault_save_pasted_blob,
+            // Vault document extraction (Rust IPC arc slice 3). PDF via
+            // pdf-extract in-process; DOCX via the @founder-os/document-
+            // extractor pnpm sidecar (mammoth). See vault_extract.rs.
+            vault_extract::vault_extract_pdf,
+            vault_extract::vault_extract_docx,
+            // Schema drift smoke test (db_smoke.rs). Boot-time variant
+            // fires automatically via the setup hook; this command lets
+            // the renderer re-probe on demand if it wants a Verify-schema
+            // diagnostic.
+            db_smoke::db_run_schema_smoke,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,0 +1,68 @@
+[
+  {
+    "id": "c-001",
+    "title": "Pricing experiment",
+    "create_time": 1715000000,
+    "update_time": 1715000300,
+    "current_node": "n3",
+    "mapping": {
+      "n0": { "id": "n0", "parent": null, "message": null },
+      "n1": {
+        "id": "n1",
+        "parent": "n0",
+        "message": {
+          "id": "m1",
+          "author": { "role": "user" },
+          "content": { "content_type": "text", "parts": ["What price should we test?"] },
+          "create_time": 1715000010
+        }
+      },
+      "n2": {
+        "id": "n2",
+        "parent": "n1",
+        "message": {
+          "id": "m2",
+          "author": { "role": "assistant" },
+          "content": { "content_type": "text", "parts": ["Try $19, $29, and $49."] },
+          "create_time": 1715000050
+        }
+      },
+      "n3": {
+        "id": "n3",
+        "parent": "n2",
+        "message": {
+          "id": "m3",
+          "author": { "role": "user" },
+          "content": { "content_type": "text", "parts": ["What about a free tier?"] },
+          "create_time": 1715000200
+        }
+      }
+    }
+  },
+  {
+    "id": "c-002",
+    "title": "Bad data",
+    "create_time": 1715100000,
+    "current_node": "missing",
+    "mapping": {
+      "x": { "id": "x", "parent": null, "message": null }
+    }
+  },
+  {
+    "id": "c-003",
+    "title": "Launch checklist",
+    "current_node": "x1",
+    "mapping": {
+      "x0": { "id": "x0", "parent": null, "message": null },
+      "x1": {
+        "id": "x1",
+        "parent": "x0",
+        "message": {
+          "id": "mx",
+          "author": { "role": "user" },
+          "content": { "content_type": "text", "parts": ["What's on the launch checklist?"] }
+        }
+      }
+    }
+  }
+]

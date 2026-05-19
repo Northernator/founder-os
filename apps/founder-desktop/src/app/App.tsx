@@ -1,9 +1,21 @@
 import { FounderQueryProvider } from "@founder-os/query";
 import { useVentureStore } from "@founder-os/state";
 import { AppShell, Sidebar } from "@founder-os/ui";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ThemeToggle } from "../features/chrome/ThemeToggle.js";
 import { ToastContainer } from "../features/toasts/ToastContainer.js";
+import { DreamVaultBrowser } from "../features/vault/DreamVaultBrowser.js";
+import {
+  discardRecoveredVaultJob,
+  hydrateResumableVaultJobs,
+} from "../features/vault/boot-hydration.js";
+import type { RunVaultImportResult } from "../features/vault/run-vault-import.js";
+import type {
+  PendingVaultImport,
+  RecentVaultImport,
+  RecoveredVaultImport,
+} from "../features/vault/types.js";
+import { VaultImportFlow } from "../features/vault/VaultImportFlow.js";
 import {
   type CreateVentureInput,
   NewVentureWizard,
@@ -13,6 +25,22 @@ import * as db from "../lib/db.js";
 import { pushToast } from "../lib/toasts.js";
 import { provisionVentureWorkspace } from "../lib/venture-io.js";
 import { WelcomeScreen } from "./WelcomeScreen.js";
+
+/**
+ * Derive the workspace root from the active venture's parent directory.
+ * Each venture lives at <workspaceRoot>/<slug>/ by convention; the
+ * vault sits as a sibling at <workspaceRoot>/_vault/. When no venture
+ * is active we fall back to a placeholder the user can change in
+ * settings once that lands.
+ */
+function deriveWorkspaceRoot(activeVentureRootPath: string | null | undefined): string {
+  if (!activeVentureRootPath) return "/workspace";
+  // venture.rootPath is the venture directory itself; the parent is the
+  // workspace root. Trim a trailing slash + drop the last segment.
+  const trimmed = activeVentureRootPath.replace(/[\\/]+$/, "");
+  const lastSep = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  return lastSep > 0 ? trimmed.slice(0, lastSep) : trimmed;
+}
 
 // Small helper — inline so App.tsx doesn't depend on db.ts internals.
 // Same shape as db.ts and venture-io.ts. If we grow a third instance
@@ -60,6 +88,41 @@ export function App() {
   } = useVentureStore();
   const [showWizard, setShowWizard] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  /** Tracks which top-level vault surface is open (slice 9 DREAM_VAULT). */
+  const [vaultScreen, setVaultScreen] = useState<"import" | "browser" | null>(null);
+  /**
+   * Slice 10 -- in-renderer registry of vault imports awaiting review.
+   * Keyed by jobId. Persists across modal close/open while the app is
+   * running; cleared on reload (Rust persistence lands slice 12).
+   */
+  const [pendingVaultImports, setPendingVaultImports] = useState<
+    ReadonlyMap<string, PendingVaultImport>
+  >(() => new Map());
+  /** Most-recently-committed vault import runs (in-memory, newest first). */
+  const [recentVaultImports, setRecentVaultImports] = useState<ReadonlyArray<RecentVaultImport>>(
+    () => []
+  );
+  /**
+   * Rust IPC arc slice 4 -- jobs recovered from SQLite on boot. These
+   * are pending-review entries from a previous session whose runner
+   * state was lost on reload. The user can only discard them; full
+   * resume requires drafts/items/matches persistence which is a
+   * separate arc.
+   */
+  const [recoveredVaultImports, setRecoveredVaultImports] = useState<
+    ReadonlyMap<string, RecoveredVaultImport>
+  >(() => new Map());
+  /** When set, the next time VaultImportFlow mounts it boots into review for this job. */
+  const [reviewJobId, setReviewJobId] = useState<string | null>(null);
+
+  const activeVenture = useMemo(
+    () => ventures.find((v) => v.id === activeVentureId) ?? null,
+    [ventures, activeVentureId]
+  );
+  const workspaceRoot = useMemo(
+    () => deriveWorkspaceRoot(activeVenture?.rootPath),
+    [activeVenture]
+  );
 
   // Boot-time keychain drain (pt.23). Runs in parallel with venture
   // hydration — the result doesn't gate the UI. Most users see a silent
@@ -101,6 +164,78 @@ export function App() {
       });
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  // Resumable-imports arc: boot hydration. Two strategies layered:
+  //   1. hydrateResumableVaultJobs -- reconstructs full
+  //      PendingVaultImport entries (with a Tauri-backed finalize)
+  //      from persisted drafts / matches / items.
+  //   2. Legacy recovered map -- jobs whose drafts weren't persisted
+  //      (pre-resumable-arc imports or runs that failed mid-persist).
+  //      Surface as discard-only.
+  // Done in a separate effect from the venture hydrate so it doesn't
+  // gate the welcome screen. Depends on `workspaceRoot` because
+  // resumed-finalize needs it for path resolution.
+  useEffect(() => {
+    let cancelled = false;
+    hydrateResumableVaultJobs({ workspaceRoot })
+      .then(({ resumable, legacyRecovered }) => {
+        if (cancelled) return;
+        if (resumable.size > 0) {
+          setPendingVaultImports((prev) => {
+            // In-session entries (live runner) win over resumed ones
+            // (Tauri-backed finalize). Same jobId surfaces in both
+            // when persistRunForResume has written the row -- prev
+            // already has the better one with the live runner.
+            const next = new Map(prev);
+            for (const [k, v] of resumable) {
+              if (!next.has(k)) next.set(k, v);
+            }
+            return next;
+          });
+        }
+        if (legacyRecovered.size > 0) setRecoveredVaultImports(legacyRecovered);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn("[vault] boot hydration failed", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceRoot]);
+
+  // Schema drift smoke test (db_smoke.rs). The Rust side fires the
+  // probe automatically on boot + emits `db:schema-smoke`; we listen
+  // here and toast a loud warning if any required table is missing.
+  // Catches the misplaced-migration class of bug (see slice 1 of the
+  // Rust IPC arc for the original incident).
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        unlisten = await listen<{ ok: boolean; missing: string[]; total: number; dbPath: string }>(
+          "db:schema-smoke",
+          (event) => {
+            if (event.payload.ok) return;
+            pushToast({
+              kind: "error",
+              message: `Database schema drift: ${event.payload.missing.length} of ${event.payload.total} tables missing`,
+              detail: `Missing: ${event.payload.missing.slice(0, 5).join(", ")}${
+                event.payload.missing.length > 5 ? ", …" : ""
+              }. Check db_smoke.rs for the migration-misplacement playbook.`,
+              ttlMs: 12000,
+            });
+          }
+        );
+      } catch (err) {
+        console.warn("[db_smoke] failed to subscribe to db:schema-smoke", err);
+      }
+    })();
+    return () => {
+      if (unlisten) unlisten();
     };
   }, []);
 
@@ -188,6 +323,89 @@ export function App() {
     setShowWizard(false);
   };
 
+  // ---------------------------------------------------------------------------
+  // Vault-import lifecycle callbacks (slice 10).
+  // ---------------------------------------------------------------------------
+
+  const handleReadyForReview = useCallback(
+    (jobId: string, result: RunVaultImportResult) => {
+      const entry: PendingVaultImport = {
+        jobId,
+        result,
+        sources: [],
+        llmConfigured: result.llmConfigured,
+        readyAt: new Date().toISOString(),
+      };
+      // The sources array is best-effort -- the runner has them inside
+      // result.run.perSource[].source, so we project a thin shape.
+      entry.sources = result.run.perSource.map((p) => ({
+        absolutePath: p.source.cachedOriginalPath,
+        originalName: p.source.originalName,
+        sourceType: p.source.sourceType,
+        ...(p.source.fileExtension ? { fileExtension: p.source.fileExtension } : {}),
+        ...(p.source.mimeType ? { mimeType: p.source.mimeType } : {}),
+        ...(p.source.byteSize !== undefined ? { byteSize: p.source.byteSize } : {}),
+      }));
+      setPendingVaultImports((prev) => {
+        const next = new Map(prev);
+        next.set(jobId, entry);
+        return next;
+      });
+    },
+    []
+  );
+
+  const handleVaultCommitted = useCallback((recent: RecentVaultImport) => {
+    setPendingVaultImports((prev) => {
+      if (!prev.has(recent.jobId)) return prev;
+      const next = new Map(prev);
+      next.delete(recent.jobId);
+      return next;
+    });
+    setRecentVaultImports((prev) => [recent, ...prev].slice(0, 25));
+  }, []);
+
+  const handleDiscardPending = useCallback((jobId: string) => {
+    setPendingVaultImports((prev) => {
+      if (!prev.has(jobId)) return prev;
+      const next = new Map(prev);
+      next.delete(jobId);
+      return next;
+    });
+    pushToast({
+      kind: "info",
+      message: "Pending vault import discarded",
+      detail: "Drafts dropped. Re-run the import if you want to review again.",
+      ttlMs: 4000,
+    });
+  }, []);
+
+  const handleReviewPending = useCallback((jobId: string) => {
+    setReviewJobId(jobId);
+    setVaultScreen("import");
+  }, []);
+
+  /**
+   * Drop a recovered-from-SQLite entry. Tries the Rust hard-delete
+   * first; even when that's not wired, we clear local state so the
+   * row stops surfacing in the panel.
+   */
+  const handleDiscardRecovered = useCallback((jobId: string) => {
+    void discardRecoveredVaultJob(jobId);
+    setRecoveredVaultImports((prev) => {
+      if (!prev.has(jobId)) return prev;
+      const next = new Map(prev);
+      next.delete(jobId);
+      return next;
+    });
+    pushToast({
+      kind: "info",
+      message: "Recovered vault import discarded",
+      detail: "The previous session's job + source rows are gone.",
+      ttlMs: 4000,
+    });
+  }, []);
+
   return (
     <>
       <style>{globalStyle}</style>
@@ -199,20 +417,66 @@ export function App() {
               activeVentureId={activeVentureId}
               onSelectVenture={setActiveVenture}
               onNewVenture={() => setShowWizard(true)}
+              onImportToVault={() => setVaultScreen("import")}
+              onOpenVault={() => setVaultScreen("browser")}
             />
           }
         >
           {!hydrated ? (
             <LoadingScreen />
+          ) : vaultScreen === "browser" ? (
+            <DreamVaultBrowser
+              ventures={ventures}
+              activeVenture={activeVenture}
+              pendingImports={pendingVaultImports}
+              recoveredImports={recoveredVaultImports}
+              recentImports={recentVaultImports}
+              onStartImport={() => {
+                setReviewJobId(null);
+                setVaultScreen("import");
+              }}
+              onReviewPending={handleReviewPending}
+              onDiscardPending={handleDiscardPending}
+              onDiscardRecovered={handleDiscardRecovered}
+              onClose={() => setVaultScreen(null)}
+            />
           ) : activeVentureId ? (
             <VentureDashboard ventureId={activeVentureId} />
           ) : (
-            <WelcomeScreen onStartJourney={() => setShowWizard(true)} />
+            <WelcomeScreen
+              onStartJourney={() => setShowWizard(true)}
+              onImportToVault={() => {
+                setReviewJobId(null);
+                setVaultScreen("import");
+              }}
+              onOpenVault={() => setVaultScreen("browser")}
+              pendingVaultImports={pendingVaultImports}
+              recoveredVaultImports={recoveredVaultImports}
+              onReviewPending={handleReviewPending}
+              onDiscardPending={handleDiscardPending}
+              onDiscardRecovered={handleDiscardRecovered}
+            />
           )}
         </AppShell>
 
         {showWizard && (
           <NewVentureWizard onClose={() => setShowWizard(false)} onCreate={handleCreate} />
+        )}
+
+        {vaultScreen === "import" && (
+          <VaultImportFlow
+            workspaceRoot={workspaceRoot}
+            ventures={ventures}
+            activeVentureId={activeVentureId}
+            pendingImports={pendingVaultImports}
+            initialReviewJobId={reviewJobId}
+            onReadyForReview={handleReadyForReview}
+            onCommitted={handleVaultCommitted}
+            onClose={() => {
+              setVaultScreen(null);
+              setReviewJobId(null);
+            }}
+          />
         )}
 
         {/* Top-right theme toggle. The pill variant carries its own
