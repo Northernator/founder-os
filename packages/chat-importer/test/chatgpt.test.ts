@@ -97,6 +97,40 @@ describe("parseChatGptExport", () => {
     expect(() => parseChatGptExport('{"oops":true}')).toThrow(/JSON array|mapping/);
   });
 
+  it("throws when fed a Claude-shaped JSON array (every item lacks `mapping`)", () => {
+    // Regression test for the run-vault-import chatPort cascade bug:
+    // Claude exports are arrays too, so the outer `Array.isArray`
+    // check passes, but every item lacks `mapping`. Before the
+    // all-bad guard, the parser returned `{ conversations: [],
+    // warnings: ["#0 skipped: missing mapping", ...] }` -- the
+    // cascade saw a successful return and never fell through to
+    // the Claude parser. Now it throws so the cascade routes
+    // correctly + the deterministic sniff catches the case before
+    // the cascade ever runs.
+    const claudeShape = JSON.stringify([
+      {
+        uuid: "u-1",
+        name: "Brand naming",
+        chat_messages: [
+          { sender: "human", text: "Suggest five names." },
+          { sender: "assistant", text: "Acme, Beta, Calo, Delta, Echo." },
+        ],
+      },
+      {
+        uuid: "u-2",
+        name: "Pricing test",
+        chat_messages: [
+          { sender: "human", text: "What variant should we run?" },
+          { sender: "assistant", text: "A at $19 vs B at $29." },
+        ],
+      },
+    ]);
+    expect(() => parseChatGptExport(claudeShape)).toThrow(/no usable conversations/);
+    // Sanity: the same input parsed via the Claude parser would
+    // succeed -- this is an "asked the wrong parser" failure mode,
+    // not a corrupt-file failure mode.
+  });
+
   it("throws ChatImporterError when the file isn't JSON", () => {
     expect(() => parseChatGptExport("not json")).toThrow(/not valid JSON/);
   });

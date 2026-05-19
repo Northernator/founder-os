@@ -37,6 +37,17 @@ export function parseClaudeJsonExport(rawJson: string): ParsedChat {
       warnings.push(`conversation #${i} skipped: ${message}`);
     }
   }
+
+  // All-bad guard. Mirrors parseChatGptExport. When every input
+  // failed, the file is almost certainly a different shape (e.g.
+  // a ChatGPT mapping-tree export fed into this parser); throwing
+  // lets a try/catch cascade fall through to the right parser
+  // instead of silently producing an empty result.
+  if (conversations.length === 0 && warnings.length > 0) {
+    throw new ChatImporterError(
+      `Claude JSON parser produced no usable conversations; likely a different export shape (warnings: ${warnings.join("; ")})`,
+    );
+  }
   return {
     extractionMethod: "chat_claude",
     conversations,

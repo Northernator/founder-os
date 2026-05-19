@@ -81,6 +81,25 @@ export function parseChatGptExport(rawJson: string): ParsedChat {
       warnings.push(`conversation #${i} skipped: ${message}`);
     }
   }
+
+  // All-bad guard. Callers using the legacy throw-based cascade
+  // (e.g. the run-vault-import chatPort's pre-sniff try/catch) rely
+  // on this parser THROWING when the input is a different export
+  // shape -- otherwise a Claude JSON array slips through (it's an
+  // array, so the outer shape check passes), every element fails
+  // `parseOneConversation` for missing `mapping`, and the cascade
+  // never falls through to parseClaudeJsonExport. Real Claude
+  // content used to silently drop because of this.
+  //
+  // We only throw when EVERY input failed; a partial-failure case
+  // (5 good, 5 bad) keeps surfacing the per-conversation warnings
+  // via the returned envelope as before. The "0 conversations,
+  // 0 warnings" case (empty array) is a successful no-op parse.
+  if (conversations.length === 0 && warnings.length > 0) {
+    throw new ChatImporterError(
+      `ChatGPT parser produced no usable conversations; likely a different export shape (warnings: ${warnings.join("; ")})`,
+    );
+  }
   return {
     extractionMethod: "chat_chatgpt",
     conversations,

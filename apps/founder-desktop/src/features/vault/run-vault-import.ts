@@ -266,6 +266,30 @@ const imagePort: ImageExtractorPort = async ({ cachedAbsolutePath, ocrEngine, vi
   });
 };
 
+/**
+ * Cheap pre-parse sniff to pick the right JSON chat parser without
+ * fully parsing the file. Operates on the first 4 KiB only -- chat
+ * exports can be 80+ MB and a full JSON.parse just to discriminate
+ * shape would dominate the import latency.
+ *
+ * Discriminators (top-level field names that appear early in every
+ * canonical export shape we support):
+ *   - "chat_messages"            -> Claude JSON (per-conversation field)
+ *   - "mapping" + "current_node" -> ChatGPT (per-conversation fields)
+ *
+ * Order: Claude first because `"chat_messages"` is more specific
+ * than `"mapping"` (which appears in plenty of unrelated JSON shapes).
+ *
+ * Returns "unknown" when neither signal is present; the caller then
+ * treats the JSON as a paste blob via parsePastedText.
+ */
+function sniffJsonChatShape(text: string): "claude" | "chatgpt" | "unknown" {
+  const sample = text.slice(0, 4096);
+  if (sample.includes('"chat_messages"')) return "claude";
+  if (sample.includes('"mapping"') && sample.includes('"current_node"')) return "chatgpt";
+  return "unknown";
+}
+
 const chatPort: ChatExtractorPort = async ({ doc, cachedAbsolutePath }) => {
   const bytes = await readCachedBytes(cachedAbsolutePath);
   if (!bytes) {
@@ -278,17 +302,34 @@ const chatPort: ChatExtractorPort = async ({ doc, cachedAbsolutePath }) => {
   const text = decodeUtf8(bytes);
   const ext = (doc.fileExtension ?? "").toLowerCase();
   if (ext === "json") {
-    // Try ChatGPT shape first, fall back to Claude JSON, then generic.
-    try {
-      return parseChatGptExport(text);
-    } catch {
-      try {
-        return parseClaudeJsonExport(text);
-      } catch {
-        // Last resort -- treat the JSON as a paste.
-        return parsePastedText({ text });
-      }
+    // Deterministic dispatch. The previous try/catch cascade assumed
+    // parseChatGptExport would THROW on a Claude export, but Claude
+    // is also an array -- so the outer Array.isArray check passed,
+    // every element failed `parseOneConversation` for missing
+    // `mapping`, and the per-item failures became warnings on a
+    // returned envelope with `conversations: []`. The cascade never
+    // fell through, real Claude content silently dropped.
+    //
+    // The all-bad guards added to parseChatGptExport +
+    // parseClaudeJsonExport restore throw-based fallback for the
+    // legacy cascade, but the sniff below avoids the throw round-trip
+    // entirely on the happy path.
+    const shape = sniffJsonChatShape(text);
+    let parsed: ParsedChat;
+    if (shape === "claude") {
+      parsed = parseClaudeJsonExport(text);
+    } else if (shape === "chatgpt") {
+      parsed = parseChatGptExport(text);
+    } else {
+      parsed = parsePastedText({ text });
     }
+    if (parsed.conversations.length === 0) {
+      console.warn(
+        `[run-vault-import] chat parser produced 0 conversations for "${doc.originalName}" (sniff: ${shape}). Inspect the file's top 4 KiB for "chat_messages" / "mapping" / "current_node" to debug.`,
+        { warnings: parsed.warnings },
+      );
+    }
+    return parsed;
   }
   if (ext === "md" || ext === "markdown") {
     return parseClaudeMarkdownExport(text);
