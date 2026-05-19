@@ -4,6 +4,11 @@ import { describe, expect, it } from "vitest";
 import { parseChatGptExport } from "../src/index";
 
 const FIXTURE_PATH = join(__dirname, "fixtures", "chatgpt-export.json");
+const SINGLE_CONVERSATION_FIXTURE_PATH = join(
+  __dirname,
+  "fixtures",
+  "chatgpt-single-conversation.json",
+);
 
 describe("parseChatGptExport", () => {
   it("walks the mapping tree to produce a chronological turn list", async () => {
@@ -53,8 +58,43 @@ describe("parseChatGptExport", () => {
     expect(parsed.conversations[0]?.turns.map((t) => t.content)).toEqual(["alpha", "beta"]);
   });
 
-  it("throws ChatImporterError when the file isn't a JSON array", () => {
-    expect(() => parseChatGptExport('{"oops":true}')).toThrow(/JSON array/);
+  it("accepts a single-conversation object with a top-level `mapping` field", async () => {
+    // Some users keep per-conversation UUID-named files instead of the
+    // canonical `conversations.json` array. Pre-fix, these hit the
+    // runner's chatgpt -> claude -> paste fallback chain and produced
+    // empty output because none of the parsers recognised the shape.
+    const raw = await readFile(SINGLE_CONVERSATION_FIXTURE_PATH, "utf8");
+    const parsed = parseChatGptExport(raw);
+    expect(parsed.extractionMethod).toBe("chat_chatgpt");
+    expect(parsed.conversations).toHaveLength(1);
+    const convo = parsed.conversations[0];
+    expect(convo?.id).toBe("c-single");
+    expect(convo?.title).toBe("Per-conversation UUID file");
+    expect(convo?.turns.map((t) => t.role)).toEqual([
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+    ]);
+    expect(convo?.turns.map((t) => t.content)).toEqual([
+      "What's the pricing test variant?",
+      "Run A at $19 vs B at $29 for two weeks.",
+      "Sample size?",
+      "~1,200 visitors per arm at p=0.05.",
+    ]);
+    // Parent-link walk should produce strictly increasing create_time
+    // across the turns -- confirms the chronological reverse worked.
+    const times = convo?.turns.map((t) =>
+      t.createdAt ? Date.parse(t.createdAt) : 0,
+    );
+    expect(times).toEqual([...(times ?? [])].sort((a, b) => a - b));
+    expect(parsed.warnings).toHaveLength(0);
+  });
+
+  it("throws ChatImporterError when the file isn't a JSON array or single conversation", () => {
+    // Object without a `mapping` property -- doesn't match either
+    // supported shape, so the parser surfaces the contract clearly.
+    expect(() => parseChatGptExport('{"oops":true}')).toThrow(/JSON array|mapping/);
   });
 
   it("throws ChatImporterError when the file isn't JSON", () => {

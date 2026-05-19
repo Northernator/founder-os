@@ -1,0 +1,49 @@
+{
+  "id": "c-single",
+  "title": "Per-conversation UUID file",
+  "create_time": 1715100000,
+  "update_time": 1715100400,
+  "current_node": "n4",
+  "mapping": {
+    "n1": {
+      "id": "n1",
+      "parent": null,
+      "message": {
+        "id": "n1",
+        "author": { "role": "user" },
+        "content": { "content_type": "text", "parts": ["What's the pricing test variant?"] },
+        "create_time": 1715100100
+      }
+    },
+    "n2": {
+      "id": "n2",
+      "parent": "n1",
+      "message": {
+        "id": "n2",
+        "author": { "role": "assistant" },
+        "content": { "content_type": "text", "parts": ["Run A at $19 vs B at $29 for two weeks."] },
+        "create_time": 1715100200
+      }
+    },
+    "n3": {
+      "id": "n3",
+      "parent": "n2",
+      "message": {
+        "id": "n3",
+        "author": { "role": "user" },
+        "content": { "content_type": "text", "parts": ["Sample size?"] },
+        "create_time": 1715100300
+      }
+    },
+    "n4": {
+      "id": "n4",
+      "parent": "n3",
+      "message": {
+        "id": "n4",
+        "author": { "role": "assistant" },
+        "content": { "content_type": "text", "parts": ["~1,200 visitors per arm at p=0.05."] },
+        "create_time": 1715100400
+      }
+    }
+  }
+}

@@ -1,11 +1,26 @@
 /**
  * ChatGPT `conversations.json` parser.
  *
- * The export is an array of conversations, each with a `mapping` tree
- * of message nodes keyed by node id. The tree is a linked-list-style
- * structure with parent / children pointers; the "leaf" is determined
- * by the `current_node` field. We walk parent links from current_node
- * up to the root, then reverse to get the chronological turn list.
+ * Two input shapes are supported:
+ *
+ *   1. The canonical full-export shape: a JSON array where every
+ *      element is one conversation. This is what ChatGPT's
+ *      "Export data" feature produces in `conversations.json`.
+ *
+ *   2. A single conversation as a top-level object: `{ mapping,
+ *      current_node, title, ... }`. This is the shape of the
+ *      per-conversation UUID-named files some users keep -- e.g.
+ *      tooling that splits the canonical export by conversation,
+ *      or hand-saved single-conversation extracts. Before this
+ *      branch was added, those files hit the runner's fallback
+ *      chain (chatgpt -> claude -> paste) and produced empty
+ *      output because none of the parsers handled the shape.
+ *
+ * Each conversation has a `mapping` tree of message nodes keyed by
+ * node id. The tree is a linked-list-style structure with parent /
+ * children pointers; the "leaf" is determined by the `current_node`
+ * field. We walk parent links from current_node up to the root, then
+ * reverse to get the chronological turn list.
  *
  * Per spec: "a malformed conversation in a 10-conversation export
  * doesn't fail the other 9" -- we wrap each conversation in a
@@ -20,6 +35,18 @@ import {
   type ParsedChat,
 } from "./types";
 
+/**
+ * Discriminator for the single-conversation shape. Requires `mapping`
+ * to be a non-null object (the tree itself); `current_node` is
+ * preferred but not required since the parser has an
+ * insertion-order fallback when it's missing.
+ */
+function isSingleConversationObject(value: unknown): value is { mapping: unknown } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  return v.mapping !== null && typeof v.mapping === "object";
+}
+
 export function parseChatGptExport(rawJson: string): ParsedChat {
   let parsed: unknown;
   try {
@@ -27,15 +54,25 @@ export function parseChatGptExport(rawJson: string): ParsedChat {
   } catch (cause) {
     throw new ChatImporterError("ChatGPT export is not valid JSON", cause);
   }
-  if (!Array.isArray(parsed)) {
+
+  // Normalise to an array. Per-conversation UUID-named files arrive
+  // as a single object with `mapping` at the top level -- wrap so
+  // the per-conversation loop below works uniformly for both shapes.
+  let conversationsRaw: unknown[];
+  if (Array.isArray(parsed)) {
+    conversationsRaw = parsed;
+  } else if (isSingleConversationObject(parsed)) {
+    conversationsRaw = [parsed];
+  } else {
     throw new ChatImporterError(
-      "ChatGPT export must be a JSON array of conversations",
+      "ChatGPT export must be a JSON array of conversations or a single conversation object with a `mapping` property",
     );
   }
+
   const conversations: ChatConversation[] = [];
   const warnings: string[] = [];
-  for (let i = 0; i < parsed.length; i += 1) {
-    const raw = parsed[i];
+  for (let i = 0; i < conversationsRaw.length; i += 1) {
+    const raw = conversationsRaw[i];
     try {
       const convo = parseOneConversation(raw, i);
       if (convo) conversations.push(convo);
