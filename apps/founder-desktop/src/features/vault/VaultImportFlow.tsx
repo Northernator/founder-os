@@ -39,8 +39,18 @@ import type { PendingVaultImport, RecentVaultImport } from "./types.js";
 export type VaultImportScreen = "hub" | "local" | "paste" | "drive" | "progress" | "review";
 
 export type VaultImportFlowProps = {
-  /** Workspace root passed through to run-vault-import.ts. */
-  workspaceRoot: string;
+  /**
+   * Workspace root passed through to run-vault-import.ts.
+   *
+   * `null` when no ventures exist yet -- the App can't derive a
+   * usable workspace root (see deriveWorkspaceRoot in App.tsx). In
+   * that case the flow renders an empty state instead of letting
+   * the import dispatch hit Rust with a bad path; the prior
+   * placeholder of `/workspace` caused `os error 3` ("path not
+   * found") deep inside vault_stage_file when the founder tried
+   * to import before creating a venture.
+   */
+  workspaceRoot: string | null;
   /** Ventures the project-classifier scores incoming sources against. */
   ventures: Venture[];
   /** The most-recently-active venture id -- threaded to pipeline-llm. */
@@ -178,26 +188,29 @@ export function VaultImportFlow({
         </header>
 
         <div style={{ padding: 22, overflowY: "auto" }}>
-          {screen === "hub" && (
+          {workspaceRoot === null ? (
+            <NoWorkspaceRootEmptyState onClose={onClose} />
+          ) : null}
+          {workspaceRoot !== null && screen === "hub" && (
             <VaultImportHubScreen
               onPickLocal={() => setScreen("local")}
               onPickPaste={() => setScreen("paste")}
               onPickDrive={() => setScreen("drive")}
             />
           )}
-          {screen === "local" && (
+          {workspaceRoot !== null && screen === "local" && (
             <VaultImportLocalScreen
               onBack={() => setScreen("hub")}
               onStartImport={(sources, jobId) => handleStartProgress(sources, jobId, "local", "files")}
             />
           )}
-          {screen === "paste" && (
+          {workspaceRoot !== null && screen === "paste" && (
             <VaultImportPasteScreen
               onBack={() => setScreen("hub")}
               onStartImport={(sources, jobId) => handleStartProgress(sources, jobId, "paste", "paste_text")}
             />
           )}
-          {screen === "drive" && (
+          {workspaceRoot !== null && screen === "drive" && (
             <VaultImportDriveScreen
               onBack={() => setScreen("hub")}
               onStartImport={(sources, jobId) =>
@@ -205,7 +218,7 @@ export function VaultImportFlow({
               }
             />
           )}
-          {screen === "progress" && stagedSources && progressJobId && (
+          {workspaceRoot !== null && screen === "progress" && stagedSources && progressJobId && (
             <VaultImportProgressScreen
               jobId={progressJobId}
               sources={stagedSources}
@@ -230,7 +243,7 @@ export function VaultImportFlow({
               onClose={onClose}
             />
           )}
-          {screen === "review" && !pendingForReview && (
+          {workspaceRoot !== null && screen === "review" && !pendingForReview && (
             <p style={{ margin: 0, fontSize: 13, color: "var(--text-tertiary, #6B7280)" }}>
               Review entry not found. Close this dialog and pick the import again from
               "Pending vault imports".
@@ -239,5 +252,63 @@ export function VaultImportFlow({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Rendered inside the modal when App.tsx couldn't resolve a workspace
+ * root (no active venture AND no other ventures to derive a parent
+ * dir from). The import flow would otherwise stage files into a path
+ * that doesn't exist on disk and fail with `os error 3` deep inside
+ * vault_stage_file. Surfacing the gate at the entry point gives the
+ * founder a clear next step.
+ */
+function NoWorkspaceRootEmptyState({ onClose }: { onClose: () => void }) {
+  return (
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        textAlign: "center",
+        gap: 14,
+        padding: "32px 16px",
+      }}
+    >
+      <div aria-hidden="true" style={{ fontSize: 36 }}>
+        📂
+      </div>
+      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>No workspace folder yet</h3>
+      <p
+        style={{
+          margin: 0,
+          fontSize: 13,
+          color: "var(--text-secondary, #4B5563)",
+          lineHeight: 1.55,
+          maxWidth: 480,
+        }}
+      >
+        Create a venture first (or set a workspace folder in Settings) before importing.
+        Dream Vault stores everything under <code>&lt;workspace&gt;/_vault/</code>, so it
+        needs a real folder on disk to write to.
+      </p>
+      <button
+        type="button"
+        onClick={onClose}
+        style={{
+          marginTop: 4,
+          padding: "8px 14px",
+          background: "var(--accent, #4F46E5)",
+          color: "var(--accent-fg, #FFFFFF)",
+          border: "1px solid transparent",
+          borderRadius: 8,
+          fontWeight: 700,
+          fontSize: 13,
+          cursor: "pointer",
+        }}
+      >
+        Got it
+      </button>
+    </section>
   );
 }

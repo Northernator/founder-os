@@ -27,19 +27,39 @@ import { provisionVentureWorkspace } from "../lib/venture-io.js";
 import { WelcomeScreen } from "./WelcomeScreen.js";
 
 /**
- * Derive the workspace root from the active venture's parent directory.
- * Each venture lives at <workspaceRoot>/<slug>/ by convention; the
- * vault sits as a sibling at <workspaceRoot>/_vault/. When no venture
- * is active we fall back to a placeholder the user can change in
- * settings once that lands.
+ * Derive the workspace root from the venture set.
+ *
+ * Each venture lives at `<workspaceRoot>/<slug>/`; the vault sits as
+ * a sibling at `<workspaceRoot>/_vault/`. We resolve the root by
+ * stripping the last path segment off a venture's `rootPath`.
+ *
+ * Resolution order:
+ *   1. Active venture's rootPath if one is selected.
+ *   2. First known venture's rootPath as a fall-back -- ventures in
+ *      this app are conventionally siblings under one root, so any
+ *      venture pins the workspace.
+ *   3. `null` when there are no ventures at all. **Returning `null`
+ *      instead of a `/workspace` placeholder is intentional**: the
+ *      old placeholder leaked into Rust and caused an `os error 3`
+ *      ("path not found") inside `_vault/_import-cache/...` because
+ *      `C:\workspace\_vault\...` doesn't exist on a fresh machine.
+ *      Callers handle `null` by blocking the import flow with an
+ *      empty state until a venture is created (or a settings-side
+ *      workspace folder is wired in a future arc).
  */
-function deriveWorkspaceRoot(activeVentureRootPath: string | null | undefined): string {
-  if (!activeVentureRootPath) return "/workspace";
-  // venture.rootPath is the venture directory itself; the parent is the
-  // workspace root. Trim a trailing slash + drop the last segment.
-  const trimmed = activeVentureRootPath.replace(/[\\/]+$/, "");
-  const lastSep = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
-  return lastSep > 0 ? trimmed.slice(0, lastSep) : trimmed;
+function deriveWorkspaceRoot(
+  activeVentureRootPath: string | null | undefined,
+  ventures: ReadonlyArray<{ rootPath: string }>
+): string | null {
+  const pickParent = (rootPath: string): string => {
+    const trimmed = rootPath.replace(/[\\/]+$/, "");
+    const lastSep = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+    return lastSep > 0 ? trimmed.slice(0, lastSep) : trimmed;
+  };
+  if (activeVentureRootPath) return pickParent(activeVentureRootPath);
+  const first = ventures[0];
+  if (first?.rootPath) return pickParent(first.rootPath);
+  return null;
 }
 
 // Small helper — inline so App.tsx doesn't depend on db.ts internals.
@@ -120,8 +140,8 @@ export function App() {
     [ventures, activeVentureId]
   );
   const workspaceRoot = useMemo(
-    () => deriveWorkspaceRoot(activeVenture?.rootPath),
-    [activeVenture]
+    () => deriveWorkspaceRoot(activeVenture?.rootPath, ventures),
+    [activeVenture, ventures]
   );
 
   // Boot-time keychain drain (pt.23). Runs in parallel with venture
@@ -178,6 +198,7 @@ export function App() {
   // gate the welcome screen. Depends on `workspaceRoot` because
   // resumed-finalize needs it for path resolution.
   useEffect(() => {
+    if (workspaceRoot === null) return;
     let cancelled = false;
     hydrateResumableVaultJobs({ workspaceRoot })
       .then(({ resumable, legacyRecovered }) => {
